@@ -1,7 +1,7 @@
-// Package capability_sdk provides the fundamental capability identifier system used across
+// Package capdef provides the fundamental capability identifier system used across
 // all LBVR plugins and providers. It defines the formal structure for capability
 // identifiers with hierarchical naming, wildcard support, and specificity comparison.
-package capability_sdk
+package capdef
 
 import (
 	"encoding/json"

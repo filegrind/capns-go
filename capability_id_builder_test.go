@@ -1,4 +1,4 @@
-package capability_sdk
+package capdef
 
 import (
 	"testing"
