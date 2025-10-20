@@ -35,20 +35,20 @@ func NewCapabilityIdBuilderFromString(s string) (*CapabilityIdBuilder, error) {
 	return NewCapabilityIdBuilderFromCapabilityId(capabilityId), nil
 }
 
-// AddSegment adds a segment to the capability ID
-func (b *CapabilityIdBuilder) AddSegment(segment string) *CapabilityIdBuilder {
+// Sub adds a segment to the capability ID
+func (b *CapabilityIdBuilder) Sub(segment string) *CapabilityIdBuilder {
 	b.segments = append(b.segments, segment)
 	return b
 }
 
-// AddSegments adds multiple segments to the capability ID
-func (b *CapabilityIdBuilder) AddSegments(segments ...string) *CapabilityIdBuilder {
+// Subs adds multiple segments to the capability ID
+func (b *CapabilityIdBuilder) Subs(segments ...string) *CapabilityIdBuilder {
 	b.segments = append(b.segments, segments...)
 	return b
 }
 
-// AddSegmentsFromSlice adds multiple segments from a slice to the capability ID
-func (b *CapabilityIdBuilder) AddSegmentsFromSlice(segments []string) *CapabilityIdBuilder {
+// SubsFromSlice adds multiple segments from a slice to the capability ID
+func (b *CapabilityIdBuilder) SubsFromSlice(segments []string) *CapabilityIdBuilder {
 	b.segments = append(b.segments, segments...)
 	return b
 }
@@ -79,7 +79,7 @@ func (b *CapabilityIdBuilder) MakeGeneralToLevel(level int) *CapabilityIdBuilder
 
 // AddWildcard adds a wildcard segment
 func (b *CapabilityIdBuilder) AddWildcard() *CapabilityIdBuilder {
-	return b.AddSegment("*")
+	return b.Sub("*")
 }
 
 // MakeWildcard replaces the last segment with a wildcard

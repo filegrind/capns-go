@@ -9,9 +9,9 @@ import (
 
 func TestCapabilityIdBuilderBasicConstruction(t *testing.T) {
 	capabilityId, err := NewCapabilityIdBuilder().
-		AddSegment("data_processing").
-		AddSegment("transform").
-		AddSegment("json").
+		Sub("data_processing").
+		Sub("transform").
+		Sub("json").
 		Build()
 
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestCapabilityIdBuilderMakeWildcard(t *testing.T) {
 
 func TestCapabilityIdBuilderAddWildcard(t *testing.T) {
 	capabilityId, err := NewCapabilityIdBuilder().
-		AddSegment("data_processing").
+		Sub("data_processing").
 		AddWildcard().
 		Build()
 
@@ -64,21 +64,21 @@ func TestCapabilityIdBuilderReplaceSegment(t *testing.T) {
 	assert.Equal(t, "extract:metadata:xml", capabilityId.ToString())
 }
 
-func TestCapabilityIdBuilderAddSegments(t *testing.T) {
+func TestCapabilityIdBuilderSubs(t *testing.T) {
 	capabilityId, err := NewCapabilityIdBuilder().
-		AddSegments("data", "processing").
-		AddSegment("json").
+		Subs("data", "processing").
+		Sub("json").
 		Build()
 
 	require.NoError(t, err)
 	assert.Equal(t, "data:processing:json", capabilityId.ToString())
 }
 
-func TestCapabilityIdBuilderAddSegmentsFromSlice(t *testing.T) {
+func TestCapabilityIdBuilderSubsFromSlice(t *testing.T) {
 	segments := []string{"data", "processing"}
 	capabilityId, err := NewCapabilityIdBuilder().
-		AddSegmentsFromSlice(segments).
-		AddSegment("json").
+		SubsFromSlice(segments).
+		Sub("json").
 		Build()
 
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestCapabilityIdBuilderClone(t *testing.T) {
 	clone := original.Clone()
 
 	// Modify original
-	original.AddSegment("json")
+	original.Sub("json")
 
 	// Clone should remain unchanged
 	originalId, err := original.Build()
@@ -136,8 +136,8 @@ func TestCapabilityIdBuilderClone(t *testing.T) {
 
 func TestCapabilityIdBuilderBuildString(t *testing.T) {
 	builder := NewCapabilityIdBuilder().
-		AddSegment("extract").
-		AddSegment("metadata").
+		Sub("extract").
+		Sub("metadata").
 		AddWildcard()
 
 	str, err := builder.BuildString()
@@ -165,7 +165,7 @@ func TestCapabilityIdBuilderHelperFunctions(t *testing.T) {
 
 func TestCapabilityIdBuilderEdgeCases(t *testing.T) {
 	// Test replace segment with invalid index
-	builder := NewCapabilityIdBuilder().AddSegment("test")
+	builder := NewCapabilityIdBuilder().Sub("test")
 	builder.ReplaceSegment(5, "invalid") // Should not crash
 	capId, err := builder.Build()
 	require.NoError(t, err)
