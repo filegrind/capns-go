@@ -32,7 +32,7 @@ type CapabilityArgument struct {
 	Name        string               `json:"name"`
 	Type        ArgumentType         `json:"type"`
 	Description string               `json:"description"`
-	CliFlag     *string              `json:"cli_flag,omitempty"`
+	CliFlag     string               `json:"cli_flag"`
 	Position    *int                 `json:"position,omitempty"`
 	Validation  *ArgumentValidation  `json:"validation,omitempty"`
 	Default     interface{}          `json:"default,omitempty"`
@@ -86,7 +86,7 @@ type Capability struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// Command defines the command string for this capability
-	Command *string `json:"command,omitempty"`
+	Command string `json:"command"`
 
 	// Arguments defines the arguments for this capability
 	Arguments *CapabilityArguments `json:"arguments,omitempty"`
@@ -96,30 +96,27 @@ type Capability struct {
 }
 
 // NewCapabilityArgument creates a new capability argument
-func NewCapabilityArgument(name string, argType ArgumentType, description string) CapabilityArgument {
+func NewCapabilityArgument(name string, argType ArgumentType, description string, cliFlag string) CapabilityArgument {
 	return CapabilityArgument{
 		Name:        name,
 		Type:        argType,
 		Description: description,
+		CliFlag:     cliFlag,
 	}
 }
 
-// NewCapabilityArgumentWithCliFlag creates an argument with CLI flag
+// NewCapabilityArgumentWithCliFlag creates an argument with CLI flag (deprecated - use NewCapabilityArgument)
 func NewCapabilityArgumentWithCliFlag(name string, argType ArgumentType, description string, cliFlag string) CapabilityArgument {
-	return CapabilityArgument{
-		Name:        name,
-		Type:        argType,
-		Description: description,
-		CliFlag:     &cliFlag,
-	}
+	return NewCapabilityArgument(name, argType, description, cliFlag)
 }
 
 // NewCapabilityArgumentWithPosition creates an argument with position
-func NewCapabilityArgumentWithPosition(name string, argType ArgumentType, description string, position int) CapabilityArgument {
+func NewCapabilityArgumentWithPosition(name string, argType ArgumentType, description string, cliFlag string, position int) CapabilityArgument {
 	return CapabilityArgument{
 		Name:        name,
 		Type:        argType,
 		Description: description,
+		CliFlag:     cliFlag,
 		Position:    &position,
 	}
 }
@@ -246,12 +243,12 @@ func (ca *CapabilityArguments) GetPositionalArgs() []CapabilityArgument {
 func (ca *CapabilityArguments) GetFlagArgs() []CapabilityArgument {
 	var args []CapabilityArgument
 	for _, arg := range ca.Required {
-		if arg.CliFlag != nil {
+		if arg.CliFlag != "" {
 			args = append(args, arg)
 		}
 	}
 	for _, arg := range ca.Optional {
-		if arg.CliFlag != nil {
+		if arg.CliFlag != "" {
 			args = append(args, arg)
 		}
 	}
@@ -259,20 +256,22 @@ func (ca *CapabilityArguments) GetFlagArgs() []CapabilityArgument {
 }
 
 // NewCapability creates a new capability
-func NewCapability(id *CapabilityId, version string) *Capability {
+func NewCapability(id *CapabilityId, version string, command string) *Capability {
 	return &Capability{
 		Id:       id,
 		Version:  version,
+		Command:  command,
 		Metadata: make(map[string]string),
 		Arguments: NewCapabilityArguments(),
 	}
 }
 
 // NewCapabilityWithDescription creates a new capability with description
-func NewCapabilityWithDescription(id *CapabilityId, version string, description string) *Capability {
+func NewCapabilityWithDescription(id *CapabilityId, version string, command string, description string) *Capability {
 	return &Capability{
 		Id:          id,
 		Version:     version,
+		Command:     command,
 		Description: &description,
 		Metadata:    make(map[string]string),
 		Arguments:   NewCapabilityArguments(),
@@ -280,13 +279,14 @@ func NewCapabilityWithDescription(id *CapabilityId, version string, description 
 }
 
 // NewCapabilityWithMetadata creates a new capability with metadata
-func NewCapabilityWithMetadata(id *CapabilityId, version string, metadata map[string]string) *Capability {
+func NewCapabilityWithMetadata(id *CapabilityId, version string, command string, metadata map[string]string) *Capability {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
 	return &Capability{
 		Id:        id,
 		Version:   version,
+		Command:   command,
 		Metadata:  metadata,
 		Arguments: NewCapabilityArguments(),
 	}
@@ -366,14 +366,14 @@ func (c *Capability) HasMetadata(key string) bool {
 	return exists
 }
 
-// GetCommand gets the command if defined
-func (c *Capability) GetCommand() *string {
+// GetCommand gets the command
+func (c *Capability) GetCommand() string {
 	return c.Command
 }
 
 // SetCommand sets the command
 func (c *Capability) SetCommand(command string) {
-	c.Command = &command
+	c.Command = command
 }
 
 // GetArguments gets the arguments

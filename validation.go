@@ -491,27 +491,27 @@ func (sv *SchemaValidator) ValidateCapabilitySchema(capability *Capability) erro
 	// Validate CLI flag uniqueness
 	cliFlags := make(map[string]string)
 	for _, arg := range capability.Arguments.Required {
-		if arg.CliFlag != nil {
-			if existing, exists := cliFlags[*arg.CliFlag]; exists {
+		if arg.CliFlag != "" {
+			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapabilitySchema",
 					CapabilityID: capabilityID,
-					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, *arg.CliFlag, existing, arg.Name),
+					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, arg.CliFlag, existing, arg.Name),
 				}
 			}
-			cliFlags[*arg.CliFlag] = arg.Name
+			cliFlags[arg.CliFlag] = arg.Name
 		}
 	}
 	for _, arg := range capability.Arguments.Optional {
-		if arg.CliFlag != nil {
-			if existing, exists := cliFlags[*arg.CliFlag]; exists {
+		if arg.CliFlag != "" {
+			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapabilitySchema",
 					CapabilityID: capabilityID,
-					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, *arg.CliFlag, existing, arg.Name),
+					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, arg.CliFlag, existing, arg.Name),
 				}
 			}
-			cliFlags[*arg.CliFlag] = arg.Name
+			cliFlags[arg.CliFlag] = arg.Name
 		}
 	}
 
