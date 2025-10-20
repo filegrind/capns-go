@@ -32,7 +32,7 @@ type CapabilityArgument struct {
 	Name        string               `json:"name"`
 	Type        ArgumentType         `json:"type"`
 	Description string               `json:"description"`
-	Command     *string              `json:"command,omitempty"`
+	CliFlag     *string              `json:"cli_flag,omitempty"`
 	Position    *int                 `json:"position,omitempty"`
 	Validation  *ArgumentValidation  `json:"validation,omitempty"`
 	Default     interface{}          `json:"default,omitempty"`
@@ -104,13 +104,13 @@ func NewCapabilityArgument(name string, argType ArgumentType, description string
 	}
 }
 
-// NewCapabilityArgumentWithCommand creates an argument with CLI flag
-func NewCapabilityArgumentWithCommand(name string, argType ArgumentType, description string, command string) CapabilityArgument {
+// NewCapabilityArgumentWithCliFlag creates an argument with CLI flag
+func NewCapabilityArgumentWithCliFlag(name string, argType ArgumentType, description string, cliFlag string) CapabilityArgument {
 	return CapabilityArgument{
 		Name:        name,
 		Type:        argType,
 		Description: description,
-		Command:     &command,
+		CliFlag:     &cliFlag,
 	}
 }
 
@@ -246,12 +246,12 @@ func (ca *CapabilityArguments) GetPositionalArgs() []CapabilityArgument {
 func (ca *CapabilityArguments) GetFlagArgs() []CapabilityArgument {
 	var args []CapabilityArgument
 	for _, arg := range ca.Required {
-		if arg.Command != nil {
+		if arg.CliFlag != nil {
 			args = append(args, arg)
 		}
 	}
 	for _, arg := range ca.Optional {
-		if arg.Command != nil {
+		if arg.CliFlag != nil {
 			args = append(args, arg)
 		}
 	}
