@@ -32,7 +32,7 @@ type CapabilityArgument struct {
 	Name        string               `json:"name"`
 	Type        ArgumentType         `json:"type"`
 	Description string               `json:"description"`
-	CliFlag     *string              `json:"cli_flag,omitempty"`
+	Command     *string              `json:"command,omitempty"`
 	Position    *int                 `json:"position,omitempty"`
 	Validation  *ArgumentValidation  `json:"validation,omitempty"`
 	Default     interface{}          `json:"default,omitempty"`
@@ -44,11 +44,6 @@ type CapabilityArguments struct {
 	Optional []CapabilityArgument `json:"optional,omitempty"`
 }
 
-// CommandInterface represents the command interface definition
-type CommandInterface struct {
-	CliFlag      string `json:"cli_flag"`
-	UsagePattern string `json:"usage_pattern"`
-}
 
 // OutputType represents the type of output a capability returns
 type OutputType string
@@ -90,8 +85,8 @@ type Capability struct {
 	// Metadata contains optional metadata as key-value pairs
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// CommandInterface defines the command interface for this capability
-	CommandInterface *CommandInterface `json:"command_interface,omitempty"`
+	// Command defines the command string for this capability
+	Command *string `json:"command,omitempty"`
 
 	// Arguments defines the arguments for this capability
 	Arguments *CapabilityArguments `json:"arguments,omitempty"`
@@ -109,13 +104,13 @@ func NewCapabilityArgument(name string, argType ArgumentType, description string
 	}
 }
 
-// NewCapabilityArgumentWithCliFlag creates an argument with CLI flag
-func NewCapabilityArgumentWithCliFlag(name string, argType ArgumentType, description string, cliFlag string) CapabilityArgument {
+// NewCapabilityArgumentWithCommand creates an argument with CLI flag
+func NewCapabilityArgumentWithCommand(name string, argType ArgumentType, description string, command string) CapabilityArgument {
 	return CapabilityArgument{
 		Name:        name,
 		Type:        argType,
 		Description: description,
-		CliFlag:     &cliFlag,
+		Command:     &command,
 	}
 }
 
@@ -251,12 +246,12 @@ func (ca *CapabilityArguments) GetPositionalArgs() []CapabilityArgument {
 func (ca *CapabilityArguments) GetFlagArgs() []CapabilityArgument {
 	var args []CapabilityArgument
 	for _, arg := range ca.Required {
-		if arg.CliFlag != nil {
+		if arg.Command != nil {
 			args = append(args, arg)
 		}
 	}
 	for _, arg := range ca.Optional {
-		if arg.CliFlag != nil {
+		if arg.Command != nil {
 			args = append(args, arg)
 		}
 	}
@@ -371,14 +366,14 @@ func (c *Capability) HasMetadata(key string) bool {
 	return exists
 }
 
-// GetCommandInterface gets the command interface if defined
-func (c *Capability) GetCommandInterface() *CommandInterface {
-	return c.CommandInterface
+// GetCommand gets the command if defined
+func (c *Capability) GetCommand() *string {
+	return c.Command
 }
 
-// SetCommandInterface sets the command interface
-func (c *Capability) SetCommandInterface(commandInterface *CommandInterface) {
-	c.CommandInterface = commandInterface
+// SetCommand sets the command
+func (c *Capability) SetCommand(command string) {
+	c.Command = &command
 }
 
 // GetArguments gets the arguments

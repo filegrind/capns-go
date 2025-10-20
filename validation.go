@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strconv"
 )
 
 // ValidationError represents validation errors with descriptive failure information
@@ -490,29 +489,29 @@ func (sv *SchemaValidator) ValidateCapabilitySchema(capability *Capability) erro
 	}
 
 	// Validate CLI flag uniqueness
-	cliFlags := make(map[string]string)
+	commands := make(map[string]string)
 	for _, arg := range capability.Arguments.Required {
-		if arg.CliFlag != nil {
-			if existing, exists := cliFlags[*arg.CliFlag]; exists {
+		if arg.Command != nil {
+			if existing, exists := commands[*arg.Command]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapabilitySchema",
 					CapabilityID: capabilityID,
-					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, *arg.CliFlag, existing, arg.Name),
+					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, *arg.Command, existing, arg.Name),
 				}
 			}
-			cliFlags[*arg.CliFlag] = arg.Name
+			commands[*arg.Command] = arg.Name
 		}
 	}
 	for _, arg := range capability.Arguments.Optional {
-		if arg.CliFlag != nil {
-			if existing, exists := cliFlags[*arg.CliFlag]; exists {
+		if arg.Command != nil {
+			if existing, exists := commands[*arg.Command]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapabilitySchema",
 					CapabilityID: capabilityID,
-					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, *arg.CliFlag, existing, arg.Name),
+					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityID, *arg.Command, existing, arg.Name),
 				}
 			}
-			cliFlags[*arg.CliFlag] = arg.Name
+			commands[*arg.Command] = arg.Name
 		}
 	}
 
@@ -565,10 +564,6 @@ func getNumericValue(value interface{}) (float64, bool) {
 		return v, true
 	case json.Number:
 		if f, err := v.Float64(); err == nil {
-			return f, true
-		}
-	case string:
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f, true
 		}
 	}
