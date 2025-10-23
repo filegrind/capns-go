@@ -40,6 +40,8 @@ const (
 
 var validSegmentPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-\*]+$`)
 
+
+
 // NewCapabilityIdFromString creates a capability identifier from a string
 func NewCapabilityIdFromString(s string) (*CapabilityId, error) {
 	if s == "" {
@@ -90,6 +92,18 @@ func (c *CapabilityId) Segments() []string {
 	copy(result, c.segments)
 	return result
 }
+
+/**
+ * Check if this capability produces binary output
+ * @return YES if the capability has the "bin:" prefix
+ */
+func (c *CapabilityId) IsBinaryOutput() bool {
+	if len(c.segments) == 0 {
+		return false
+	}
+	return c.segments[0] == "bin"
+}
+
 
 // CanHandle checks if this capability can handle a request
 func (c *CapabilityId) CanHandle(request *CapabilityId) bool {
