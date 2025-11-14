@@ -50,7 +50,7 @@ func TestPluginCapabilitiesIdentifiers(t *testing.T) {
 	capabilities.AddCapability(cap1)
 	capabilities.AddCapability(cap2)
 	
-	identifiers := capabilities.CapabilityKeyentifiers()
+	identifiers := capabilities.CapabilityKeys()
 	assert.Len(t, identifiers, 2)
 	assert.Contains(t, identifiers, "data_processing:transform:json")
 	assert.Contains(t, identifiers, "compute:math:arithmetic")

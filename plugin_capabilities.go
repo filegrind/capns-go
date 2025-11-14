@@ -55,8 +55,8 @@ func (pc *PluginCapabilities) CanHandleCapability(capabilityRequest string) bool
 	return false
 }
 
-// CapabilityKeyentifiers gets all capability identifiers as strings
-func (pc *PluginCapabilities) CapabilityKeyentifiers() []string {
+// CapabilityKeys gets all capability identifiers as strings
+func (pc *PluginCapabilities) CapabilityKeys() []string {
 	identifiers := make([]string, len(pc.Capabilities))
 	for i, capability := range pc.Capabilities {
 		identifiers[i] = capability.IdString()
