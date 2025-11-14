@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCapabilityIdCreation(t *testing.T) {
-	capId, err := NewCapabilityIdFromString("data_processing:transform:json")
+func TestCapabilityKeyCreation(t *testing.T) {
+	capId, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	
 	assert.NoError(t, err)
 	assert.NotNil(t, capId)
@@ -20,36 +20,36 @@ func TestCapabilityIdCreation(t *testing.T) {
 	assert.Equal(t, "json", capId.Segments()[2])
 }
 
-func TestInvalidCapabilityId(t *testing.T) {
-	capId, err := NewCapabilityIdFromString("")
+func TestInvalidCapabilityKey(t *testing.T) {
+	capId, err := NewCapabilityKeyFromString("")
 	
 	assert.Nil(t, capId)
 	assert.Error(t, err)
-	assert.Equal(t, ErrorInvalidFormat, err.(*CapabilityIdError).Code)
+	assert.Equal(t, ErrorInvalidFormat, err.(*CapabilityKeyError).Code)
 }
 
 func TestInvalidCharacters(t *testing.T) {
-	capId, err := NewCapabilityIdFromString("data@processing:transform")
+	capId, err := NewCapabilityKeyFromString("data@processing:transform")
 	
 	assert.Nil(t, capId)
 	assert.Error(t, err)
-	assert.Equal(t, ErrorInvalidCharacter, err.(*CapabilityIdError).Code)
+	assert.Equal(t, ErrorInvalidCharacter, err.(*CapabilityKeyError).Code)
 }
 
 func TestCapabilityMatching(t *testing.T) {
-	capability, err := NewCapabilityIdFromString("data_processing:transform:json")
+	capability, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
-	request1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	request1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
-	request2, err := NewCapabilityIdFromString("data_processing:transform")
+	request2, err := NewCapabilityKeyFromString("data_processing:transform")
 	require.NoError(t, err)
 	
-	request3, err := NewCapabilityIdFromString("data_processing")
+	request3, err := NewCapabilityKeyFromString("data_processing")
 	require.NoError(t, err)
 	
-	request4, err := NewCapabilityIdFromString("compute:math")
+	request4, err := NewCapabilityKeyFromString("compute:math")
 	require.NoError(t, err)
 	
 	assert.True(t, capability.CanHandle(request1))
@@ -59,16 +59,16 @@ func TestCapabilityMatching(t *testing.T) {
 }
 
 func TestWildcardMatching(t *testing.T) {
-	wildcard, err := NewCapabilityIdFromString("data_processing:*")
+	wildcard, err := NewCapabilityKeyFromString("data_processing:*")
 	require.NoError(t, err)
 	
-	request1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	request1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
-	request2, err := NewCapabilityIdFromString("data_processing:validate:xml")
+	request2, err := NewCapabilityKeyFromString("data_processing:validate:xml")
 	require.NoError(t, err)
 	
-	request3, err := NewCapabilityIdFromString("compute:math")
+	request3, err := NewCapabilityKeyFromString("compute:math")
 	require.NoError(t, err)
 	
 	assert.True(t, wildcard.CanHandle(request1))
@@ -77,10 +77,10 @@ func TestWildcardMatching(t *testing.T) {
 }
 
 func TestSpecificity(t *testing.T) {
-	specific, err := NewCapabilityIdFromString("data_processing:transform:json")
+	specific, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
-	general, err := NewCapabilityIdFromString("data_processing:*")
+	general, err := NewCapabilityKeyFromString("data_processing:*")
 	require.NoError(t, err)
 	
 	assert.True(t, specific.IsMoreSpecificThan(general))
@@ -90,13 +90,13 @@ func TestSpecificity(t *testing.T) {
 }
 
 func TestCompatibility(t *testing.T) {
-	cap1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	cap1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapabilityIdFromString("data_processing:*")
+	cap2, err := NewCapabilityKeyFromString("data_processing:*")
 	require.NoError(t, err)
 	
-	cap3, err := NewCapabilityIdFromString("compute:math")
+	cap3, err := NewCapabilityKeyFromString("compute:math")
 	require.NoError(t, err)
 	
 	assert.True(t, cap1.IsCompatibleWith(cap2))
@@ -105,13 +105,13 @@ func TestCompatibility(t *testing.T) {
 }
 
 func TestEquality(t *testing.T) {
-	cap1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	cap1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapabilityIdFromString("data_processing:transform:json")
+	cap2, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
-	cap3, err := NewCapabilityIdFromString("data_processing:transform:xml")
+	cap3, err := NewCapabilityKeyFromString("data_processing:transform:xml")
 	require.NoError(t, err)
 	
 	assert.True(t, cap1.Equals(cap2))
@@ -119,7 +119,7 @@ func TestEquality(t *testing.T) {
 }
 
 func TestWildcardAtLevel(t *testing.T) {
-	cap, err := NewCapabilityIdFromString("data_processing:*:json")
+	cap, err := NewCapabilityKeyFromString("data_processing:*:json")
 	require.NoError(t, err)
 	
 	assert.False(t, cap.IsWildcardAtLevel(0))
@@ -129,14 +129,14 @@ func TestWildcardAtLevel(t *testing.T) {
 }
 
 func TestJSONSerialization(t *testing.T) {
-	original, err := NewCapabilityIdFromString("data_processing:transform:json")
+	original, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
 	data, err := json.Marshal(original)
 	assert.NoError(t, err)
 	assert.NotNil(t, data)
 	
-	var decoded CapabilityId
+	var decoded CapabilityKey
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
 	assert.True(t, original.Equals(&decoded))

@@ -10,24 +10,24 @@ import (
 	"strings"
 )
 
-// CapabilityId represents a formal capability identifier with hierarchical naming and wildcard support
+// CapabilityKey represents a formal capability identifier with hierarchical naming and wildcard support
 //
 // Examples:
 // - file_handling:thumbnail_generation:pdf
 // - file_handling:thumbnail_generation:*
 // - file_handling:*
 // - data_processing:transform:json
-type CapabilityId struct {
+type CapabilityKey struct {
 	segments []string
 }
 
-// CapabilityIdError represents errors that can occur during capability identifier operations
-type CapabilityIdError struct {
+// CapabilityKeyError represents errors that can occur during capability identifier operations
+type CapabilityKeyError struct {
 	Code    int
 	Message string
 }
 
-func (e *CapabilityIdError) Error() string {
+func (e *CapabilityKeyError) Error() string {
 	return e.Message
 }
 
@@ -42,23 +42,23 @@ var validSegmentPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-\*]+$`)
 
 
 
-// NewCapabilityIdFromString creates a capability identifier from a string
-func NewCapabilityIdFromString(s string) (*CapabilityId, error) {
+// NewCapabilityKeyFromString creates a capability identifier from a string
+func NewCapabilityKeyFromString(s string) (*CapabilityKey, error) {
 	if s == "" {
-		return nil, &CapabilityIdError{
+		return nil, &CapabilityKeyError{
 			Code:    ErrorInvalidFormat,
 			Message: "capability identifier cannot be empty",
 		}
 	}
 
 	segments := strings.Split(s, ":")
-	return NewCapabilityIdFromSegments(segments)
+	return NewCapabilityKeyFromSegments(segments)
 }
 
-// NewCapabilityIdFromSegments creates a capability identifier from segments
-func NewCapabilityIdFromSegments(segments []string) (*CapabilityId, error) {
+// NewCapabilityKeyFromSegments creates a capability identifier from segments
+func NewCapabilityKeyFromSegments(segments []string) (*CapabilityKey, error) {
 	if len(segments) == 0 {
-		return nil, &CapabilityIdError{
+		return nil, &CapabilityKeyError{
 			Code:    ErrorInvalidFormat,
 			Message: "capability identifier must have at least one segment",
 		}
@@ -67,27 +67,27 @@ func NewCapabilityIdFromSegments(segments []string) (*CapabilityId, error) {
 	// Validate segments
 	for _, segment := range segments {
 		if segment == "" {
-			return nil, &CapabilityIdError{
+			return nil, &CapabilityKeyError{
 				Code:    ErrorEmptySegment,
 				Message: "capability identifier segments cannot be empty",
 			}
 		}
 
 		if !validSegmentPattern.MatchString(segment) {
-			return nil, &CapabilityIdError{
+			return nil, &CapabilityKeyError{
 				Code:    ErrorInvalidCharacter,
 				Message: fmt.Sprintf("invalid character in segment: %s", segment),
 			}
 		}
 	}
 
-	return &CapabilityId{
+	return &CapabilityKey{
 		segments: segments,
 	}, nil
 }
 
 // Segments returns the segments of the capability identifier
-func (c *CapabilityId) Segments() []string {
+func (c *CapabilityKey) Segments() []string {
 	result := make([]string, len(c.segments))
 	copy(result, c.segments)
 	return result
@@ -97,7 +97,7 @@ func (c *CapabilityId) Segments() []string {
  * Check if this capability produces binary output
  * @return YES if the capability has the "bin:" prefix
  */
-func (c *CapabilityId) IsBinaryOutput() bool {
+func (c *CapabilityKey) IsBinaryOutput() bool {
 	if len(c.segments) == 0 {
 		return false
 	}
@@ -106,7 +106,7 @@ func (c *CapabilityId) IsBinaryOutput() bool {
 
 
 // CanHandle checks if this capability can handle a request
-func (c *CapabilityId) CanHandle(request *CapabilityId) bool {
+func (c *CapabilityKey) CanHandle(request *CapabilityKey) bool {
 	if request == nil {
 		return false
 	}
@@ -138,7 +138,7 @@ func (c *CapabilityId) CanHandle(request *CapabilityId) bool {
 }
 
 // IsCompatibleWith checks if this capability is compatible with another
-func (c *CapabilityId) IsCompatibleWith(other *CapabilityId) bool {
+func (c *CapabilityKey) IsCompatibleWith(other *CapabilityKey) bool {
 	if other == nil {
 		return false
 	}
@@ -167,7 +167,7 @@ func (c *CapabilityId) IsCompatibleWith(other *CapabilityId) bool {
 }
 
 // IsMoreSpecificThan checks if this capability is more specific than another
-func (c *CapabilityId) IsMoreSpecificThan(other *CapabilityId) bool {
+func (c *CapabilityKey) IsMoreSpecificThan(other *CapabilityKey) bool {
 	if other == nil {
 		return true
 	}
@@ -184,7 +184,7 @@ func (c *CapabilityId) IsMoreSpecificThan(other *CapabilityId) bool {
 }
 
 // SpecificityLevel returns the specificity level of this capability
-func (c *CapabilityId) SpecificityLevel() int {
+func (c *CapabilityKey) SpecificityLevel() int {
 	count := 0
 	for _, segment := range c.segments {
 		if segment != "*" {
@@ -195,7 +195,7 @@ func (c *CapabilityId) SpecificityLevel() int {
 }
 
 // IsWildcardAtLevel checks if this capability is a wildcard at a given level
-func (c *CapabilityId) IsWildcardAtLevel(level int) bool {
+func (c *CapabilityKey) IsWildcardAtLevel(level int) bool {
 	if level >= len(c.segments) {
 		return false
 	}
@@ -203,17 +203,17 @@ func (c *CapabilityId) IsWildcardAtLevel(level int) bool {
 }
 
 // ToString returns the string representation of this capability
-func (c *CapabilityId) ToString() string {
+func (c *CapabilityKey) ToString() string {
 	return strings.Join(c.segments, ":")
 }
 
 // String implements the Stringer interface
-func (c *CapabilityId) String() string {
+func (c *CapabilityKey) String() string {
 	return c.ToString()
 }
 
 // Equals checks if this capability identifier is equal to another
-func (c *CapabilityId) Equals(other *CapabilityId) bool {
+func (c *CapabilityKey) Equals(other *CapabilityKey) bool {
 	if other == nil {
 		return false
 	}
@@ -232,18 +232,18 @@ func (c *CapabilityId) Equals(other *CapabilityId) bool {
 }
 
 // MarshalJSON implements the json.Marshaler interface
-func (c *CapabilityId) MarshalJSON() ([]byte, error) {
+func (c *CapabilityKey) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.ToString())
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
-func (c *CapabilityId) UnmarshalJSON(data []byte) error {
+func (c *CapabilityKey) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
 
-	capId, err := NewCapabilityIdFromString(s)
+	capId, err := NewCapabilityKeyFromString(s)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestCapabilityCreation(t *testing.T) {
-	id, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
 	cap := NewCapability(id, "1.0.0")
@@ -22,7 +22,7 @@ func TestCapabilityCreation(t *testing.T) {
 }
 
 func TestCapabilityWithMetadata(t *testing.T) {
-	id, err := NewCapabilityIdFromString("compute:math:arithmetic")
+	id, err := NewCapabilityKeyFromString("compute:math:arithmetic")
 	require.NoError(t, err)
 	
 	metadata := map[string]string{
@@ -45,7 +45,7 @@ func TestCapabilityWithMetadata(t *testing.T) {
 }
 
 func TestCapabilityRequestMatching(t *testing.T) {
-	id, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
 	cap := NewCapability(id, "1.0.0")
@@ -57,11 +57,11 @@ func TestCapabilityRequestMatching(t *testing.T) {
 }
 
 func TestCapabilitySpecificity(t *testing.T) {
-	id1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	cap1 := NewCapability(id1, "1.0.0")
 	
-	id2, err := NewCapabilityIdFromString("data_processing:*")
+	id2, err := NewCapabilityKeyFromString("data_processing:*")
 	require.NoError(t, err)
 	cap2 := NewCapability(id2, "1.0.0")
 	
@@ -70,7 +70,7 @@ func TestCapabilitySpecificity(t *testing.T) {
 }
 
 func TestCapabilityMetadataOperations(t *testing.T) {
-	id, err := NewCapabilityIdFromString("test:capability")
+	id, err := NewCapabilityKeyFromString("test:capability")
 	require.NoError(t, err)
 	
 	cap := NewCapability(id, "1.0.0")
@@ -94,7 +94,7 @@ func TestCapabilityMetadataOperations(t *testing.T) {
 }
 
 func TestCapabilityEquality(t *testing.T) {
-	id, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
 	cap1 := NewCapabilityWithDescription(id, "1.0.0", "Test capability")
@@ -106,7 +106,7 @@ func TestCapabilityEquality(t *testing.T) {
 }
 
 func TestCapabilityJSONSerialization(t *testing.T) {
-	id, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	
 	metadata := map[string]string{

@@ -11,11 +11,11 @@ import (
 func TestPluginCapabilities(t *testing.T) {
 	capabilities := NewPluginCapabilities()
 	
-	id1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	cap1 := NewCapability(id1, "1.0.0")
 	
-	id2, err := NewCapabilityIdFromString("data_processing:validate:*")
+	id2, err := NewCapabilityKeyFromString("data_processing:validate:*")
 	require.NoError(t, err)
 	metadata := map[string]string{
 		"formats": "json,xml,yaml",
@@ -39,18 +39,18 @@ func TestPluginCapabilities(t *testing.T) {
 func TestPluginCapabilitiesIdentifiers(t *testing.T) {
 	capabilities := NewPluginCapabilities()
 	
-	id1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	cap1 := NewCapability(id1, "1.0.0")
 	
-	id2, err := NewCapabilityIdFromString("compute:math:arithmetic")
+	id2, err := NewCapabilityKeyFromString("compute:math:arithmetic")
 	require.NoError(t, err)
 	cap2 := NewCapability(id2, "1.0.0")
 	
 	capabilities.AddCapability(cap1)
 	capabilities.AddCapability(cap2)
 	
-	identifiers := capabilities.CapabilityIdentifiers()
+	identifiers := capabilities.CapabilityKeyentifiers()
 	assert.Len(t, identifiers, 2)
 	assert.Contains(t, identifiers, "data_processing:transform:json")
 	assert.Contains(t, identifiers, "compute:math:arithmetic")
@@ -60,12 +60,12 @@ func TestFindBestCapability(t *testing.T) {
 	capabilities := NewPluginCapabilities()
 	
 	// Add a specific capability
-	id1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	cap1 := NewCapability(id1, "1.0.0")
 	
 	// Add a wildcard capability
-	id2, err := NewCapabilityIdFromString("data_processing:*")
+	id2, err := NewCapabilityKeyFromString("data_processing:*")
 	require.NoError(t, err)
 	cap2 := NewCapability(id2, "1.0.0")
 	
@@ -86,7 +86,7 @@ func TestFindBestCapability(t *testing.T) {
 func TestCapabilitiesWithMetadata(t *testing.T) {
 	capabilities := NewPluginCapabilities()
 	
-	id1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	metadata1 := map[string]string{
 		"format": "json",
@@ -94,7 +94,7 @@ func TestCapabilitiesWithMetadata(t *testing.T) {
 	}
 	cap1 := NewCapabilityWithMetadata(id1, "1.0.0", metadata1)
 	
-	id2, err := NewCapabilityIdFromString("data_processing:transform:xml")
+	id2, err := NewCapabilityKeyFromString("data_processing:transform:xml")
 	require.NoError(t, err)
 	metadata2 := map[string]string{
 		"format": "xml",
@@ -119,7 +119,7 @@ func TestCapabilitiesWithMetadata(t *testing.T) {
 func TestAllMetadataKeys(t *testing.T) {
 	capabilities := NewPluginCapabilities()
 	
-	id1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	metadata1 := map[string]string{
 		"format": "json",
@@ -127,7 +127,7 @@ func TestAllMetadataKeys(t *testing.T) {
 	}
 	cap1 := NewCapabilityWithMetadata(id1, "1.0.0", metadata1)
 	
-	id2, err := NewCapabilityIdFromString("data_processing:transform:xml")
+	id2, err := NewCapabilityKeyFromString("data_processing:transform:xml")
 	require.NoError(t, err)
 	metadata2 := map[string]string{
 		"format": "xml",
@@ -148,7 +148,7 @@ func TestAllMetadataKeys(t *testing.T) {
 func TestRemoveCapability(t *testing.T) {
 	capabilities := NewPluginCapabilities()
 	
-	id, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	cap := NewCapability(id, "1.0.0")
 	
@@ -169,11 +169,11 @@ func TestRemoveCapability(t *testing.T) {
 func TestPluginCapabilitiesJSONSerialization(t *testing.T) {
 	original := NewPluginCapabilities()
 	
-	id1, err := NewCapabilityIdFromString("data_processing:transform:json")
+	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
 	require.NoError(t, err)
 	cap1 := NewCapability(id1, "1.0.0")
 	
-	id2, err := NewCapabilityIdFromString("compute:math:arithmetic")
+	id2, err := NewCapabilityKeyFromString("compute:math:arithmetic")
 	require.NoError(t, err)
 	cap2 := NewCapabilityWithDescription(id2, "2.0.0", "Math operations")
 	

@@ -55,8 +55,8 @@ func (pc *PluginCapabilities) CanHandleCapability(capabilityRequest string) bool
 	return false
 }
 
-// CapabilityIdentifiers gets all capability identifiers as strings
-func (pc *PluginCapabilities) CapabilityIdentifiers() []string {
+// CapabilityKeyentifiers gets all capability identifiers as strings
+func (pc *PluginCapabilities) CapabilityKeyentifiers() []string {
 	identifiers := make([]string, len(pc.Capabilities))
 	for i, capability := range pc.Capabilities {
 		identifiers[i] = capability.IdString()
@@ -66,7 +66,7 @@ func (pc *PluginCapabilities) CapabilityIdentifiers() []string {
 
 // FindCapabilityWithIdentifier finds a capability by identifier
 func (pc *PluginCapabilities) FindCapabilityWithIdentifier(identifier string) *Capability {
-	searchId, err := NewCapabilityIdFromString(identifier)
+	searchId, err := NewCapabilityKeyFromString(identifier)
 	if err != nil {
 		return nil
 	}
@@ -81,17 +81,17 @@ func (pc *PluginCapabilities) FindCapabilityWithIdentifier(identifier string) *C
 
 // FindBestCapabilityForRequest finds the most specific capability that can handle a request
 func (pc *PluginCapabilities) FindBestCapabilityForRequest(request string) *Capability {
-	requestId, err := NewCapabilityIdFromString(request)
+	requestId, err := NewCapabilityKeyFromString(request)
 	if err != nil {
 		return nil
 	}
 
-	capabilityIds := make([]*CapabilityId, len(pc.Capabilities))
+	capabilityKeys := make([]*CapabilityKey, len(pc.Capabilities))
 	for i, capability := range pc.Capabilities {
-		capabilityIds[i] = capability.Id
+		capabilityKeys[i] = capability.Id
 	}
 
-	bestId := FindBestMatchStatic(capabilityIds, requestId)
+	bestId := FindBestMatchStatic(capabilityKeys, requestId)
 	if bestId == nil {
 		return nil
 	}

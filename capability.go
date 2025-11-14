@@ -74,7 +74,7 @@ type CapabilityOutput struct {
 // and do not assume any specific domain like files or documents.
 type Capability struct {
 	// Id is the formal capability identifier with hierarchical naming
-	Id *CapabilityId `json:"id"`
+	Id *CapabilityKey `json:"id"`
 
 	// Version is the capability version
 	Version string `json:"version"`
@@ -256,7 +256,7 @@ func (ca *CapabilityArguments) GetFlagArgs() []CapabilityArgument {
 }
 
 // NewCapability creates a new capability
-func NewCapability(id *CapabilityId, version string, command string) *Capability {
+func NewCapability(id *CapabilityKey, version string, command string) *Capability {
 	return &Capability{
 		Id:       id,
 		Version:  version,
@@ -267,7 +267,7 @@ func NewCapability(id *CapabilityId, version string, command string) *Capability
 }
 
 // NewCapabilityWithDescription creates a new capability with description
-func NewCapabilityWithDescription(id *CapabilityId, version string, command string, description string) *Capability {
+func NewCapabilityWithDescription(id *CapabilityKey, version string, command string, description string) *Capability {
 	return &Capability{
 		Id:          id,
 		Version:     version,
@@ -279,7 +279,7 @@ func NewCapabilityWithDescription(id *CapabilityId, version string, command stri
 }
 
 // NewCapabilityWithMetadata creates a new capability with metadata
-func NewCapabilityWithMetadata(id *CapabilityId, version string, command string, metadata map[string]string) *Capability {
+func NewCapabilityWithMetadata(id *CapabilityKey, version string, command string, metadata map[string]string) *Capability {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
@@ -293,7 +293,7 @@ func NewCapabilityWithMetadata(id *CapabilityId, version string, command string,
 }
 
 // NewCapabilityWithDescriptionAndMetadata creates a new capability with description and metadata
-func NewCapabilityWithDescriptionAndMetadata(id *CapabilityId, version string, description string, metadata map[string]string) *Capability {
+func NewCapabilityWithDescriptionAndMetadata(id *CapabilityKey, version string, description string, metadata map[string]string) *Capability {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
@@ -308,7 +308,7 @@ func NewCapabilityWithDescriptionAndMetadata(id *CapabilityId, version string, d
 
 // MatchesRequest checks if this capability matches a request string
 func (c *Capability) MatchesRequest(request string) bool {
-	requestId, err := NewCapabilityIdFromString(request)
+	requestId, err := NewCapabilityKeyFromString(request)
 	if err != nil {
 		return false
 	}
@@ -316,7 +316,7 @@ func (c *Capability) MatchesRequest(request string) bool {
 }
 
 // CanHandleRequest checks if this capability can handle a request
-func (c *Capability) CanHandleRequest(request *CapabilityId) bool {
+func (c *Capability) CanHandleRequest(request *CapabilityKey) bool {
 	return c.Id.CanHandle(request)
 }
 

@@ -9,7 +9,7 @@ import (
 type CapabilityMatcher struct{}
 
 // FindBestMatch finds the most specific capability that can handle a request
-func (m *CapabilityMatcher) FindBestMatch(capabilities []*CapabilityId, request *CapabilityId) *CapabilityId {
+func (m *CapabilityMatcher) FindBestMatch(capabilities []*CapabilityKey, request *CapabilityKey) *CapabilityKey {
 	matches := m.FindAllMatches(capabilities, request)
 	if len(matches) == 0 {
 		return nil
@@ -19,8 +19,8 @@ func (m *CapabilityMatcher) FindBestMatch(capabilities []*CapabilityId, request 
 
 // FindAllMatches finds all capabilities that can handle a request
 // Returns capabilities sorted by specificity (most specific first)
-func (m *CapabilityMatcher) FindAllMatches(capabilities []*CapabilityId, request *CapabilityId) []*CapabilityId {
-	var matches []*CapabilityId
+func (m *CapabilityMatcher) FindAllMatches(capabilities []*CapabilityKey, request *CapabilityKey) []*CapabilityKey {
+	var matches []*CapabilityKey
 
 	for _, capability := range capabilities {
 		if capability.CanHandle(request) {
@@ -32,8 +32,8 @@ func (m *CapabilityMatcher) FindAllMatches(capabilities []*CapabilityId, request
 }
 
 // SortBySpecificity sorts capabilities by specificity (most specific first)
-func (m *CapabilityMatcher) SortBySpecificity(capabilities []*CapabilityId) []*CapabilityId {
-	sorted := make([]*CapabilityId, len(capabilities))
+func (m *CapabilityMatcher) SortBySpecificity(capabilities []*CapabilityKey) []*CapabilityKey {
+	sorted := make([]*CapabilityKey, len(capabilities))
 	copy(sorted, capabilities)
 
 	sort.Slice(sorted, func(i, j int) bool {
@@ -64,7 +64,7 @@ func (m *CapabilityMatcher) SortBySpecificity(capabilities []*CapabilityId) []*C
 }
 
 // CanHandleWithContext checks if a capability can handle a request with additional context
-func (m *CapabilityMatcher) CanHandleWithContext(capability *CapabilityId, request *CapabilityId, context map[string]interface{}) bool {
+func (m *CapabilityMatcher) CanHandleWithContext(capability *CapabilityKey, request *CapabilityKey, context map[string]interface{}) bool {
 	// Basic capability matching
 	if !capability.CanHandle(request) {
 		return false
@@ -85,19 +85,19 @@ func (m *CapabilityMatcher) CanHandleWithContext(capability *CapabilityId, reque
 // Static methods for convenience
 
 // FindBestMatchStatic is a convenience function for finding the best match without creating a matcher instance
-func FindBestMatchStatic(capabilities []*CapabilityId, request *CapabilityId) *CapabilityId {
+func FindBestMatchStatic(capabilities []*CapabilityKey, request *CapabilityKey) *CapabilityKey {
 	matcher := &CapabilityMatcher{}
 	return matcher.FindBestMatch(capabilities, request)
 }
 
 // FindAllMatchesStatic is a convenience function for finding all matches without creating a matcher instance
-func FindAllMatchesStatic(capabilities []*CapabilityId, request *CapabilityId) []*CapabilityId {
+func FindAllMatchesStatic(capabilities []*CapabilityKey, request *CapabilityKey) []*CapabilityKey {
 	matcher := &CapabilityMatcher{}
 	return matcher.FindAllMatches(capabilities, request)
 }
 
 // SortBySpecificityStatic is a convenience function for sorting by specificity without creating a matcher instance
-func SortBySpecificityStatic(capabilities []*CapabilityId) []*CapabilityId {
+func SortBySpecificityStatic(capabilities []*CapabilityKey) []*CapabilityKey {
 	matcher := &CapabilityMatcher{}
 	return matcher.SortBySpecificity(capabilities)
 }
