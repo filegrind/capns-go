@@ -91,7 +91,8 @@ func (pc *PluginCapabilities) FindBestCapabilityForRequest(request string) *Capa
 		capabilityKeys[i] = capability.Id
 	}
 
-	bestId := FindBestMatchStatic(capabilityKeys, requestId)
+	matcher := &CapabilityMatcher{}
+	bestId := matcher.FindBestMatch(capabilityKeys, requestId)
 	if bestId == nil {
 		return nil
 	}

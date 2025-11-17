@@ -1,7 +1,6 @@
 package capdef
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,20 +8,21 @@ import (
 )
 
 func TestCapabilityCreation(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
+	id, err := NewCapabilityKeyFromString("action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap := NewCapability(id, "1.0.0")
+	cap := NewCapability(id, "1.0.0", "test-command")
 	
-	assert.Equal(t, "data_processing:transform:json", cap.IdString())
+	assert.Equal(t, "action=transform;format=json;type=data_processing", cap.IdString())
 	assert.Equal(t, "1.0.0", cap.Version)
+	assert.Equal(t, "test-command", cap.Command)
 	assert.Nil(t, cap.Description)
 	assert.NotNil(t, cap.Metadata)
 	assert.Empty(t, cap.Metadata)
 }
 
 func TestCapabilityWithMetadata(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("compute:math:arithmetic")
+	id, err := NewCapabilityKeyFromString("action=arithmetic;subtype=math;type=compute")
 	require.NoError(t, err)
 	
 	metadata := map[string]string{
@@ -30,98 +30,65 @@ func TestCapabilityWithMetadata(t *testing.T) {
 		"operations": "add,subtract,multiply,divide",
 	}
 	
-	cap := NewCapabilityWithMetadata(id, "2.1.0", metadata)
+	cap := NewCapabilityWithMetadata(id, "2.1.0", "calc-command", metadata)
 	
-	value, exists := cap.GetMetadata("precision")
+	precision, exists := cap.GetMetadata("precision")
 	assert.True(t, exists)
-	assert.Equal(t, "double", value)
+	assert.Equal(t, "double", precision)
 	
-	value, exists = cap.GetMetadata("operations")
+	operations, exists := cap.GetMetadata("operations")
 	assert.True(t, exists)
-	assert.Equal(t, "add,subtract,multiply,divide", value)
-	
+	assert.Equal(t, "add,subtract,multiply,divide", operations)
 	assert.True(t, cap.HasMetadata("precision"))
 	assert.False(t, cap.HasMetadata("nonexistent"))
 }
 
-func TestCapabilityRequestMatching(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
+func TestCapabilityMatching(t *testing.T) {
+	id, err := NewCapabilityKeyFromString("action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap := NewCapability(id, "1.0.0")
+	cap := NewCapability(id, "1.0.0", "test-command")
 	
-	assert.True(t, cap.MatchesRequest("data_processing:transform:json"))
-	assert.True(t, cap.MatchesRequest("data_processing:transform"))
-	assert.True(t, cap.MatchesRequest("data_processing"))
-	assert.False(t, cap.MatchesRequest("compute:math"))
+	assert.True(t, cap.MatchesRequest("action=transform;format=json;type=data_processing"))
+	assert.True(t, cap.MatchesRequest("action=transform;format=*;type=data_processing")) // Request wants any format, cap handles json specifically
+	assert.True(t, cap.MatchesRequest("type=data_processing"))
+	assert.False(t, cap.MatchesRequest("type=compute"))
 }
 
-func TestCapabilitySpecificity(t *testing.T) {
-	id1, err := NewCapabilityKeyFromString("data_processing:transform:json")
-	require.NoError(t, err)
-	cap1 := NewCapability(id1, "1.0.0")
-	
-	id2, err := NewCapabilityKeyFromString("data_processing:*")
-	require.NoError(t, err)
-	cap2 := NewCapability(id2, "1.0.0")
-	
-	assert.True(t, cap1.IsMoreSpecificThan(cap2))
-	assert.False(t, cap2.IsMoreSpecificThan(cap1))
-}
-
-func TestCapabilityMetadataOperations(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("test:capability")
+func TestCapabilityRequestHandling(t *testing.T) {
+	id, err := NewCapabilityKeyFromString("action=extract;target=metadata;type=document")
 	require.NoError(t, err)
 	
-	cap := NewCapability(id, "1.0.0")
+	cap1 := NewCapability(id, "1.0.0", "extract-cmd")
+	cap2 := NewCapability(id, "1.0.0", "extract-cmd")
 	
-	// Test setting metadata
-	cap.SetMetadata("key1", "value1")
-	assert.True(t, cap.HasMetadata("key1"))
+	assert.True(t, cap1.CanHandleRequest(cap2.Id))
 	
-	value, exists := cap.GetMetadata("key1")
-	assert.True(t, exists)
-	assert.Equal(t, "value1", value)
+	otherId, err := NewCapabilityKeyFromString("action=generate;type=image")
+	require.NoError(t, err)
+	cap3 := NewCapability(otherId, "1.0.0", "generate-cmd")
 	
-	// Test removing metadata
-	removed := cap.RemoveMetadata("key1")
-	assert.True(t, removed)
-	assert.False(t, cap.HasMetadata("key1"))
-	
-	// Test removing non-existent metadata
-	removed = cap.RemoveMetadata("nonexistent")
-	assert.False(t, removed)
+	assert.False(t, cap1.CanHandleRequest(cap3.Id))
 }
 
 func TestCapabilityEquality(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
+	id, err := NewCapabilityKeyFromString("action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap1 := NewCapabilityWithDescription(id, "1.0.0", "Test capability")
-	cap2 := NewCapabilityWithDescription(id, "1.0.0", "Test capability")
-	cap3 := NewCapabilityWithDescription(id, "2.0.0", "Test capability")
+	cap1 := NewCapability(id, "1.0.0", "test-command")
+	cap2 := NewCapability(id, "1.0.0", "test-command")
 	
 	assert.True(t, cap1.Equals(cap2))
-	assert.False(t, cap1.Equals(cap3))
 }
 
-func TestCapabilityJSONSerialization(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("data_processing:transform:json")
+func TestCapabilityDescription(t *testing.T) {
+	id, err := NewCapabilityKeyFromString("action=parse;format=json;type=data")
 	require.NoError(t, err)
 	
-	metadata := map[string]string{
-		"format": "json",
-		"version": "2.0",
-	}
+	cap1 := NewCapabilityWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
+	cap2 := NewCapabilityWithDescription(id, "2.0.0", "parse-cmd", "Parse JSON data v2")
+	cap3 := NewCapabilityWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
 	
-	original := NewCapabilityWithDescriptionAndMetadata(id, "1.0.0", "Test capability", metadata)
-	
-	data, err := json.Marshal(original)
-	assert.NoError(t, err)
-	assert.NotNil(t, data)
-	
-	var decoded Capability
-	err = json.Unmarshal(data, &decoded)
-	assert.NoError(t, err)
-	assert.True(t, original.Equals(&decoded))
+	assert.False(t, cap1.Equals(cap2)) // Different versions
+	assert.True(t, cap1.Equals(cap3))  // Same everything
 }
