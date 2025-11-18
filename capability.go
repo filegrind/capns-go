@@ -93,6 +93,9 @@ type Capability struct {
 
 	// Output defines the output format for this capability
 	Output *CapabilityOutput `json:"output,omitempty"`
+
+	// AcceptsStdin indicates whether this capability accepts input via stdin
+	AcceptsStdin bool `json:"accepts_stdin,omitempty"`
 }
 
 // NewCapabilityArgument creates a new capability argument

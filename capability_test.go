@@ -1,6 +1,7 @@
 package capdef
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,4 +92,28 @@ func TestCapabilityDescription(t *testing.T) {
 	
 	assert.False(t, cap1.Equals(cap2)) // Different versions
 	assert.True(t, cap1.Equals(cap3))  // Same everything
+}
+
+func TestCapabilityAcceptsStdin(t *testing.T) {
+	id, err := NewCapabilityKeyFromString("action=generate;target=embeddings;type=document")
+	require.NoError(t, err)
+	
+	cap := NewCapability(id, "1.0.0", "generate")
+	
+	// By default, capabilities should not accept stdin
+	assert.False(t, cap.AcceptsStdin)
+	
+	// Enable stdin support
+	cap.AcceptsStdin = true
+	assert.True(t, cap.AcceptsStdin)
+	
+	// Test JSON serialization/deserialization preserves the field
+	jsonData, err := json.Marshal(cap)
+	require.NoError(t, err)
+	
+	var deserialized Capability
+	err = json.Unmarshal(jsonData, &deserialized)
+	require.NoError(t, err)
+	
+	assert.Equal(t, cap.AcceptsStdin, deserialized.AcceptsStdin)
 }
