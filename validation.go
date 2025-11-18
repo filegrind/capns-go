@@ -9,7 +9,7 @@ import (
 // ValidationError represents validation errors with descriptive failure information
 type ValidationError struct {
 	Type         string
-	CapabilityID string
+	CapID string
 	ArgumentName string
 	ExpectedType string
 	ActualType   string
@@ -22,83 +22,83 @@ func (e *ValidationError) Error() string {
 	return e.Message
 }
 
-// NewUnknownCapabilityError creates an error for unknown capabilities
-func NewUnknownCapabilityError(capabilityKey string) *ValidationError {
+// NewUnknownCapError creates an error for unknown caps
+func NewUnknownCapError(capCard string) *ValidationError {
 	return &ValidationError{
-		Type:         "UnknownCapability",
-		CapabilityID: capabilityKey,
-		Message:      fmt.Sprintf("Unknown capability '%s' - capability not registered or advertised", capabilityKey),
+		Type:         "UnknownCap",
+		CapID: capCard,
+		Message:      fmt.Sprintf("Unknown cap '%s' - cap not registered or advertised", capCard),
 	}
 }
 
 // NewMissingRequiredArgumentError creates an error for missing required arguments
-func NewMissingRequiredArgumentError(capabilityKey, argumentName string) *ValidationError {
+func NewMissingRequiredArgumentError(capCard, argumentName string) *ValidationError {
 	return &ValidationError{
 		Type:         "MissingRequiredArgument",
-		CapabilityID: capabilityKey,
+		CapID: capCard,
 		ArgumentName: argumentName,
-		Message:      fmt.Sprintf("Capability '%s' requires argument '%s' but it was not provided", capabilityKey, argumentName),
+		Message:      fmt.Sprintf("Cap '%s' requires argument '%s' but it was not provided", capCard, argumentName),
 	}
 }
 
 // NewInvalidArgumentTypeError creates an error for invalid argument types
-func NewInvalidArgumentTypeError(capabilityKey, argumentName string, expectedType ArgumentType, actualType string, actualValue interface{}) *ValidationError {
+func NewInvalidArgumentTypeError(capCard, argumentName string, expectedType ArgumentType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidArgumentType",
-		CapabilityID: capabilityKey,
+		CapID: capCard,
 		ArgumentName: argumentName,
 		ExpectedType: string(expectedType),
 		ActualType:   actualType,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Capability '%s' argument '%s' expects type '%s' but received '%s' with value: %v", capabilityKey, argumentName, expectedType, actualType, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' expects type '%s' but received '%s' with value: %v", capCard, argumentName, expectedType, actualType, actualValue),
 	}
 }
 
 // NewArgumentValidationFailedError creates an error for argument validation failures
-func NewArgumentValidationFailedError(capabilityKey, argumentName, rule string, actualValue interface{}) *ValidationError {
+func NewArgumentValidationFailedError(capCard, argumentName, rule string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "ArgumentValidationFailed",
-		CapabilityID: capabilityKey,
+		CapID: capCard,
 		ArgumentName: argumentName,
 		Rule:         rule,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Capability '%s' argument '%s' failed validation rule '%s' with value: %v", capabilityKey, argumentName, rule, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' failed validation rule '%s' with value: %v", capCard, argumentName, rule, actualValue),
 	}
 }
 
 // NewInvalidOutputTypeError creates an error for invalid output types
-func NewInvalidOutputTypeError(capabilityKey string, expectedType OutputType, actualType string, actualValue interface{}) *ValidationError {
+func NewInvalidOutputTypeError(capCard string, expectedType OutputType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidOutputType",
-		CapabilityID: capabilityKey,
+		CapID: capCard,
 		ExpectedType: string(expectedType),
 		ActualType:   actualType,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Capability '%s' output expects type '%s' but received '%s' with value: %v", capabilityKey, expectedType, actualType, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' output expects type '%s' but received '%s' with value: %v", capCard, expectedType, actualType, actualValue),
 	}
 }
 
 // NewOutputValidationFailedError creates an error for output validation failures
-func NewOutputValidationFailedError(capabilityKey, rule string, actualValue interface{}) *ValidationError {
+func NewOutputValidationFailedError(capCard, rule string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "OutputValidationFailed",
-		CapabilityID: capabilityKey,
+		CapID: capCard,
 		Rule:         rule,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Capability '%s' output failed validation rule '%s' with value: %v", capabilityKey, rule, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' output failed validation rule '%s' with value: %v", capCard, rule, actualValue),
 	}
 }
 
-// InputValidator validates arguments against capability input schemas
+// InputValidator validates arguments against cap input schemas
 type InputValidator struct{}
 
-// ValidateArguments validates arguments against a capability's input schema
-func (iv *InputValidator) ValidateArguments(capability *Capability, arguments []interface{}) error {
-	capabilityKey := capability.IdString()
-	args := capability.Arguments
+// ValidateArguments validates arguments against a cap's input schema
+func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) error {
+	capCard := cap.IdString()
+	args := cap.Arguments
 
 	if args == nil {
-		args = NewCapabilityArguments()
+		args = NewCapArguments()
 	}
 
 	// Check if too many arguments provided
@@ -106,18 +106,18 @@ func (iv *InputValidator) ValidateArguments(capability *Capability, arguments []
 	if len(arguments) > maxArgs {
 		return &ValidationError{
 			Type:         "TooManyArguments",
-			CapabilityID: capabilityKey,
-			Message:      fmt.Sprintf("Capability '%s' expects at most %d arguments but received %d", capabilityKey, maxArgs, len(arguments)),
+			CapID: capCard,
+			Message:      fmt.Sprintf("Cap '%s' expects at most %d arguments but received %d", capCard, maxArgs, len(arguments)),
 		}
 	}
 
 	// Validate required arguments
 	for index, reqArg := range args.Required {
 		if index >= len(arguments) {
-			return NewMissingRequiredArgumentError(capabilityKey, reqArg.Name)
+			return NewMissingRequiredArgumentError(capCard, reqArg.Name)
 		}
 
-		if err := iv.validateSingleArgument(capability, &reqArg, arguments[index]); err != nil {
+		if err := iv.validateSingleArgument(cap, &reqArg, arguments[index]); err != nil {
 			return err
 		}
 	}
@@ -127,7 +127,7 @@ func (iv *InputValidator) ValidateArguments(capability *Capability, arguments []
 	for index, optArg := range args.Optional {
 		argIndex := requiredCount + index
 		if argIndex < len(arguments) {
-			if err := iv.validateSingleArgument(capability, &optArg, arguments[argIndex]); err != nil {
+			if err := iv.validateSingleArgument(cap, &optArg, arguments[argIndex]); err != nil {
 				return err
 			}
 		}
@@ -136,22 +136,22 @@ func (iv *InputValidator) ValidateArguments(capability *Capability, arguments []
 	return nil
 }
 
-func (iv *InputValidator) validateSingleArgument(capability *Capability, argDef *CapabilityArgument, value interface{}) error {
+func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, value interface{}) error {
 	// Type validation
-	if err := iv.validateArgumentType(capability, argDef, value); err != nil {
+	if err := iv.validateArgumentType(cap, argDef, value); err != nil {
 		return err
 	}
 
 	// Validation rules
-	if err := iv.validateArgumentRules(capability, argDef, value); err != nil {
+	if err := iv.validateArgumentRules(cap, argDef, value); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (iv *InputValidator) validateArgumentType(capability *Capability, argDef *CapabilityArgument, value interface{}) error {
-	capabilityKey := capability.IdString()
+func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, value interface{}) error {
+	capCard := cap.IdString()
 	actualType := getValueTypeName(value)
 
 	typeMatches := false
@@ -182,14 +182,14 @@ func (iv *InputValidator) validateArgumentType(capability *Capability, argDef *C
 	}
 
 	if !typeMatches {
-		return NewInvalidArgumentTypeError(capabilityKey, argDef.Name, argDef.Type, actualType, value)
+		return NewInvalidArgumentTypeError(capCard, argDef.Name, argDef.Type, actualType, value)
 	}
 
 	return nil
 }
 
-func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *CapabilityArgument, value interface{}) error {
-	capabilityKey := capability.IdString()
+func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, value interface{}) error {
+	capCard := cap.IdString()
 	validation := argDef.Validation
 
 	if validation == nil {
@@ -200,7 +200,7 @@ func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *
 	if validation.Min != nil {
 		if num, ok := getNumericValue(value); ok {
 			if num < *validation.Min {
-				return NewArgumentValidationFailedError(capabilityKey, argDef.Name, fmt.Sprintf("minimum value %v", *validation.Min), value)
+				return NewArgumentValidationFailedError(capCard, argDef.Name, fmt.Sprintf("minimum value %v", *validation.Min), value)
 			}
 		}
 	}
@@ -208,7 +208,7 @@ func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *
 	if validation.Max != nil {
 		if num, ok := getNumericValue(value); ok {
 			if num > *validation.Max {
-				return NewArgumentValidationFailedError(capabilityKey, argDef.Name, fmt.Sprintf("maximum value %v", *validation.Max), value)
+				return NewArgumentValidationFailedError(capCard, argDef.Name, fmt.Sprintf("maximum value %v", *validation.Max), value)
 			}
 		}
 	}
@@ -217,7 +217,7 @@ func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *
 	if validation.MinLength != nil {
 		if s, ok := value.(string); ok {
 			if len(s) < *validation.MinLength {
-				return NewArgumentValidationFailedError(capabilityKey, argDef.Name, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
+				return NewArgumentValidationFailedError(capCard, argDef.Name, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
 			}
 		}
 	}
@@ -225,7 +225,7 @@ func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *
 	if validation.MaxLength != nil {
 		if s, ok := value.(string); ok {
 			if len(s) > *validation.MaxLength {
-				return NewArgumentValidationFailedError(capabilityKey, argDef.Name, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
+				return NewArgumentValidationFailedError(capCard, argDef.Name, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
 			}
 		}
 	}
@@ -235,7 +235,7 @@ func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *
 		if s, ok := value.(string); ok {
 			if regex, err := regexp.Compile(*validation.Pattern); err == nil {
 				if !regex.MatchString(s) {
-					return NewArgumentValidationFailedError(capabilityKey, argDef.Name, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
+					return NewArgumentValidationFailedError(capCard, argDef.Name, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
 				}
 			}
 		}
@@ -252,7 +252,7 @@ func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *
 				}
 			}
 			if !allowed {
-				return NewArgumentValidationFailedError(capabilityKey, argDef.Name, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
+				return NewArgumentValidationFailedError(capCard, argDef.Name, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
 			}
 		}
 	}
@@ -260,37 +260,37 @@ func (iv *InputValidator) validateArgumentRules(capability *Capability, argDef *
 	return nil
 }
 
-// OutputValidator validates output against capability output schemas
+// OutputValidator validates output against cap output schemas
 type OutputValidator struct{}
 
-// ValidateOutput validates output against a capability's output schema
-func (ov *OutputValidator) ValidateOutput(capability *Capability, output interface{}) error {
-	capabilityKey := capability.IdString()
+// ValidateOutput validates output against a cap's output schema
+func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
+	capCard := cap.IdString()
 
-	outputDef := capability.GetOutput()
+	outputDef := cap.GetOutput()
 	if outputDef == nil {
 		return &ValidationError{
-			Type:         "InvalidCapabilitySchema",
-			CapabilityID: capabilityKey,
-			Message:      fmt.Sprintf("Capability '%s' has no output definition specified", capabilityKey),
+			Type:         "InvalidCapSchema",
+			CapID: capCard,
+			Message:      fmt.Sprintf("Cap '%s' has no output definition specified", capCard),
 		}
 	}
 
 	// Type validation
-	if err := ov.validateOutputType(capability, outputDef, output); err != nil {
+	if err := ov.validateOutputType(cap, outputDef, output); err != nil {
 		return err
 	}
 
 	// Validation rules
-	if err := ov.validateOutputRules(capability, outputDef, output); err != nil {
+	if err := ov.validateOutputRules(cap, outputDef, output); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (ov *OutputValidator) validateOutputType(capability *Capability, outputDef *CapabilityOutput, value interface{}) error {
-	capabilityKey := capability.IdString()
+func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, value interface{}) error {
+	capCard := cap.IdString()
 	actualType := getValueTypeName(value)
 
 	typeMatches := false
@@ -321,14 +321,14 @@ func (ov *OutputValidator) validateOutputType(capability *Capability, outputDef 
 	}
 
 	if !typeMatches {
-		return NewInvalidOutputTypeError(capabilityKey, outputDef.Type, actualType, value)
+		return NewInvalidOutputTypeError(capCard, outputDef.Type, actualType, value)
 	}
 
 	return nil
 }
 
-func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef *CapabilityOutput, value interface{}) error {
-	capabilityKey := capability.IdString()
+func (ov *OutputValidator) validateOutputRules(cap *Cap, outputDef *CapOutput, value interface{}) error {
+	capCard := cap.IdString()
 	validation := outputDef.Validation
 
 	if validation == nil {
@@ -339,7 +339,7 @@ func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef
 	if validation.Min != nil {
 		if num, ok := getNumericValue(value); ok {
 			if num < *validation.Min {
-				return NewOutputValidationFailedError(capabilityKey, fmt.Sprintf("minimum value %v", *validation.Min), value)
+				return NewOutputValidationFailedError(capCard, fmt.Sprintf("minimum value %v", *validation.Min), value)
 			}
 		}
 	}
@@ -347,7 +347,7 @@ func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef
 	if validation.Max != nil {
 		if num, ok := getNumericValue(value); ok {
 			if num > *validation.Max {
-				return NewOutputValidationFailedError(capabilityKey, fmt.Sprintf("maximum value %v", *validation.Max), value)
+				return NewOutputValidationFailedError(capCard, fmt.Sprintf("maximum value %v", *validation.Max), value)
 			}
 		}
 	}
@@ -355,7 +355,7 @@ func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef
 	if validation.MinLength != nil {
 		if s, ok := value.(string); ok {
 			if len(s) < *validation.MinLength {
-				return NewOutputValidationFailedError(capabilityKey, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
+				return NewOutputValidationFailedError(capCard, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
 			}
 		}
 	}
@@ -363,7 +363,7 @@ func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef
 	if validation.MaxLength != nil {
 		if s, ok := value.(string); ok {
 			if len(s) > *validation.MaxLength {
-				return NewOutputValidationFailedError(capabilityKey, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
+				return NewOutputValidationFailedError(capCard, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
 			}
 		}
 	}
@@ -372,7 +372,7 @@ func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef
 		if s, ok := value.(string); ok {
 			if regex, err := regexp.Compile(*validation.Pattern); err == nil {
 				if !regex.MatchString(s) {
-					return NewOutputValidationFailedError(capabilityKey, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
+					return NewOutputValidationFailedError(capCard, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
 				}
 			}
 		}
@@ -388,7 +388,7 @@ func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef
 				}
 			}
 			if !allowed {
-				return NewOutputValidationFailedError(capabilityKey, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
+				return NewOutputValidationFailedError(capCard, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
 			}
 		}
 	}
@@ -398,7 +398,7 @@ func (ov *OutputValidator) validateOutputRules(capability *Capability, outputDef
 
 // SchemaValidator provides centralized validation coordination
 type SchemaValidator struct {
-	capabilities   map[string]*Capability
+	caps   map[string]*Cap
 	inputValidator *InputValidator
 	outputValidator *OutputValidator
 }
@@ -406,82 +406,82 @@ type SchemaValidator struct {
 // NewSchemaValidator creates a new schema validator
 func NewSchemaValidator() *SchemaValidator {
 	return &SchemaValidator{
-		capabilities:    make(map[string]*Capability),
+		caps:    make(map[string]*Cap),
 		inputValidator:  &InputValidator{},
 		outputValidator: &OutputValidator{},
 	}
 }
 
-// RegisterCapability registers a capability schema for validation
-func (sv *SchemaValidator) RegisterCapability(capability *Capability) {
-	sv.capabilities[capability.IdString()] = capability
+// RegisterCap registers a cap schema for validation
+func (sv *SchemaValidator) RegisterCap(cap *Cap) {
+	sv.caps[cap.IdString()] = cap
 }
 
-// GetCapability gets a capability by ID
-func (sv *SchemaValidator) GetCapability(capabilityKey string) *Capability {
-	return sv.capabilities[capabilityKey]
+// GetCap gets a cap by ID
+func (sv *SchemaValidator) GetCap(capCard string) *Cap {
+	return sv.caps[capCard]
 }
 
-// ValidateInputs validates arguments against a capability's input schema
-func (sv *SchemaValidator) ValidateInputs(capabilityKey string, arguments []interface{}) error {
-	capability := sv.GetCapability(capabilityKey)
-	if capability == nil {
-		return NewUnknownCapabilityError(capabilityKey)
+// ValidateInputs validates arguments against a cap's input schema
+func (sv *SchemaValidator) ValidateInputs(capCard string, arguments []interface{}) error {
+	cap := sv.GetCap(capCard)
+	if cap == nil {
+		return NewUnknownCapError(capCard)
 	}
 
-	return sv.inputValidator.ValidateArguments(capability, arguments)
+	return sv.inputValidator.ValidateArguments(cap, arguments)
 }
 
-// ValidateOutput validates output against a capability's output schema
-func (sv *SchemaValidator) ValidateOutput(capabilityKey string, output interface{}) error {
-	capability := sv.GetCapability(capabilityKey)
-	if capability == nil {
-		return NewUnknownCapabilityError(capabilityKey)
+// ValidateOutput validates output against a cap's output schema
+func (sv *SchemaValidator) ValidateOutput(capCard string, output interface{}) error {
+	cap := sv.GetCap(capCard)
+	if cap == nil {
+		return NewUnknownCapError(capCard)
 	}
 
-	return sv.outputValidator.ValidateOutput(capability, output)
+	return sv.outputValidator.ValidateOutput(cap, output)
 }
 
-// ValidateCapabilitySchema validates a capability definition itself
-func (sv *SchemaValidator) ValidateCapabilitySchema(capability *Capability) error {
-	capabilityKey := capability.IdString()
+// ValidateCapSchema validates a cap definition itself
+func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
+	capCard := cap.IdString()
 
-	if capability.Arguments == nil {
+	if cap.Arguments == nil {
 		return nil
 	}
 
 	// Validate that required arguments don't have default values
-	for _, arg := range capability.Arguments.Required {
+	for _, arg := range cap.Arguments.Required {
 		if arg.Default != nil {
 			return &ValidationError{
-				Type:         "InvalidCapabilitySchema",
-				CapabilityID: capabilityKey,
-				Message:      fmt.Sprintf("Capability '%s' required argument '%s' cannot have a default value", capabilityKey, arg.Name),
+				Type:         "InvalidCapSchema",
+				CapID: capCard,
+				Message:      fmt.Sprintf("Cap '%s' required argument '%s' cannot have a default value", capCard, arg.Name),
 			}
 		}
 	}
 
 	// Validate argument position uniqueness
 	positions := make(map[int]string)
-	for _, arg := range capability.Arguments.Required {
+	for _, arg := range cap.Arguments.Required {
 		if arg.Position != nil {
 			if existing, exists := positions[*arg.Position]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapabilitySchema",
-					CapabilityID: capabilityKey,
-					Message:      fmt.Sprintf("Capability '%s' duplicate argument position %d for arguments '%s' and '%s'", capabilityKey, *arg.Position, existing, arg.Name),
+					Type:         "InvalidCapSchema",
+					CapID: capCard,
+					Message:      fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capCard, *arg.Position, existing, arg.Name),
 				}
 			}
 			positions[*arg.Position] = arg.Name
 		}
 	}
-	for _, arg := range capability.Arguments.Optional {
+	for _, arg := range cap.Arguments.Optional {
 		if arg.Position != nil {
 			if existing, exists := positions[*arg.Position]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapabilitySchema",
-					CapabilityID: capabilityKey,
-					Message:      fmt.Sprintf("Capability '%s' duplicate argument position %d for arguments '%s' and '%s'", capabilityKey, *arg.Position, existing, arg.Name),
+					Type:         "InvalidCapSchema",
+					CapID: capCard,
+					Message:      fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capCard, *arg.Position, existing, arg.Name),
 				}
 			}
 			positions[*arg.Position] = arg.Name
@@ -490,25 +490,25 @@ func (sv *SchemaValidator) ValidateCapabilitySchema(capability *Capability) erro
 
 	// Validate CLI flag uniqueness
 	cliFlags := make(map[string]string)
-	for _, arg := range capability.Arguments.Required {
+	for _, arg := range cap.Arguments.Required {
 		if arg.CliFlag != "" {
 			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapabilitySchema",
-					CapabilityID: capabilityKey,
-					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityKey, arg.CliFlag, existing, arg.Name),
+					Type:         "InvalidCapSchema",
+					CapID: capCard,
+					Message:      fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capCard, arg.CliFlag, existing, arg.Name),
 				}
 			}
 			cliFlags[arg.CliFlag] = arg.Name
 		}
 	}
-	for _, arg := range capability.Arguments.Optional {
+	for _, arg := range cap.Arguments.Optional {
 		if arg.CliFlag != "" {
 			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapabilitySchema",
-					CapabilityID: capabilityKey,
-					Message:      fmt.Sprintf("Capability '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capabilityKey, arg.CliFlag, existing, arg.Name),
+					Type:         "InvalidCapSchema",
+					CapID: capCard,
+					Message:      fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capCard, arg.CliFlag, existing, arg.Name),
 				}
 			}
 			cliFlags[arg.CliFlag] = arg.Name

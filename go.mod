@@ -1,4 +1,4 @@
-module github.com/lbvr/capability-sdk-go
+module github.com/lbvr/cap-sdk-go
 
 go 1.21
 

@@ -1,8 +1,8 @@
-// Package capdef provides the unified capability-based manifest interface
+// Package capdef provides the unified cap-based manifest interface
 package capdef
 
-// CapabilityManifest represents unified capability manifest for --manifest output
-type CapabilityManifest struct {
+// CapManifest represents unified cap manifest for --manifest output
+type CapManifest struct {
 	// Component name
 	Name string `json:"name"`
 
@@ -12,25 +12,25 @@ type CapabilityManifest struct {
 	// Component description
 	Description string `json:"description"`
 
-	// Component capabilities with formal definitions
-	Capabilities []Capability `json:"capabilities"`
+	// Component caps with formal definitions
+	Caps []Cap `json:"caps"`
 
 	// Component author/maintainer
 	Author *string `json:"author,omitempty"`
 }
 
-// NewCapabilityManifest creates a new capability manifest
-func NewCapabilityManifest(name, version, description string, capabilities []Capability) *CapabilityManifest {
-	return &CapabilityManifest{
+// NewCapManifest creates a new cap manifest
+func NewCapManifest(name, version, description string, caps []Cap) *CapManifest {
+	return &CapManifest{
 		Name:         name,
 		Version:      version,
 		Description:  description,
-		Capabilities: capabilities,
+		Caps: caps,
 	}
 }
 
 // WithAuthor sets the author of the component
-func (cm *CapabilityManifest) WithAuthor(author string) *CapabilityManifest {
+func (cm *CapManifest) WithAuthor(author string) *CapManifest {
 	cm.Author = &author
 	return cm
 }
@@ -38,8 +38,8 @@ func (cm *CapabilityManifest) WithAuthor(author string) *CapabilityManifest {
 // ComponentMetadata interface for components to provide metadata about themselves
 type ComponentMetadata interface {
 	// ComponentManifest returns the component manifest
-	ComponentManifest() *CapabilityManifest
+	ComponentManifest() *CapManifest
 
-	// Capabilities returns the component capabilities
-	Capabilities() []Capability
+	// Caps returns the component caps
+	Caps() []Cap
 }

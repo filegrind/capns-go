@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCapabilityCreation(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("action=transform;format=json;type=data_processing")
+func TestCapCreation(t *testing.T) {
+	id, err := NewCapCardFromString("action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap := NewCapability(id, "1.0.0", "test-command")
+	cap := NewCap(id, "1.0.0", "test-command")
 	
 	assert.Equal(t, "action=transform;format=json;type=data_processing", cap.IdString())
 	assert.Equal(t, "1.0.0", cap.Version)
@@ -22,8 +22,8 @@ func TestCapabilityCreation(t *testing.T) {
 	assert.Empty(t, cap.Metadata)
 }
 
-func TestCapabilityWithMetadata(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("action=arithmetic;subtype=math;type=compute")
+func TestCapWithMetadata(t *testing.T) {
+	id, err := NewCapCardFromString("action=arithmetic;subtype=math;type=compute")
 	require.NoError(t, err)
 	
 	metadata := map[string]string{
@@ -31,7 +31,7 @@ func TestCapabilityWithMetadata(t *testing.T) {
 		"operations": "add,subtract,multiply,divide",
 	}
 	
-	cap := NewCapabilityWithMetadata(id, "2.1.0", "calc-command", metadata)
+	cap := NewCapWithMetadata(id, "2.1.0", "calc-command", metadata)
 	
 	precision, exists := cap.GetMetadata("precision")
 	assert.True(t, exists)
@@ -44,11 +44,11 @@ func TestCapabilityWithMetadata(t *testing.T) {
 	assert.False(t, cap.HasMetadata("nonexistent"))
 }
 
-func TestCapabilityMatching(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("action=transform;format=json;type=data_processing")
+func TestCapMatching(t *testing.T) {
+	id, err := NewCapCardFromString("action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap := NewCapability(id, "1.0.0", "test-command")
+	cap := NewCap(id, "1.0.0", "test-command")
 	
 	assert.True(t, cap.MatchesRequest("action=transform;format=json;type=data_processing"))
 	assert.True(t, cap.MatchesRequest("action=transform;format=*;type=data_processing")) // Request wants any format, cap handles json specifically
@@ -56,51 +56,51 @@ func TestCapabilityMatching(t *testing.T) {
 	assert.False(t, cap.MatchesRequest("type=compute"))
 }
 
-func TestCapabilityRequestHandling(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("action=extract;target=metadata;type=document")
+func TestCapRequestHandling(t *testing.T) {
+	id, err := NewCapCardFromString("action=extract;target=metadata;type=document")
 	require.NoError(t, err)
 	
-	cap1 := NewCapability(id, "1.0.0", "extract-cmd")
-	cap2 := NewCapability(id, "1.0.0", "extract-cmd")
+	cap1 := NewCap(id, "1.0.0", "extract-cmd")
+	cap2 := NewCap(id, "1.0.0", "extract-cmd")
 	
 	assert.True(t, cap1.CanHandleRequest(cap2.Id))
 	
-	otherId, err := NewCapabilityKeyFromString("action=generate;type=image")
+	otherId, err := NewCapCardFromString("action=generate;type=image")
 	require.NoError(t, err)
-	cap3 := NewCapability(otherId, "1.0.0", "generate-cmd")
+	cap3 := NewCap(otherId, "1.0.0", "generate-cmd")
 	
 	assert.False(t, cap1.CanHandleRequest(cap3.Id))
 }
 
-func TestCapabilityEquality(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("action=transform;format=json;type=data_processing")
+func TestCapEquality(t *testing.T) {
+	id, err := NewCapCardFromString("action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap1 := NewCapability(id, "1.0.0", "test-command")
-	cap2 := NewCapability(id, "1.0.0", "test-command")
+	cap1 := NewCap(id, "1.0.0", "test-command")
+	cap2 := NewCap(id, "1.0.0", "test-command")
 	
 	assert.True(t, cap1.Equals(cap2))
 }
 
-func TestCapabilityDescription(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("action=parse;format=json;type=data")
+func TestCapDescription(t *testing.T) {
+	id, err := NewCapCardFromString("action=parse;format=json;type=data")
 	require.NoError(t, err)
 	
-	cap1 := NewCapabilityWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
-	cap2 := NewCapabilityWithDescription(id, "2.0.0", "parse-cmd", "Parse JSON data v2")
-	cap3 := NewCapabilityWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
+	cap1 := NewCapWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
+	cap2 := NewCapWithDescription(id, "2.0.0", "parse-cmd", "Parse JSON data v2")
+	cap3 := NewCapWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
 	
 	assert.False(t, cap1.Equals(cap2)) // Different versions
 	assert.True(t, cap1.Equals(cap3))  // Same everything
 }
 
-func TestCapabilityAcceptsStdin(t *testing.T) {
-	id, err := NewCapabilityKeyFromString("action=generate;target=embeddings;type=document")
+func TestCapAcceptsStdin(t *testing.T) {
+	id, err := NewCapCardFromString("action=generate;target=embeddings;type=document")
 	require.NoError(t, err)
 	
-	cap := NewCapability(id, "1.0.0", "generate")
+	cap := NewCap(id, "1.0.0", "generate")
 	
-	// By default, capabilities should not accept stdin
+	// By default, caps should not accept stdin
 	assert.False(t, cap.AcceptsStdin)
 	
 	// Enable stdin support
@@ -111,7 +111,7 @@ func TestCapabilityAcceptsStdin(t *testing.T) {
 	jsonData, err := json.Marshal(cap)
 	require.NoError(t, err)
 	
-	var deserialized Capability
+	var deserialized Cap
 	err = json.Unmarshal(jsonData, &deserialized)
 	require.NoError(t, err)
 	

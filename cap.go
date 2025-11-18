@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 )
 
-// ArgumentType represents the type of a capability argument
+// ArgumentType represents the type of a cap argument
 type ArgumentType string
 
 const (
@@ -17,7 +17,7 @@ const (
 	ArgumentTypeBinary  ArgumentType = "binary"
 )
 
-// ArgumentValidation represents validation rules for capability arguments
+// ArgumentValidation represents validation rules for cap arguments
 type ArgumentValidation struct {
 	Min          *float64  `json:"min,omitempty"`
 	Max          *float64  `json:"max,omitempty"`
@@ -27,8 +27,8 @@ type ArgumentValidation struct {
 	AllowedValues []string `json:"allowed_values,omitempty"`
 }
 
-// CapabilityArgument represents a single argument definition for a capability
-type CapabilityArgument struct {
+// CapArgument represents a single argument definition for a cap
+type CapArgument struct {
 	Name        string               `json:"name"`
 	Type        ArgumentType         `json:"type"`
 	Description string               `json:"description"`
@@ -38,14 +38,14 @@ type CapabilityArgument struct {
 	Default     interface{}          `json:"default,omitempty"`
 }
 
-// CapabilityArguments represents the collection of arguments for a capability
-type CapabilityArguments struct {
-	Required []CapabilityArgument `json:"required,omitempty"`
-	Optional []CapabilityArgument `json:"optional,omitempty"`
+// CapArguments represents the collection of arguments for a cap
+type CapArguments struct {
+	Required []CapArgument `json:"required,omitempty"`
+	Optional []CapArgument `json:"optional,omitempty"`
 }
 
 
-// OutputType represents the type of output a capability returns
+// OutputType represents the type of output a cap returns
 type OutputType string
 
 const (
@@ -58,8 +58,8 @@ const (
 	OutputTypeBinary  OutputType = "binary"
 )
 
-// CapabilityOutput represents the output definition for a capability
-type CapabilityOutput struct {
+// CapOutput represents the output definition for a cap
+type CapOutput struct {
 	Type        OutputType           `json:"type"`
 	SchemaRef   *string              `json:"schema_ref,omitempty"`
 	ContentType *string              `json:"content_type,omitempty"`
@@ -67,16 +67,16 @@ type CapabilityOutput struct {
 	Description string               `json:"description"`
 }
 
-// Capability represents a formal capability definition
+// Cap represents a formal cap definition
 //
-// This defines the structure for formal capability definitions that include
-// the capability identifier, versioning, metadata, and arguments. Capabilities are general-purpose
+// This defines the structure for formal cap definitions that include
+// the cap identifier, versioning, metadata, and arguments. Caps are general-purpose
 // and do not assume any specific domain like files or documents.
-type Capability struct {
-	// Id is the formal capability identifier with hierarchical naming
-	Id *CapabilityKey `json:"id"`
+type Cap struct {
+	// Id is the formal cap identifier with hierarchical naming
+	Id *CapCard `json:"id"`
 
-	// Version is the capability version
+	// Version is the cap version
 	Version string `json:"version"`
 
 	// Description is an optional description
@@ -85,22 +85,22 @@ type Capability struct {
 	// Metadata contains optional metadata as key-value pairs
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// Command defines the command string for this capability
+	// Command defines the command string for this cap
 	Command string `json:"command"`
 
-	// Arguments defines the arguments for this capability
-	Arguments *CapabilityArguments `json:"arguments,omitempty"`
+	// Arguments defines the arguments for this cap
+	Arguments *CapArguments `json:"arguments,omitempty"`
 
-	// Output defines the output format for this capability
-	Output *CapabilityOutput `json:"output,omitempty"`
+	// Output defines the output format for this cap
+	Output *CapOutput `json:"output,omitempty"`
 
-	// AcceptsStdin indicates whether this capability accepts input via stdin
+	// AcceptsStdin indicates whether this cap accepts input via stdin
 	AcceptsStdin bool `json:"accepts_stdin,omitempty"`
 }
 
-// NewCapabilityArgument creates a new capability argument
-func NewCapabilityArgument(name string, argType ArgumentType, description string, cliFlag string) CapabilityArgument {
-	return CapabilityArgument{
+// NewCapArgument creates a new cap argument
+func NewCapArgument(name string, argType ArgumentType, description string, cliFlag string) CapArgument {
+	return CapArgument{
 		Name:        name,
 		Type:        argType,
 		Description: description,
@@ -108,14 +108,14 @@ func NewCapabilityArgument(name string, argType ArgumentType, description string
 	}
 }
 
-// NewCapabilityArgumentWithCliFlag creates an argument with CLI flag (deprecated - use NewCapabilityArgument)
-func NewCapabilityArgumentWithCliFlag(name string, argType ArgumentType, description string, cliFlag string) CapabilityArgument {
-	return NewCapabilityArgument(name, argType, description, cliFlag)
+// NewCapArgumentWithCliFlag creates an argument with CLI flag (deprecated - use NewCapArgument)
+func NewCapArgumentWithCliFlag(name string, argType ArgumentType, description string, cliFlag string) CapArgument {
+	return NewCapArgument(name, argType, description, cliFlag)
 }
 
-// NewCapabilityArgumentWithPosition creates an argument with position
-func NewCapabilityArgumentWithPosition(name string, argType ArgumentType, description string, cliFlag string, position int) CapabilityArgument {
-	return CapabilityArgument{
+// NewCapArgumentWithPosition creates an argument with position
+func NewCapArgumentWithPosition(name string, argType ArgumentType, description string, cliFlag string, position int) CapArgument {
+	return CapArgument{
 		Name:        name,
 		Type:        argType,
 		Description: description,
@@ -154,57 +154,57 @@ func NewArgumentValidationAllowedValues(values []string) *ArgumentValidation {
 	}
 }
 
-// NewCapabilityOutput creates a new output definition
-func NewCapabilityOutput(outputType OutputType, description string) *CapabilityOutput {
-	return &CapabilityOutput{
+// NewCapOutput creates a new output definition
+func NewCapOutput(outputType OutputType, description string) *CapOutput {
+	return &CapOutput{
 		Type:        outputType,
 		Description: description,
 	}
 }
 
-// NewCapabilityOutputWithContentType creates output with content type
-func NewCapabilityOutputWithContentType(outputType OutputType, description string, contentType string) *CapabilityOutput {
-	return &CapabilityOutput{
+// NewCapOutputWithContentType creates output with content type
+func NewCapOutputWithContentType(outputType OutputType, description string, contentType string) *CapOutput {
+	return &CapOutput{
 		Type:        outputType,
 		Description: description,
 		ContentType: &contentType,
 	}
 }
 
-// NewCapabilityOutputWithSchema creates output with schema reference
-func NewCapabilityOutputWithSchema(outputType OutputType, description string, schemaRef string) *CapabilityOutput {
-	return &CapabilityOutput{
+// NewCapOutputWithSchema creates output with schema reference
+func NewCapOutputWithSchema(outputType OutputType, description string, schemaRef string) *CapOutput {
+	return &CapOutput{
 		Type:        outputType,
 		Description: description,
 		SchemaRef:   &schemaRef,
 	}
 }
 
-// NewCapabilityArguments creates a new capability arguments collection
-func NewCapabilityArguments() *CapabilityArguments {
-	return &CapabilityArguments{
-		Required: []CapabilityArgument{},
-		Optional: []CapabilityArgument{},
+// NewCapArguments creates a new cap arguments collection
+func NewCapArguments() *CapArguments {
+	return &CapArguments{
+		Required: []CapArgument{},
+		Optional: []CapArgument{},
 	}
 }
 
-// IsEmpty checks if the capability arguments collection is empty
-func (ca *CapabilityArguments) IsEmpty() bool {
+// IsEmpty checks if the cap arguments collection is empty
+func (ca *CapArguments) IsEmpty() bool {
 	return len(ca.Required) == 0 && len(ca.Optional) == 0
 }
 
 // AddRequired adds a required argument
-func (ca *CapabilityArguments) AddRequired(arg CapabilityArgument) {
+func (ca *CapArguments) AddRequired(arg CapArgument) {
 	ca.Required = append(ca.Required, arg)
 }
 
 // AddOptional adds an optional argument
-func (ca *CapabilityArguments) AddOptional(arg CapabilityArgument) {
+func (ca *CapArguments) AddOptional(arg CapArgument) {
 	ca.Optional = append(ca.Optional, arg)
 }
 
 // FindArgument finds an argument by name
-func (ca *CapabilityArguments) FindArgument(name string) *CapabilityArgument {
+func (ca *CapArguments) FindArgument(name string) *CapArgument {
 	for i := range ca.Required {
 		if ca.Required[i].Name == name {
 			return &ca.Required[i]
@@ -219,8 +219,8 @@ func (ca *CapabilityArguments) FindArgument(name string) *CapabilityArgument {
 }
 
 // GetPositionalArgs returns arguments sorted by position
-func (ca *CapabilityArguments) GetPositionalArgs() []CapabilityArgument {
-	var args []CapabilityArgument
+func (ca *CapArguments) GetPositionalArgs() []CapArgument {
+	var args []CapArgument
 	for _, arg := range ca.Required {
 		if arg.Position != nil {
 			args = append(args, arg)
@@ -243,8 +243,8 @@ func (ca *CapabilityArguments) GetPositionalArgs() []CapabilityArgument {
 }
 
 // GetFlagArgs returns arguments that have CLI flags
-func (ca *CapabilityArguments) GetFlagArgs() []CapabilityArgument {
-	var args []CapabilityArgument
+func (ca *CapArguments) GetFlagArgs() []CapArgument {
+	var args []CapArgument
 	for _, arg := range ca.Required {
 		if arg.CliFlag != "" {
 			args = append(args, arg)
@@ -258,73 +258,73 @@ func (ca *CapabilityArguments) GetFlagArgs() []CapabilityArgument {
 	return args
 }
 
-// NewCapability creates a new capability
-func NewCapability(id *CapabilityKey, version string, command string) *Capability {
-	return &Capability{
+// NewCap creates a new cap
+func NewCap(id *CapCard, version string, command string) *Cap {
+	return &Cap{
 		Id:       id,
 		Version:  version,
 		Command:  command,
 		Metadata: make(map[string]string),
-		Arguments: NewCapabilityArguments(),
+		Arguments: NewCapArguments(),
 	}
 }
 
-// NewCapabilityWithDescription creates a new capability with description
-func NewCapabilityWithDescription(id *CapabilityKey, version string, command string, description string) *Capability {
-	return &Capability{
+// NewCapWithDescription creates a new cap with description
+func NewCapWithDescription(id *CapCard, version string, command string, description string) *Cap {
+	return &Cap{
 		Id:          id,
 		Version:     version,
 		Command:     command,
 		Description: &description,
 		Metadata:    make(map[string]string),
-		Arguments:   NewCapabilityArguments(),
+		Arguments:   NewCapArguments(),
 	}
 }
 
-// NewCapabilityWithMetadata creates a new capability with metadata
-func NewCapabilityWithMetadata(id *CapabilityKey, version string, command string, metadata map[string]string) *Capability {
+// NewCapWithMetadata creates a new cap with metadata
+func NewCapWithMetadata(id *CapCard, version string, command string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
-	return &Capability{
+	return &Cap{
 		Id:        id,
 		Version:   version,
 		Command:   command,
 		Metadata:  metadata,
-		Arguments: NewCapabilityArguments(),
+		Arguments: NewCapArguments(),
 	}
 }
 
-// NewCapabilityWithDescriptionAndMetadata creates a new capability with description and metadata
-func NewCapabilityWithDescriptionAndMetadata(id *CapabilityKey, version string, description string, metadata map[string]string) *Capability {
+// NewCapWithDescriptionAndMetadata creates a new cap with description and metadata
+func NewCapWithDescriptionAndMetadata(id *CapCard, version string, description string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
-	return &Capability{
+	return &Cap{
 		Id:          id,
 		Version:     version,
 		Description: &description,
 		Metadata:    metadata,
-		Arguments:   NewCapabilityArguments(),
+		Arguments:   NewCapArguments(),
 	}
 }
 
-// MatchesRequest checks if this capability matches a request string
-func (c *Capability) MatchesRequest(request string) bool {
-	requestId, err := NewCapabilityKeyFromString(request)
+// MatchesRequest checks if this cap matches a request string
+func (c *Cap) MatchesRequest(request string) bool {
+	requestId, err := NewCapCardFromString(request)
 	if err != nil {
 		return false
 	}
 	return c.Id.CanHandle(requestId)
 }
 
-// CanHandleRequest checks if this capability can handle a request
-func (c *Capability) CanHandleRequest(request *CapabilityKey) bool {
+// CanHandleRequest checks if this cap can handle a request
+func (c *Cap) CanHandleRequest(request *CapCard) bool {
 	return c.Id.CanHandle(request)
 }
 
-// IsMoreSpecificThan checks if this capability is more specific than another
-func (c *Capability) IsMoreSpecificThan(other *Capability) bool {
+// IsMoreSpecificThan checks if this cap is more specific than another
+func (c *Cap) IsMoreSpecificThan(other *Cap) bool {
 	if other == nil {
 		return true
 	}
@@ -332,7 +332,7 @@ func (c *Capability) IsMoreSpecificThan(other *Capability) bool {
 }
 
 // GetMetadata gets a metadata value by key
-func (c *Capability) GetMetadata(key string) (string, bool) {
+func (c *Cap) GetMetadata(key string) (string, bool) {
 	if c.Metadata == nil {
 		return "", false
 	}
@@ -341,7 +341,7 @@ func (c *Capability) GetMetadata(key string) (string, bool) {
 }
 
 // SetMetadata sets a metadata value
-func (c *Capability) SetMetadata(key, value string) {
+func (c *Cap) SetMetadata(key, value string) {
 	if c.Metadata == nil {
 		c.Metadata = make(map[string]string)
 	}
@@ -349,7 +349,7 @@ func (c *Capability) SetMetadata(key, value string) {
 }
 
 // RemoveMetadata removes a metadata value
-func (c *Capability) RemoveMetadata(key string) bool {
+func (c *Cap) RemoveMetadata(key string) bool {
 	if c.Metadata == nil {
 		return false
 	}
@@ -360,8 +360,8 @@ func (c *Capability) RemoveMetadata(key string) bool {
 	return exists
 }
 
-// HasMetadata checks if this capability has specific metadata
-func (c *Capability) HasMetadata(key string) bool {
+// HasMetadata checks if this cap has specific metadata
+func (c *Cap) HasMetadata(key string) bool {
 	if c.Metadata == nil {
 		return false
 	}
@@ -370,58 +370,58 @@ func (c *Capability) HasMetadata(key string) bool {
 }
 
 // GetCommand gets the command
-func (c *Capability) GetCommand() string {
+func (c *Cap) GetCommand() string {
 	return c.Command
 }
 
 // SetCommand sets the command
-func (c *Capability) SetCommand(command string) {
+func (c *Cap) SetCommand(command string) {
 	c.Command = command
 }
 
 // GetArguments gets the arguments
-func (c *Capability) GetArguments() *CapabilityArguments {
+func (c *Cap) GetArguments() *CapArguments {
 	return c.Arguments
 }
 
 // SetArguments sets the arguments
-func (c *Capability) SetArguments(arguments *CapabilityArguments) {
+func (c *Cap) SetArguments(arguments *CapArguments) {
 	c.Arguments = arguments
 }
 
 // AddRequiredArgument adds a required argument
-func (c *Capability) AddRequiredArgument(arg CapabilityArgument) {
+func (c *Cap) AddRequiredArgument(arg CapArgument) {
 	if c.Arguments == nil {
-		c.Arguments = NewCapabilityArguments()
+		c.Arguments = NewCapArguments()
 	}
 	c.Arguments.AddRequired(arg)
 }
 
 // AddOptionalArgument adds an optional argument
-func (c *Capability) AddOptionalArgument(arg CapabilityArgument) {
+func (c *Cap) AddOptionalArgument(arg CapArgument) {
 	if c.Arguments == nil {
-		c.Arguments = NewCapabilityArguments()
+		c.Arguments = NewCapArguments()
 	}
 	c.Arguments.AddOptional(arg)
 }
 
 // GetOutput gets the output definition if defined
-func (c *Capability) GetOutput() *CapabilityOutput {
+func (c *Cap) GetOutput() *CapOutput {
 	return c.Output
 }
 
 // SetOutput sets the output definition
-func (c *Capability) SetOutput(output *CapabilityOutput) {
+func (c *Cap) SetOutput(output *CapOutput) {
 	c.Output = output
 }
 
-// IdString gets the capability identifier as a string
-func (c *Capability) IdString() string {
+// IdString gets the cap identifier as a string
+func (c *Cap) IdString() string {
 	return c.Id.ToString()
 }
 
-// Equals checks if this capability is equal to another
-func (c *Capability) Equals(other *Capability) bool {
+// Equals checks if this cap is equal to another
+func (c *Cap) Equals(other *Cap) bool {
 	if other == nil {
 		return false
 	}
@@ -456,14 +456,14 @@ func (c *Capability) Equals(other *Capability) bool {
 }
 
 // MarshalJSON implements custom JSON marshaling
-func (c *Capability) MarshalJSON() ([]byte, error) {
-	type CapabilityAlias Capability
-	return json.Marshal((*CapabilityAlias)(c))
+func (c *Cap) MarshalJSON() ([]byte, error) {
+	type CapAlias Cap
+	return json.Marshal((*CapAlias)(c))
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling
-func (c *Capability) UnmarshalJSON(data []byte) error {
-	type CapabilityAlias Capability
-	aux := (*CapabilityAlias)(c)
+func (c *Cap) UnmarshalJSON(data []byte) error {
+	type CapAlias Cap
+	aux := (*CapAlias)(c)
 	return json.Unmarshal(data, aux)
 }
