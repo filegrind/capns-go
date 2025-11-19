@@ -109,7 +109,7 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 	
 	id2, err := NewCapCardFromString("action=extract;target=outline;type=document")
 	require.NoError(t, err)
-	metadata := map[string]string{"supports_toc": "true"}
+	metadata := map[string]string{"supports_outline": "true"}
 	cap2 := NewCapWithMetadata(id2, "1.0.0", "extract-outline", metadata)
 	
 	manifest := NewCapManifest(
@@ -122,7 +122,7 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 	assert.Len(t, manifest.Caps, 2)
 	assert.Equal(t, "action=extract;target=metadata;type=document", manifest.Caps[0].IdString())
 	assert.Equal(t, "action=extract;target=outline;type=document", manifest.Caps[1].IdString())
-	assert.True(t, manifest.Caps[1].HasMetadata("supports_toc"))
+	assert.True(t, manifest.Caps[1].HasMetadata("supports_outline"))
 }
 
 func TestCapManifestEmptyCaps(t *testing.T) {
