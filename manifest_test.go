@@ -9,7 +9,7 @@ import (
 )
 
 func TestCapManifestCreation(t *testing.T) {
-	id, err := NewCapCardFromString("action=extract;target=metadata;type=document")
+	id, err := NewCapCardFromString("action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -29,7 +29,7 @@ func TestCapManifestCreation(t *testing.T) {
 }
 
 func TestCapManifestWithAuthor(t *testing.T) {
-	id, err := NewCapCardFromString("action=extract;target=metadata;type=document")
+	id, err := NewCapCardFromString("action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -46,7 +46,7 @@ func TestCapManifestWithAuthor(t *testing.T) {
 }
 
 func TestCapManifestJSONSerialization(t *testing.T) {
-	id, err := NewCapCardFromString("action=extract;target=metadata;type=document")
+	id, err := NewCapCardFromString("action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -103,11 +103,11 @@ func TestCapManifestRequiredFields(t *testing.T) {
 }
 
 func TestCapManifestWithMultipleCaps(t *testing.T) {
-	id1, err := NewCapCardFromString("action=extract;target=metadata;type=document")
+	id1, err := NewCapCardFromString("action=extract;target=metadata;")
 	require.NoError(t, err)
 	cap1 := NewCap(id1, "1.0.0", "extract-metadata")
 	
-	id2, err := NewCapCardFromString("action=extract;target=outline;type=document")
+	id2, err := NewCapCardFromString("action=extract;target=outline;")
 	require.NoError(t, err)
 	metadata := map[string]string{"supports_outline": "true"}
 	cap2 := NewCapWithMetadata(id2, "1.0.0", "extract-outline", metadata)
@@ -120,8 +120,8 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 	)
 	
 	assert.Len(t, manifest.Caps, 2)
-	assert.Equal(t, "action=extract;target=metadata;type=document", manifest.Caps[0].IdString())
-	assert.Equal(t, "action=extract;target=outline;type=document", manifest.Caps[1].IdString())
+	assert.Equal(t, "action=extract;target=metadata;", manifest.Caps[0].IdString())
+	assert.Equal(t, "action=extract;target=outline;", manifest.Caps[1].IdString())
 	assert.True(t, manifest.Caps[1].HasMetadata("supports_outline"))
 }
 
@@ -212,7 +212,7 @@ func TestComponentMetadataInterface(t *testing.T) {
 
 func TestCapManifestValidation(t *testing.T) {
 	// Test that manifest with valid caps works
-	id, err := NewCapCardFromString("action=extract;target=metadata;type=document") 
+	id, err := NewCapCardFromString("action=extract;target=metadata;") 
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -241,7 +241,7 @@ func TestCapManifestValidation(t *testing.T) {
 
 func TestCapManifestCompatibility(t *testing.T) {
 	// Test that manifest format is compatible between different types
-	id, err := NewCapCardFromString("action=process;type=document")
+	id, err := NewCapCardFromString("action=process;")
 	require.NoError(t, err)
 	cap := NewCap(id, "1.0.0", "process")
 	

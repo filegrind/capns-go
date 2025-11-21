@@ -14,8 +14,8 @@ import (
 // CapCard represents a cap identifier using flat, ordered tags
 //
 // Examples:
-// - action=generate;format=pdf;output=binary;target=thumbnail;type=document
-// - action=extract;target=metadata;type=document
+// - action=generate;format=pdf;output=binary;target=thumbnail;
+// - action=extract;target=metadata;
 // - action=analysis;format=en;type=inference
 type CapCard struct {
 	tags map[string]string
@@ -251,36 +251,6 @@ func (c *CapCard) IsCompatibleWith(other *CapCard) bool {
 	return true
 }
 
-// GetType returns the type of this cap (convenience method)
-func (c *CapCard) GetType() (string, bool) {
-	return c.GetTag("type")
-}
-
-// GetAction returns the action of this cap (convenience method)
-func (c *CapCard) GetAction() (string, bool) {
-	return c.GetTag("action")
-}
-
-// GetTarget returns the target of this cap (convenience method)
-func (c *CapCard) GetTarget() (string, bool) {
-	return c.GetTag("target")
-}
-
-// GetFormat returns the format of this cap (convenience method)
-func (c *CapCard) GetFormat() (string, bool) {
-	return c.GetTag("format")
-}
-
-// GetOutput returns the output type of this cap (convenience method)
-func (c *CapCard) GetOutput() (string, bool) {
-	return c.GetTag("output")
-}
-
-// IsBinaryOutput checks if this cap produces binary output
-func (c *CapCard) IsBinaryOutput() bool {
-	return c.HasTag("output", "binary")
-}
-
 // WithWildcardTag returns a new cap with a specific tag set to wildcard
 func (c *CapCard) WithWildcardTag(key string) *CapCard {
 	if _, exists := c.tags[key]; exists {
@@ -448,41 +418,6 @@ func NewCapCardBuilder() *CapCardBuilder {
 func (b *CapCardBuilder) Tag(key, value string) *CapCardBuilder {
 	b.tags[key] = value
 	return b
-}
-
-// Type sets the type tag
-func (b *CapCardBuilder) Type(value string) *CapCardBuilder {
-	return b.Tag("type", value)
-}
-
-// Action sets the action tag
-func (b *CapCardBuilder) Action(value string) *CapCardBuilder {
-	return b.Tag("action", value)
-}
-
-// Target sets the target tag
-func (b *CapCardBuilder) Target(value string) *CapCardBuilder {
-	return b.Tag("target", value)
-}
-
-// Format sets the format tag
-func (b *CapCardBuilder) Format(value string) *CapCardBuilder {
-	return b.Tag("format", value)
-}
-
-// Output sets the output tag
-func (b *CapCardBuilder) Output(value string) *CapCardBuilder {
-	return b.Tag("output", value)
-}
-
-// BinaryOutput sets output to binary
-func (b *CapCardBuilder) BinaryOutput() *CapCardBuilder {
-	return b.Output("binary")
-}
-
-// JSONOutput sets output to json
-func (b *CapCardBuilder) JSONOutput() *CapCardBuilder {
-	return b.Output("json")
 }
 
 // Build creates the final CapCard

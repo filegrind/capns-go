@@ -57,7 +57,7 @@ func TestCapMatching(t *testing.T) {
 }
 
 func TestCapRequestHandling(t *testing.T) {
-	id, err := NewCapCardFromString("action=extract;target=metadata;type=document")
+	id, err := NewCapCardFromString("action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap1 := NewCap(id, "1.0.0", "extract-cmd")
@@ -95,7 +95,7 @@ func TestCapDescription(t *testing.T) {
 }
 
 func TestCapAcceptsStdin(t *testing.T) {
-	id, err := NewCapCardFromString("action=generate;target=embeddings;type=document")
+	id, err := NewCapCardFromString("action=generate;target=embeddings;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "generate")
