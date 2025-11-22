@@ -14,7 +14,7 @@ import (
 // CapCard represents a cap identifier using flat, ordered tags
 //
 // Examples:
-// - action=generate;format=pdf;output=binary;target=thumbnail;
+// - action=generate;ext=pdf;output=binary;target=thumbnail;
 // - action=extract;target=metadata;
 // - action=analysis;format=en;type=inference
 type CapCard struct {

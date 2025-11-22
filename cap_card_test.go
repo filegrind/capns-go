@@ -22,17 +22,17 @@ func TestCapCardCreation(t *testing.T) {
 	assert.True(t, exists)
 	assert.Equal(t, "transform", action)
 	
-	format, exists := capCard.GetTag("format")
+	format, exists := capCard.GetTag("ext")
 	assert.True(t, exists)
 	assert.Equal(t, "json", format)
 }
 
 func TestCanonicalStringFormat(t *testing.T) {
-	capCard, err := NewCapCardFromString("action=generate;target=thumbnail;format=pdf")
+	capCard, err := NewCapCardFromString("action=generate;target=thumbnail;ext=pdf")
 	require.NoError(t, err)
 	
 	// Should be sorted alphabetically
-	assert.Equal(t, "action=generate;format=pdf;target=thumbnail;", capCard.ToString())
+	assert.Equal(t, "action=generate;ext=pdf;target=thumbnail;", capCard.ToString())
 }
 
 func TestInvalidCapCard(t *testing.T) {
@@ -60,11 +60,11 @@ func TestInvalidCharacters(t *testing.T) {
 }
 
 func TestTagMatching(t *testing.T) {
-	cap, err := NewCapCardFromString("action=generate;format=pdf;target=thumbnail;")
+	cap, err := NewCapCardFromString("action=generate;ext=pdf;target=thumbnail;")
 	require.NoError(t, err)
 	
 	// Exact match
-	request1, err := NewCapCardFromString("action=generate;format=pdf;target=thumbnail;")
+	request1, err := NewCapCardFromString("action=generate;ext=pdf;target=thumbnail;")
 	require.NoError(t, err)
 	assert.True(t, cap.Matches(request1))
 	
@@ -89,12 +89,12 @@ func TestMissingTagHandling(t *testing.T) {
 	require.NoError(t, err)
 	
 	// Request with missing tag should fail if specific value required
-	request1, err := NewCapCardFromString("format=pdf")
+	request1, err := NewCapCardFromString("ext=pdf")
 	require.NoError(t, err)
 	assert.True(t, cap.Matches(request1)) // cap missing format tag = wildcard, can handle any format
 	
 	// But cap with extra tags can match subset requests
-	cap2, err := NewCapCardFromString("action=generate;format=pdf")
+	cap2, err := NewCapCardFromString("action=generate;ext=pdf")
 	require.NoError(t, err)
 	request2, err := NewCapCardFromString("action=generate")
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestSpecificity(t *testing.T) {
 	cap2, err := NewCapCardFromString("action=generate")
 	require.NoError(t, err)
 	
-	cap3, err := NewCapCardFromString("action=*;format=pdf")
+	cap3, err := NewCapCardFromString("action=*;ext=pdf")
 	require.NoError(t, err)
 	
 	assert.Equal(t, 1, cap1.Specificity())
@@ -119,7 +119,7 @@ func TestSpecificity(t *testing.T) {
 }
 
 func TestCompatibility(t *testing.T) {
-	cap1, err := NewCapCardFromString("action=generate;format=pdf")
+	cap1, err := NewCapCardFromString("action=generate;ext=pdf")
 	require.NoError(t, err)
 	
 	cap2, err := NewCapCardFromString("action=generate;format=*")
@@ -140,7 +140,7 @@ func TestCompatibility(t *testing.T) {
 }
 
 func TestConvenienceMethods(t *testing.T) {
-	cap, err := NewCapCardFromString("action=generate;format=pdf;output=binary;target=thumbnail;")
+	cap, err := NewCapCardFromString("action=generate;ext=pdf;output=binary;target=thumbnail;")
 	require.NoError(t, err)
 	
 	action, exists := cap.GetTag("action")
@@ -151,7 +151,7 @@ func TestConvenienceMethods(t *testing.T) {
 	assert.True(t, exists)
 	assert.Equal(t, "thumbnail", target)
 	
-	format, exists := cap.GetTag("format")
+	format, exists := cap.GetTag("ext")
 	assert.True(t, exists)
 	assert.Equal(t, "pdf", format)
 	
@@ -164,7 +164,7 @@ func TestBuilder(t *testing.T) {
 	cap, err := NewCapCardBuilder().
 		Tag("action", "generate").
 		Tag("target", "thumbnail").
-		Tag("format", "pdf").
+		Tag("ext", "pdf").
 		Tag("output", "binary").
 		Build()
 	require.NoError(t, err)
@@ -182,31 +182,31 @@ func TestWithTag(t *testing.T) {
 	original, err := NewCapCardFromString("action=generate")
 	require.NoError(t, err)
 	
-	modified := original.WithTag("format", "pdf")
+	modified := original.WithTag("ext", "pdf")
 	
-	assert.Equal(t, "action=generate;format=pdf;", modified.ToString())
+	assert.Equal(t, "action=generate;ext=pdf;", modified.ToString())
 	
 	// Original should be unchanged
 	assert.Equal(t, "action=generate;", original.ToString())
 }
 
 func TestWithoutTag(t *testing.T) {
-	original, err := NewCapCardFromString("action=generate;format=pdf;")
+	original, err := NewCapCardFromString("action=generate;ext=pdf;")
 	require.NoError(t, err)
 	
-	modified := original.WithoutTag("format")
+	modified := original.WithoutTag("ext")
 	
 	assert.Equal(t, "action=generate;", modified.ToString())
 	
 	// Original should be unchanged
-	assert.Equal(t, "action=generate;format=pdf;", original.ToString())
+	assert.Equal(t, "action=generate;ext=pdf;", original.ToString())
 }
 
 func TestWildcardTag(t *testing.T) {
-	cap, err := NewCapCardFromString("format=pdf")
+	cap, err := NewCapCardFromString("ext=pdf")
 	require.NoError(t, err)
 	
-	wildcarded := cap.WithWildcardTag("format")
+	wildcarded := cap.WithWildcardTag("ext")
 	
 	assert.Equal(t, "format=*;", wildcarded.ToString())
 	
@@ -221,24 +221,24 @@ func TestWildcardTag(t *testing.T) {
 }
 
 func TestSubset(t *testing.T) {
-	cap, err := NewCapCardFromString("action=generate;format=pdf;output=binary;target=thumbnail;")
+	cap, err := NewCapCardFromString("action=generate;ext=pdf;output=binary;target=thumbnail;")
 	require.NoError(t, err)
 	
-	subset := cap.Subset([]string{"type", "format"})
+	subset := cap.Subset([]string{"type", "ext"})
 	
-	assert.Equal(t, "format=pdf;", subset.ToString())
+	assert.Equal(t, "ext=pdf;", subset.ToString())
 }
 
 func TestMerge(t *testing.T) {
 	cap1, err := NewCapCardFromString("action=generate")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapCardFromString("format=pdf;output=binary")
+	cap2, err := NewCapCardFromString("ext=pdf;output=binary")
 	require.NoError(t, err)
 	
 	merged := cap1.Merge(cap2)
 	
-	assert.Equal(t, "action=generate;format=pdf;output=binary;", merged.ToString())
+	assert.Equal(t, "action=generate;ext=pdf;output=binary;", merged.ToString())
 }
 
 func TestEquality(t *testing.T) {
@@ -268,7 +268,7 @@ func TestCapMatcher(t *testing.T) {
 	require.NoError(t, err)
 	caps = append(caps, cap2)
 	
-	cap3, err := NewCapCardFromString("action=generate;format=pdf")
+	cap3, err := NewCapCardFromString("action=generate;ext=pdf")
 	require.NoError(t, err)
 	caps = append(caps, cap3)
 	
@@ -279,7 +279,7 @@ func TestCapMatcher(t *testing.T) {
 	require.NotNil(t, best)
 	
 	// Most specific cap that can handle the request
-	assert.Equal(t, "action=generate;format=pdf;", best.ToString())
+	assert.Equal(t, "action=generate;ext=pdf;", best.ToString())
 }
 
 func TestJSONSerialization(t *testing.T) {
