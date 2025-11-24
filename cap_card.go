@@ -1,5 +1,5 @@
 // Package capdef provides the fundamental cap identifier system used across
-// all LBVR plugins and providers. It defines the formal structure for cap
+// all FMIO plugins and providers. It defines the formal structure for cap
 // identifiers with flat tag-based naming, wildcard support, and specificity comparison.
 package capdef
 
