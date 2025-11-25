@@ -95,7 +95,7 @@ func TestCapDescription(t *testing.T) {
 }
 
 func TestCapAcceptsStdin(t *testing.T) {
-	id, err := NewCapCardFromString("action=generate;target=embeddings;")
+	id, err := NewCapCardFromString("action=generate;target=embeddings")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "generate")

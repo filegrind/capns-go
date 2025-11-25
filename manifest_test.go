@@ -241,7 +241,7 @@ func TestCapManifestValidation(t *testing.T) {
 
 func TestCapManifestCompatibility(t *testing.T) {
 	// Test that manifest format is compatible between different types
-	id, err := NewCapCardFromString("action=process;")
+	id, err := NewCapCardFromString("action=process")
 	require.NoError(t, err)
 	cap := NewCap(id, "1.0.0", "process")
 	
