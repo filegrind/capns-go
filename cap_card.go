@@ -16,7 +16,7 @@ import (
 // Examples:
 // - action=generate;ext=pdf;output=binary;target=thumbnail;
 // - action=extract;target=metadata;
-// - action=analysis;format=en;type=inference
+// - action=analysis;format=en;type=constrained
 type CapCard struct {
 	tags map[string]string
 }
