@@ -1,5 +1,5 @@
-// Package capdef provides the unified cap-based manifest interface
-package capdef
+// Package capns provides the unified cap-based manifest interface
+package capns
 
 // CapManifest represents unified cap manifest for --manifest output
 type CapManifest struct {

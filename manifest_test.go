@@ -1,4 +1,4 @@
-package capdef
+package capns
 
 import (
 	"encoding/json"
