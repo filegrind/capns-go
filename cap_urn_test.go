@@ -8,55 +8,55 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCapCardCreation(t *testing.T) {
-	capCard, err := NewCapCardFromString("cap:action=transform;format=json;type=data_processing")
+func TestCapUrnCreation(t *testing.T) {
+	capUrn, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	
 	assert.NoError(t, err)
-	assert.NotNil(t, capCard)
+	assert.NotNil(t, capUrn)
 	
-	capType, exists := capCard.GetTag("type")
+	capType, exists := capUrn.GetTag("type")
 	assert.True(t, exists)
 	assert.Equal(t, "data_processing", capType)
 	
-	action, exists := capCard.GetTag("action")
+	action, exists := capUrn.GetTag("action")
 	assert.True(t, exists)
 	assert.Equal(t, "transform", action)
 	
-	format, exists := capCard.GetTag("format")
+	format, exists := capUrn.GetTag("format")
 	assert.True(t, exists)
 	assert.Equal(t, "json", format)
 }
 
 func TestCanonicalStringFormat(t *testing.T) {
-	capCard, err := NewCapCardFromString("cap:action=generate;target=thumbnail;ext=pdf")
+	capUrn, err := NewCapUrnFromString("cap:action=generate;target=thumbnail;ext=pdf")
 	require.NoError(t, err)
 	
 	// Should be sorted alphabetically and have no trailing semicolon in canonical form
-	assert.Equal(t, "cap:action=generate;ext=pdf;target=thumbnail", capCard.ToString())
+	assert.Equal(t, "cap:action=generate;ext=pdf;target=thumbnail", capUrn.ToString())
 }
 
 func TestCapPrefixRequired(t *testing.T) {
 	// Missing cap: prefix should fail
-	capCard, err := NewCapCardFromString("action=generate;ext=pdf")
-	assert.Nil(t, capCard)
+	capUrn, err := NewCapUrnFromString("action=generate;ext=pdf")
+	assert.Nil(t, capUrn)
 	assert.Error(t, err)
-	assert.Equal(t, ErrorMissingCapPrefix, err.(*CapCardError).Code)
+	assert.Equal(t, ErrorMissingCapPrefix, err.(*CapUrnError).Code)
 	
 	// Valid cap: prefix should work
-	capCard, err = NewCapCardFromString("cap:action=generate;ext=pdf")
+	capUrn, err = NewCapUrnFromString("cap:action=generate;ext=pdf")
 	assert.NoError(t, err)
-	assert.NotNil(t, capCard)
-	action, exists := capCard.GetTag("action")
+	assert.NotNil(t, capUrn)
+	action, exists := capUrn.GetTag("action")
 	assert.True(t, exists)
 	assert.Equal(t, "generate", action)
 }
 
 func TestTrailingSemicolonEquivalence(t *testing.T) {
 	// Both with and without trailing semicolon should be equivalent
-	cap1, err := NewCapCardFromString("cap:action=generate;ext=pdf")
+	cap1, err := NewCapUrnFromString("cap:action=generate;ext=pdf")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapCardFromString("cap:action=generate;ext=pdf;")
+	cap2, err := NewCapUrnFromString("cap:action=generate;ext=pdf;")
 	require.NoError(t, err)
 	
 	// They should be equal
@@ -73,80 +73,80 @@ func TestTrailingSemicolonEquivalence(t *testing.T) {
 	assert.True(t, cap2.Matches(cap1))
 }
 
-func TestInvalidCapCard(t *testing.T) {
-	capCard, err := NewCapCardFromString("")
+func TestInvalidCapUrn(t *testing.T) {
+	capUrn, err := NewCapUrnFromString("")
 	
-	assert.Nil(t, capCard)
+	assert.Nil(t, capUrn)
 	assert.Error(t, err)
-	assert.Equal(t, ErrorInvalidFormat, err.(*CapCardError).Code)
+	assert.Equal(t, ErrorInvalidFormat, err.(*CapUrnError).Code)
 }
 
 func TestInvalidTagFormat(t *testing.T) {
-	capCard, err := NewCapCardFromString("cap:invalid_tag")
+	capUrn, err := NewCapUrnFromString("cap:invalid_tag")
 	
-	assert.Nil(t, capCard)
+	assert.Nil(t, capUrn)
 	assert.Error(t, err)
-	assert.Equal(t, ErrorInvalidTagFormat, err.(*CapCardError).Code)
+	assert.Equal(t, ErrorInvalidTagFormat, err.(*CapUrnError).Code)
 }
 
 func TestInvalidCharacters(t *testing.T) {
-	capCard, err := NewCapCardFromString("cap:type@invalid=value")
+	capUrn, err := NewCapUrnFromString("cap:type@invalid=value")
 	
-	assert.Nil(t, capCard)
+	assert.Nil(t, capUrn)
 	assert.Error(t, err)
-	assert.Equal(t, ErrorInvalidCharacter, err.(*CapCardError).Code)
+	assert.Equal(t, ErrorInvalidCharacter, err.(*CapUrnError).Code)
 }
 
 func TestTagMatching(t *testing.T) {
-	cap, err := NewCapCardFromString("cap:action=generate;ext=pdf;target=thumbnail")
+	cap, err := NewCapUrnFromString("cap:action=generate;ext=pdf;target=thumbnail")
 	require.NoError(t, err)
 	
 	// Exact match
-	request1, err := NewCapCardFromString("cap:action=generate;ext=pdf;target=thumbnail")
+	request1, err := NewCapUrnFromString("cap:action=generate;ext=pdf;target=thumbnail")
 	require.NoError(t, err)
 	assert.True(t, cap.Matches(request1))
 	
 	// Subset match
-	request2, err := NewCapCardFromString("cap:action=generate")
+	request2, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	assert.True(t, cap.Matches(request2))
 	
 	// Wildcard match
-	request3, err := NewCapCardFromString("cap:ext=*")
+	request3, err := NewCapUrnFromString("cap:ext=*")
 	require.NoError(t, err)
 	assert.True(t, cap.Matches(request3))
 	
 	// No match - conflicting value
-	request4, err := NewCapCardFromString("cap:action=extract")
+	request4, err := NewCapUrnFromString("cap:action=extract")
 	require.NoError(t, err)
 	assert.False(t, cap.Matches(request4))
 }
 
 func TestMissingTagHandling(t *testing.T) {
-	cap, err := NewCapCardFromString("cap:action=generate")
+	cap, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	
 	// Request with missing tag should fail if specific value required
-	request1, err := NewCapCardFromString("cap:ext=pdf")
+	request1, err := NewCapUrnFromString("cap:ext=pdf")
 	require.NoError(t, err)
 	assert.True(t, cap.Matches(request1)) // cap missing format tag = wildcard, can handle any format
 	
 	// But cap with extra tags can match subset requests
-	cap2, err := NewCapCardFromString("cap:action=generate;ext=pdf")
+	cap2, err := NewCapUrnFromString("cap:action=generate;ext=pdf")
 	require.NoError(t, err)
-	request2, err := NewCapCardFromString("cap:action=generate")
+	request2, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	assert.True(t, cap2.Matches(request2))
 }
 
 func TestSpecificity(t *testing.T) {
-	cap1, err := NewCapCardFromString("cap:action=*")
+	cap1, err := NewCapUrnFromString("cap:action=*")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapCardFromString("cap:action=generate")
+	cap2, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	
-	cap3, err := NewCapCardFromString("cap:action=*;ext=pdf")
+	cap3, err := NewCapUrnFromString("cap:action=*;ext=pdf")
 	require.NoError(t, err)
 	
 	assert.Equal(t, 0, cap1.Specificity()) // wildcard doesn't count
@@ -157,13 +157,13 @@ func TestSpecificity(t *testing.T) {
 }
 
 func TestCompatibility(t *testing.T) {
-	cap1, err := NewCapCardFromString("cap:action=generate;ext=pdf")
+	cap1, err := NewCapUrnFromString("cap:action=generate;ext=pdf")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapCardFromString("cap:action=generate;format=*")
+	cap2, err := NewCapUrnFromString("cap:action=generate;format=*")
 	require.NoError(t, err)
 	
-	cap3, err := NewCapCardFromString("cap:action=extract;ext=pdf")
+	cap3, err := NewCapUrnFromString("cap:action=extract;ext=pdf")
 	require.NoError(t, err)
 	
 	assert.True(t, cap1.IsCompatibleWith(cap2))
@@ -171,14 +171,14 @@ func TestCompatibility(t *testing.T) {
 	assert.False(t, cap1.IsCompatibleWith(cap3))
 	
 	// Missing tags are treated as wildcards for compatibility
-	cap4, err := NewCapCardFromString("cap:action=generate")
+	cap4, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	assert.True(t, cap1.IsCompatibleWith(cap4))
 	assert.True(t, cap4.IsCompatibleWith(cap1))
 }
 
 func TestConvenienceMethods(t *testing.T) {
-	cap, err := NewCapCardFromString("cap:action=generate;ext=pdf;output=binary;target=thumbnail")
+	cap, err := NewCapUrnFromString("cap:action=generate;ext=pdf;output=binary;target=thumbnail")
 	require.NoError(t, err)
 	
 	action, exists := cap.GetTag("action")
@@ -199,7 +199,7 @@ func TestConvenienceMethods(t *testing.T) {
 }
 
 func TestBuilder(t *testing.T) {
-	cap, err := NewCapCardBuilder().
+	cap, err := NewCapUrnBuilder().
 		Tag("action", "generate").
 		Tag("target", "thumbnail").
 		Tag("ext", "pdf").
@@ -217,7 +217,7 @@ func TestBuilder(t *testing.T) {
 }
 
 func TestWithTag(t *testing.T) {
-	original, err := NewCapCardFromString("cap:action=generate")
+	original, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	
 	modified := original.WithTag("ext", "pdf")
@@ -229,7 +229,7 @@ func TestWithTag(t *testing.T) {
 }
 
 func TestWithoutTag(t *testing.T) {
-	original, err := NewCapCardFromString("cap:action=generate;ext=pdf")
+	original, err := NewCapUrnFromString("cap:action=generate;ext=pdf")
 	require.NoError(t, err)
 	
 	modified := original.WithoutTag("ext")
@@ -241,7 +241,7 @@ func TestWithoutTag(t *testing.T) {
 }
 
 func TestWildcardTag(t *testing.T) {
-	cap, err := NewCapCardFromString("cap:ext=pdf")
+	cap, err := NewCapUrnFromString("cap:ext=pdf")
 	require.NoError(t, err)
 	
 	wildcarded := cap.WithWildcardTag("ext")
@@ -249,17 +249,17 @@ func TestWildcardTag(t *testing.T) {
 	assert.Equal(t, "cap:ext=*", wildcarded.ToString())
 	
 	// Test that wildcarded cap can match more requests
-	request, err := NewCapCardFromString("cap:ext=jpg")
+	request, err := NewCapUrnFromString("cap:ext=jpg")
 	require.NoError(t, err)
 	assert.False(t, cap.Matches(request))
 	
-	wildcardRequest, err := NewCapCardFromString("cap:ext=*")
+	wildcardRequest, err := NewCapUrnFromString("cap:ext=*")
 	require.NoError(t, err)
 	assert.True(t, wildcarded.Matches(wildcardRequest))
 }
 
 func TestSubset(t *testing.T) {
-	cap, err := NewCapCardFromString("cap:action=generate;ext=pdf;output=binary;target=thumbnail;")
+	cap, err := NewCapUrnFromString("cap:action=generate;ext=pdf;output=binary;target=thumbnail;")
 	require.NoError(t, err)
 	
 	subset := cap.Subset([]string{"type", "ext"})
@@ -268,10 +268,10 @@ func TestSubset(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
-	cap1, err := NewCapCardFromString("cap:action=generate")
+	cap1, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapCardFromString("cap:ext=pdf;output=binary")
+	cap2, err := NewCapUrnFromString("cap:ext=pdf;output=binary")
 	require.NoError(t, err)
 	
 	merged := cap1.Merge(cap2)
@@ -280,13 +280,13 @@ func TestMerge(t *testing.T) {
 }
 
 func TestEquality(t *testing.T) {
-	cap1, err := NewCapCardFromString("cap:action=generate")
+	cap1, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	
-	cap2, err := NewCapCardFromString("cap:action=generate") // different order
+	cap2, err := NewCapUrnFromString("cap:action=generate") // different order
 	require.NoError(t, err)
 	
-	cap3, err := NewCapCardFromString("cap:action=generate;type=image")
+	cap3, err := NewCapUrnFromString("cap:action=generate;type=image")
 	require.NoError(t, err)
 	
 	assert.True(t, cap1.Equals(cap2)) // order doesn't matter
@@ -296,21 +296,21 @@ func TestEquality(t *testing.T) {
 func TestCapMatcher(t *testing.T) {
 	matcher := &CapMatcher{}
 	
-	caps := []*CapCard{}
+	caps := []*CapUrn{}
 	
-	cap1, err := NewCapCardFromString("cap:action=*")
+	cap1, err := NewCapUrnFromString("cap:action=*")
 	require.NoError(t, err)
 	caps = append(caps, cap1)
 	
-	cap2, err := NewCapCardFromString("cap:action=generate")
+	cap2, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	caps = append(caps, cap2)
 	
-	cap3, err := NewCapCardFromString("cap:action=generate;ext=pdf")
+	cap3, err := NewCapUrnFromString("cap:action=generate;ext=pdf")
 	require.NoError(t, err)
 	caps = append(caps, cap3)
 	
-	request, err := NewCapCardFromString("cap:action=generate")
+	request, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	
 	best := matcher.FindBestMatch(caps, request)
@@ -321,14 +321,14 @@ func TestCapMatcher(t *testing.T) {
 }
 
 func TestJSONSerialization(t *testing.T) {
-	original, err := NewCapCardFromString("cap:action=generate")
+	original, err := NewCapUrnFromString("cap:action=generate")
 	require.NoError(t, err)
 	
 	data, err := json.Marshal(original)
 	assert.NoError(t, err)
 	assert.NotNil(t, data)
 	
-	var decoded CapCard
+	var decoded CapUrn
 	err = json.Unmarshal(data, &decoded)
 	assert.NoError(t, err)
 	assert.True(t, original.Equals(&decoded))

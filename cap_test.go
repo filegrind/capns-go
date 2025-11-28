@@ -9,7 +9,7 @@ import (
 )
 
 func TestCapCreation(t *testing.T) {
-	id, err := NewCapCardFromString("cap:action=transform;format=json;type=data_processing")
+	id, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "test-command")
@@ -23,7 +23,7 @@ func TestCapCreation(t *testing.T) {
 }
 
 func TestCapWithMetadata(t *testing.T) {
-	id, err := NewCapCardFromString("cap:action=arithmetic;subtype=math;type=compute")
+	id, err := NewCapUrnFromString("cap:action=arithmetic;subtype=math;type=compute")
 	require.NoError(t, err)
 	
 	metadata := map[string]string{
@@ -45,7 +45,7 @@ func TestCapWithMetadata(t *testing.T) {
 }
 
 func TestCapMatching(t *testing.T) {
-	id, err := NewCapCardFromString("cap:action=transform;format=json;type=data_processing")
+	id, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "test-command")
@@ -57,7 +57,7 @@ func TestCapMatching(t *testing.T) {
 }
 
 func TestCapRequestHandling(t *testing.T) {
-	id, err := NewCapCardFromString("cap:action=extract;target=metadata;")
+	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap1 := NewCap(id, "1.0.0", "extract-cmd")
@@ -65,7 +65,7 @@ func TestCapRequestHandling(t *testing.T) {
 	
 	assert.True(t, cap1.CanHandleRequest(cap2.Id))
 	
-	otherId, err := NewCapCardFromString("cap:action=generate;type=image")
+	otherId, err := NewCapUrnFromString("cap:action=generate;type=image")
 	require.NoError(t, err)
 	cap3 := NewCap(otherId, "1.0.0", "generate-cmd")
 	
@@ -73,7 +73,7 @@ func TestCapRequestHandling(t *testing.T) {
 }
 
 func TestCapEquality(t *testing.T) {
-	id, err := NewCapCardFromString("cap:action=transform;format=json;type=data_processing")
+	id, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
 	cap1 := NewCap(id, "1.0.0", "test-command")
@@ -83,7 +83,7 @@ func TestCapEquality(t *testing.T) {
 }
 
 func TestCapDescription(t *testing.T) {
-	id, err := NewCapCardFromString("cap:action=parse;format=json;type=data")
+	id, err := NewCapUrnFromString("cap:action=parse;format=json;type=data")
 	require.NoError(t, err)
 	
 	cap1 := NewCapWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
@@ -95,7 +95,7 @@ func TestCapDescription(t *testing.T) {
 }
 
 func TestCapAcceptsStdin(t *testing.T) {
-	id, err := NewCapCardFromString("cap:action=generate;target=embeddings")
+	id, err := NewCapUrnFromString("cap:action=generate;target=embeddings")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "generate")

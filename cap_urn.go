@@ -12,23 +12,23 @@ import (
 	"strings"
 )
 
-// CapCard represents a cap identifier using flat, ordered tags
+// CapUrn represents a cap identifier using flat, ordered tags
 //
 // Examples:
 // - action=generate;ext=pdf;output=binary;target=thumbnail;
 // - action=extract;target=metadata;
 // - action=analysis;format=en;type=constrained
-type CapCard struct {
+type CapUrn struct {
 	tags map[string]string
 }
 
-// CapCardError represents errors that can occur during cap identifier operations
-type CapCardError struct {
+// CapUrnError represents errors that can occur during cap identifier operations
+type CapUrnError struct {
 	Code    int
 	Message string
 }
 
-func (e *CapCardError) Error() string {
+func (e *CapUrnError) Error() string {
 	return e.Message
 }
 
@@ -43,14 +43,14 @@ const (
 
 var validTagComponentPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-\*]+$`)
 
-// NewCapCardFromString creates a cap identifier from a string
+// NewCapUrnFromString creates a cap identifier from a string
 // Format: cap:key1=value1;key2=value2;...
 // The "cap:" prefix is mandatory
 // Trailing semicolons are optional and ignored
 // Tags are automatically sorted alphabetically for canonical form
-func NewCapCardFromString(s string) (*CapCard, error) {
+func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if s == "" {
-		return nil, &CapCardError{
+		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
 			Message: "cap identifier cannot be empty",
 		}
@@ -58,7 +58,7 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 
 	// Ensure "cap:" prefix is present
 	if !strings.HasPrefix(s, "cap:") {
-		return nil, &CapCardError{
+		return nil, &CapUrnError{
 			Code:    ErrorMissingCapPrefix,
 			Message: "cap identifier must start with 'cap:'",
 		}
@@ -67,7 +67,7 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 	// Remove the "cap:" prefix
 	tagsPart := s[4:]
 	if tagsPart == "" {
-		return nil, &CapCardError{
+		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
 			Message: "cap identifier cannot be empty",
 		}
@@ -86,7 +86,7 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 
 		parts := strings.Split(tagStr, "=")
 		if len(parts) != 2 {
-			return nil, &CapCardError{
+			return nil, &CapUrnError{
 				Code:    ErrorInvalidTagFormat,
 				Message: fmt.Sprintf("invalid tag format (must be key=value): %s", tagStr),
 			}
@@ -96,7 +96,7 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 		value := strings.TrimSpace(parts[1])
 
 		if key == "" || value == "" {
-			return nil, &CapCardError{
+			return nil, &CapUrnError{
 				Code:    ErrorEmptyTag,
 				Message: fmt.Sprintf("tag key or value cannot be empty: %s", tagStr),
 			}
@@ -104,7 +104,7 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 
 		// Validate key and value characters
 		if !validTagComponentPattern.MatchString(key) || !validTagComponentPattern.MatchString(value) {
-			return nil, &CapCardError{
+			return nil, &CapUrnError{
 				Code:    ErrorInvalidCharacter,
 				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -, *): %s", tagStr),
 			}
@@ -114,59 +114,59 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 	}
 
 	if len(tags) == 0 {
-		return nil, &CapCardError{
+		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
 			Message: "cap identifier cannot be empty",
 		}
 	}
 
-	return &CapCard{
+	return &CapUrn{
 		tags: tags,
 	}, nil
 }
 
-// NewCapCardFromTags creates a cap identifier from tags
-func NewCapCardFromTags(tags map[string]string) *CapCard {
+// NewCapUrnFromTags creates a cap identifier from tags
+func NewCapUrnFromTags(tags map[string]string) *CapUrn {
 	result := make(map[string]string)
 	for k, v := range tags {
 		result[k] = v
 	}
-	return &CapCard{
+	return &CapUrn{
 		tags: result,
 	}
 }
 
 // GetTag returns the value of a specific tag
-func (c *CapCard) GetTag(key string) (string, bool) {
+func (c *CapUrn) GetTag(key string) (string, bool) {
 	value, exists := c.tags[key]
 	return value, exists
 }
 
 // HasTag checks if this cap has a specific tag with a specific value
-func (c *CapCard) HasTag(key, value string) bool {
+func (c *CapUrn) HasTag(key, value string) bool {
 	tagValue, exists := c.tags[key]
 	return exists && tagValue == value
 }
 
-// WithTag returns a new cap card with an added or updated tag
-func (c *CapCard) WithTag(key, value string) *CapCard {
+// WithTag returns a new cap URN with an added or updated tag
+func (c *CapUrn) WithTag(key, value string) *CapUrn {
 	newTags := make(map[string]string)
 	for k, v := range c.tags {
 		newTags[k] = v
 	}
 	newTags[key] = value
-	return &CapCard{tags: newTags}
+	return &CapUrn{tags: newTags}
 }
 
-// WithoutTag returns a new cap card with a tag removed
-func (c *CapCard) WithoutTag(key string) *CapCard {
+// WithoutTag returns a new cap URN with a tag removed
+func (c *CapUrn) WithoutTag(key string) *CapUrn {
 	newTags := make(map[string]string)
 	for k, v := range c.tags {
 		if k != key {
 			newTags[k] = v
 		}
 	}
-	return &CapCard{tags: newTags}
+	return &CapUrn{tags: newTags}
 }
 
 // Matches checks if this cap matches another based on tag compatibility
@@ -175,7 +175,7 @@ func (c *CapCard) WithoutTag(key string) *CapCard {
 // - For each tag in the request: cap has same value, wildcard (*), or missing tag
 // - For each tag in the cap: if request is missing that tag, that's fine (cap is more specific)
 // Missing tags are treated as wildcards (less specific, can handle any value).
-func (c *CapCard) Matches(request *CapCard) bool {
+func (c *CapUrn) Matches(request *CapUrn) bool {
 	if request == nil {
 		return true
 	}
@@ -210,13 +210,13 @@ func (c *CapCard) Matches(request *CapCard) bool {
 }
 
 // CanHandle checks if this cap can handle a request
-func (c *CapCard) CanHandle(request *CapCard) bool {
+func (c *CapUrn) CanHandle(request *CapUrn) bool {
 	return c.Matches(request)
 }
 
 // Specificity returns the specificity score for cap matching
 // More specific caps have higher scores and are preferred
-func (c *CapCard) Specificity() int {
+func (c *CapUrn) Specificity() int {
 	// Count non-wildcard tags
 	count := 0
 	for _, value := range c.tags {
@@ -228,7 +228,7 @@ func (c *CapCard) Specificity() int {
 }
 
 // IsMoreSpecificThan checks if this cap is more specific than another
-func (c *CapCard) IsMoreSpecificThan(other *CapCard) bool {
+func (c *CapUrn) IsMoreSpecificThan(other *CapUrn) bool {
 	if other == nil {
 		return true
 	}
@@ -245,7 +245,7 @@ func (c *CapCard) IsMoreSpecificThan(other *CapCard) bool {
 //
 // Two caps are compatible if they can potentially match
 // the same types of requests (considering wildcards and missing tags as wildcards)
-func (c *CapCard) IsCompatibleWith(other *CapCard) bool {
+func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
 	if other == nil {
 		return true
 	}
@@ -276,7 +276,7 @@ func (c *CapCard) IsCompatibleWith(other *CapCard) bool {
 }
 
 // WithWildcardTag returns a new cap with a specific tag set to wildcard
-func (c *CapCard) WithWildcardTag(key string) *CapCard {
+func (c *CapUrn) WithWildcardTag(key string) *CapUrn {
 	if _, exists := c.tags[key]; exists {
 		return c.WithTag(key, "*")
 	}
@@ -284,18 +284,18 @@ func (c *CapCard) WithWildcardTag(key string) *CapCard {
 }
 
 // Subset returns a new cap with only specified tags
-func (c *CapCard) Subset(keys []string) *CapCard {
+func (c *CapUrn) Subset(keys []string) *CapUrn {
 	newTags := make(map[string]string)
 	for _, key := range keys {
 		if value, exists := c.tags[key]; exists {
 			newTags[key] = value
 		}
 	}
-	return &CapCard{tags: newTags}
+	return &CapUrn{tags: newTags}
 }
 
 // Merge returns a new cap merged with another (other takes precedence for conflicts)
-func (c *CapCard) Merge(other *CapCard) *CapCard {
+func (c *CapUrn) Merge(other *CapUrn) *CapUrn {
 	newTags := make(map[string]string)
 	for k, v := range c.tags {
 		newTags[k] = v
@@ -303,14 +303,14 @@ func (c *CapCard) Merge(other *CapCard) *CapCard {
 	for k, v := range other.tags {
 		newTags[k] = v
 	}
-	return &CapCard{tags: newTags}
+	return &CapUrn{tags: newTags}
 }
 
 // ToString returns the canonical string representation of this cap identifier
 // Always includes "cap:" prefix
 // Tags are sorted alphabetically for consistent representation
 // No trailing semicolon in canonical form
-func (c *CapCard) ToString() string {
+func (c *CapUrn) ToString() string {
 	if len(c.tags) == 0 {
 		return ""
 	}
@@ -333,12 +333,12 @@ func (c *CapCard) ToString() string {
 }
 
 // String implements the Stringer interface
-func (c *CapCard) String() string {
+func (c *CapUrn) String() string {
 	return c.ToString()
 }
 
 // Equals checks if this cap identifier is equal to another
-func (c *CapCard) Equals(other *CapCard) bool {
+func (c *CapUrn) Equals(other *CapUrn) bool {
 	if other == nil {
 		return false
 	}
@@ -359,7 +359,7 @@ func (c *CapCard) Equals(other *CapCard) bool {
 
 // Hash returns a hash of this cap identifier
 // Two equivalent cap identifiers will have the same hash
-func (c *CapCard) Hash() string {
+func (c *CapUrn) Hash() string {
 	// Use canonical string representation for consistent hashing
 	canonical := c.ToString()
 	h := sha256.Sum256([]byte(canonical))
@@ -367,23 +367,23 @@ func (c *CapCard) Hash() string {
 }
 
 // MarshalJSON implements the json.Marshaler interface
-func (c *CapCard) MarshalJSON() ([]byte, error) {
+func (c *CapUrn) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.ToString())
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface
-func (c *CapCard) UnmarshalJSON(data []byte) error {
+func (c *CapUrn) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err
 	}
 
-	capCard, err := NewCapCardFromString(s)
+	capUrn, err := NewCapUrnFromString(s)
 	if err != nil {
 		return err
 	}
 
-	c.tags = capCard.tags
+	c.tags = capUrn.tags
 	return nil
 }
 
@@ -391,8 +391,8 @@ func (c *CapCard) UnmarshalJSON(data []byte) error {
 type CapMatcher struct{}
 
 // FindBestMatch finds the most specific cap that can handle a request
-func (m *CapMatcher) FindBestMatch(caps []*CapCard, request *CapCard) *CapCard {
-	var best *CapCard
+func (m *CapMatcher) FindBestMatch(caps []*CapUrn, request *CapUrn) *CapUrn {
+	var best *CapUrn
 	bestSpecificity := -1
 
 	for _, cap := range caps {
@@ -409,8 +409,8 @@ func (m *CapMatcher) FindBestMatch(caps []*CapCard, request *CapCard) *CapCard {
 }
 
 // FindAllMatches finds all caps that can handle a request, sorted by specificity
-func (m *CapMatcher) FindAllMatches(caps []*CapCard, request *CapCard) []*CapCard {
-	var matches []*CapCard
+func (m *CapMatcher) FindAllMatches(caps []*CapUrn, request *CapUrn) []*CapUrn {
+	var matches []*CapUrn
 
 	for _, cap := range caps {
 		if cap.CanHandle(request) {
@@ -427,7 +427,7 @@ func (m *CapMatcher) FindAllMatches(caps []*CapCard, request *CapCard) []*CapCar
 }
 
 // AreCompatible checks if two cap sets are compatible
-func (m *CapMatcher) AreCompatible(caps1, caps2 []*CapCard) bool {
+func (m *CapMatcher) AreCompatible(caps1, caps2 []*CapUrn) bool {
 	for _, c1 := range caps1 {
 		for _, c2 := range caps2 {
 			if c1.IsCompatibleWith(c2) {
@@ -438,32 +438,32 @@ func (m *CapMatcher) AreCompatible(caps1, caps2 []*CapCard) bool {
 	return false
 }
 
-// CapCardBuilder provides a fluent builder interface for creating cap cards
-type CapCardBuilder struct {
+// CapUrnBuilder provides a fluent builder interface for creating cap URNs
+type CapUrnBuilder struct {
 	tags map[string]string
 }
 
-// NewCapCardBuilder creates a new builder
-func NewCapCardBuilder() *CapCardBuilder {
-	return &CapCardBuilder{
+// NewCapUrnBuilder creates a new builder
+func NewCapUrnBuilder() *CapUrnBuilder {
+	return &CapUrnBuilder{
 		tags: make(map[string]string),
 	}
 }
 
 // Tag adds or updates a tag
-func (b *CapCardBuilder) Tag(key, value string) *CapCardBuilder {
+func (b *CapUrnBuilder) Tag(key, value string) *CapUrnBuilder {
 	b.tags[key] = value
 	return b
 }
 
-// Build creates the final CapCard
-func (b *CapCardBuilder) Build() (*CapCard, error) {
+// Build creates the final CapUrn
+func (b *CapUrnBuilder) Build() (*CapUrn, error) {
 	if len(b.tags) == 0 {
-		return nil, &CapCardError{
+		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
 			Message: "cap identifier cannot be empty",
 		}
 	}
 
-	return NewCapCardFromTags(b.tags), nil
+	return NewCapUrnFromTags(b.tags), nil
 }

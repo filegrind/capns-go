@@ -74,7 +74,7 @@ type CapOutput struct {
 // and do not assume any specific domain like files or documents.
 type Cap struct {
 	// Id is the formal cap identifier with hierarchical naming
-	Id *CapCard `json:"id"`
+	Id *CapUrn `json:"id"`
 
 	// Version is the cap version
 	Version string `json:"version"`
@@ -259,7 +259,7 @@ func (ca *CapArguments) GetFlagArgs() []CapArgument {
 }
 
 // NewCap creates a new cap
-func NewCap(id *CapCard, version string, command string) *Cap {
+func NewCap(id *CapUrn, version string, command string) *Cap {
 	return &Cap{
 		Id:       id,
 		Version:  version,
@@ -270,7 +270,7 @@ func NewCap(id *CapCard, version string, command string) *Cap {
 }
 
 // NewCapWithDescription creates a new cap with description
-func NewCapWithDescription(id *CapCard, version string, command string, description string) *Cap {
+func NewCapWithDescription(id *CapUrn, version string, command string, description string) *Cap {
 	return &Cap{
 		Id:          id,
 		Version:     version,
@@ -282,7 +282,7 @@ func NewCapWithDescription(id *CapCard, version string, command string, descript
 }
 
 // NewCapWithMetadata creates a new cap with metadata
-func NewCapWithMetadata(id *CapCard, version string, command string, metadata map[string]string) *Cap {
+func NewCapWithMetadata(id *CapUrn, version string, command string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
@@ -296,7 +296,7 @@ func NewCapWithMetadata(id *CapCard, version string, command string, metadata ma
 }
 
 // NewCapWithDescriptionAndMetadata creates a new cap with description and metadata
-func NewCapWithDescriptionAndMetadata(id *CapCard, version string, description string, metadata map[string]string) *Cap {
+func NewCapWithDescriptionAndMetadata(id *CapUrn, version string, description string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
@@ -311,7 +311,7 @@ func NewCapWithDescriptionAndMetadata(id *CapCard, version string, description s
 
 // MatchesRequest checks if this cap matches a request string
 func (c *Cap) MatchesRequest(request string) bool {
-	requestId, err := NewCapCardFromString(request)
+	requestId, err := NewCapUrnFromString(request)
 	if err != nil {
 		return false
 	}
@@ -319,7 +319,7 @@ func (c *Cap) MatchesRequest(request string) bool {
 }
 
 // CanHandleRequest checks if this cap can handle a request
-func (c *Cap) CanHandleRequest(request *CapCard) bool {
+func (c *Cap) CanHandleRequest(request *CapUrn) bool {
 	return c.Id.CanHandle(request)
 }
 
