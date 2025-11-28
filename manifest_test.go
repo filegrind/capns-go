@@ -9,7 +9,7 @@ import (
 )
 
 func TestCapManifestCreation(t *testing.T) {
-	id, err := NewCapCardFromString("action=extract;target=metadata;")
+	id, err := NewCapCardFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -29,7 +29,7 @@ func TestCapManifestCreation(t *testing.T) {
 }
 
 func TestCapManifestWithAuthor(t *testing.T) {
-	id, err := NewCapCardFromString("action=extract;target=metadata;")
+	id, err := NewCapCardFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -46,7 +46,7 @@ func TestCapManifestWithAuthor(t *testing.T) {
 }
 
 func TestCapManifestJSONSerialization(t *testing.T) {
-	id, err := NewCapCardFromString("action=extract;target=metadata;")
+	id, err := NewCapCardFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -103,11 +103,11 @@ func TestCapManifestRequiredFields(t *testing.T) {
 }
 
 func TestCapManifestWithMultipleCaps(t *testing.T) {
-	id1, err := NewCapCardFromString("action=extract;target=metadata;")
+	id1, err := NewCapCardFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	cap1 := NewCap(id1, "1.0.0", "extract-metadata")
 	
-	id2, err := NewCapCardFromString("action=extract;target=outline;")
+	id2, err := NewCapCardFromString("cap:action=extract;target=outline;")
 	require.NoError(t, err)
 	metadata := map[string]string{"supports_outline": "true"}
 	cap2 := NewCapWithMetadata(id2, "1.0.0", "extract-outline", metadata)
@@ -120,8 +120,8 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 	)
 	
 	assert.Len(t, manifest.Caps, 2)
-	assert.Equal(t, "action=extract;target=metadata;", manifest.Caps[0].IdString())
-	assert.Equal(t, "action=extract;target=outline;", manifest.Caps[1].IdString())
+	assert.Equal(t, "cap:action=extract;target=metadata", manifest.Caps[0].IdString())
+	assert.Equal(t, "cap:action=extract;target=outline", manifest.Caps[1].IdString())
 	assert.True(t, manifest.Caps[1].HasMetadata("supports_outline"))
 }
 
@@ -146,7 +146,7 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 }
 
 func TestCapManifestOptionalAuthorField(t *testing.T) {
-	id, err := NewCapCardFromString("action=validate;type=file")
+	id, err := NewCapCardFromString("cap:action=validate;type=file")
 	require.NoError(t, err)
 	cap := NewCap(id, "1.0.0", "validate")
 	
@@ -193,7 +193,7 @@ func (tc *testComponent) Caps() []Cap {
 
 func TestComponentMetadataInterface(t *testing.T) {
 	
-	id, err := NewCapCardFromString("action=test;type=component")
+	id, err := NewCapCardFromString("cap:action=test;type=component")
 	require.NoError(t, err)
 	cap := NewCap(id, "1.0.0", "test")
 	
@@ -207,12 +207,12 @@ func TestComponentMetadataInterface(t *testing.T) {
 	
 	caps := component.Caps()
 	assert.Len(t, caps, 1)
-	assert.Equal(t, "action=test;type=component", caps[0].IdString())
+	assert.Equal(t, "cap:action=test;type=component", caps[0].IdString())
 }
 
 func TestCapManifestValidation(t *testing.T) {
 	// Test that manifest with valid caps works
-	id, err := NewCapCardFromString("action=extract;target=metadata;") 
+	id, err := NewCapCardFromString("cap:action=extract;target=metadata;") 
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "1.0.0", "extract-metadata")
@@ -233,15 +233,15 @@ func TestCapManifestValidation(t *testing.T) {
 	
 	// Validate cap integrity
 	assert.Len(t, manifest.Caps, 1)
-	cap := manifest.Caps[0]
-	assert.Equal(t, "1.0.0", cap.Version)
-	assert.Equal(t, "extract-metadata", cap.Command)
-	assert.True(t, cap.AcceptsStdin)
+	capInManifest := manifest.Caps[0]
+	assert.Equal(t, "1.0.0", capInManifest.Version)
+	assert.Equal(t, "extract-metadata", capInManifest.Command)
+	assert.True(t, capInManifest.AcceptsStdin)
 }
 
 func TestCapManifestCompatibility(t *testing.T) {
 	// Test that manifest format is compatible between different types
-	id, err := NewCapCardFromString("action=process")
+	id, err := NewCapCardFromString("cap:action=process")
 	require.NoError(t, err)
 	cap := NewCap(id, "1.0.0", "process")
 	

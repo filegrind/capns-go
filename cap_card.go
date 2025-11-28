@@ -4,6 +4,7 @@
 package capdef
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -37,12 +38,15 @@ const (
 	ErrorEmptyTag         = 2
 	ErrorInvalidCharacter = 3
 	ErrorInvalidTagFormat = 4
+	ErrorMissingCapPrefix = 5
 )
 
 var validTagComponentPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-\*]+$`)
 
 // NewCapCardFromString creates a cap identifier from a string
-// Format: key1=value1;key2=value2;...
+// Format: cap:key1=value1;key2=value2;...
+// The "cap:" prefix is mandatory
+// Trailing semicolons are optional and ignored
 // Tags are automatically sorted alphabetically for canonical form
 func NewCapCardFromString(s string) (*CapCard, error) {
 	if s == "" {
@@ -52,9 +56,29 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 		}
 	}
 
+	// Ensure "cap:" prefix is present
+	if !strings.HasPrefix(s, "cap:") {
+		return nil, &CapCardError{
+			Code:    ErrorMissingCapPrefix,
+			Message: "cap identifier must start with 'cap:'",
+		}
+	}
+
+	// Remove the "cap:" prefix
+	tagsPart := s[4:]
+	if tagsPart == "" {
+		return nil, &CapCardError{
+			Code:    ErrorInvalidFormat,
+			Message: "cap identifier cannot be empty",
+		}
+	}
+
 	tags := make(map[string]string)
 
-	for _, tagStr := range strings.Split(s, ";") {
+	// Remove trailing semicolon if present
+	normalizedTagsPart := strings.TrimSuffix(tagsPart, ";")
+
+	for _, tagStr := range strings.Split(normalizedTagsPart, ";") {
 		tagStr = strings.TrimSpace(tagStr)
 		if tagStr == "" {
 			continue
@@ -82,7 +106,7 @@ func NewCapCardFromString(s string) (*CapCard, error) {
 		if !validTagComponentPattern.MatchString(key) || !validTagComponentPattern.MatchString(value) {
 			return nil, &CapCardError{
 				Code:    ErrorInvalidCharacter,
-				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -): %s", tagStr),
+				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -, *): %s", tagStr),
 			}
 		}
 
@@ -283,7 +307,9 @@ func (c *CapCard) Merge(other *CapCard) *CapCard {
 }
 
 // ToString returns the canonical string representation of this cap identifier
+// Always includes "cap:" prefix
 // Tags are sorted alphabetically for consistent representation
+// No trailing semicolon in canonical form
 func (c *CapCard) ToString() string {
 	if len(c.tags) == 0 {
 		return ""
@@ -302,7 +328,8 @@ func (c *CapCard) ToString() string {
 		parts = append(parts, fmt.Sprintf("%s=%s", key, c.tags[key]))
 	}
 
-	return strings.Join(parts, ";")
+	tagsStr := strings.Join(parts, ";")
+	return fmt.Sprintf("cap:%s", tagsStr)
 }
 
 // String implements the Stringer interface
@@ -328,6 +355,15 @@ func (c *CapCard) Equals(other *CapCard) bool {
 	}
 
 	return true
+}
+
+// Hash returns a hash of this cap identifier
+// Two equivalent cap identifiers will have the same hash
+func (c *CapCard) Hash() string {
+	// Use canonical string representation for consistent hashing
+	canonical := c.ToString()
+	h := sha256.Sum256([]byte(canonical))
+	return fmt.Sprintf("%x", h)
 }
 
 // MarshalJSON implements the json.Marshaler interface
