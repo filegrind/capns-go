@@ -120,8 +120,8 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 	)
 	
 	assert.Len(t, manifest.Caps, 2)
-	assert.Equal(t, "cap:action=extract;target=metadata", manifest.Caps[0].IdString())
-	assert.Equal(t, "cap:action=extract;target=outline", manifest.Caps[1].IdString())
+	assert.Equal(t, "cap:action=extract;target=metadata", manifest.Caps[0].UrnString())
+	assert.Equal(t, "cap:action=extract;target=outline", manifest.Caps[1].UrnString())
 	assert.True(t, manifest.Caps[1].HasMetadata("supports_outline"))
 }
 
@@ -207,7 +207,7 @@ func TestComponentMetadataInterface(t *testing.T) {
 	
 	caps := component.Caps()
 	assert.Len(t, caps, 1)
-	assert.Equal(t, "cap:action=test;type=component", caps[0].IdString())
+	assert.Equal(t, "cap:action=test;type=component", caps[0].UrnString())
 }
 
 func TestCapManifestValidation(t *testing.T) {

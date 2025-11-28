@@ -9,7 +9,7 @@ import (
 // ValidationError represents validation errors with descriptive failure information
 type ValidationError struct {
 	Type         string
-	CapID string
+	CapUrn string
 	ArgumentName string
 	ExpectedType string
 	ActualType   string
@@ -26,7 +26,7 @@ func (e *ValidationError) Error() string {
 func NewUnknownCapError(capUrn string) *ValidationError {
 	return &ValidationError{
 		Type:         "UnknownCap",
-		CapID: capUrn,
+		CapUrn: capUrn,
 		Message:      fmt.Sprintf("Unknown cap '%s' - cap not registered or advertised", capUrn),
 	}
 }
@@ -35,7 +35,7 @@ func NewUnknownCapError(capUrn string) *ValidationError {
 func NewMissingRequiredArgumentError(capUrn, argumentName string) *ValidationError {
 	return &ValidationError{
 		Type:         "MissingRequiredArgument",
-		CapID: capUrn,
+		CapUrn: capUrn,
 		ArgumentName: argumentName,
 		Message:      fmt.Sprintf("Cap '%s' requires argument '%s' but it was not provided", capUrn, argumentName),
 	}
@@ -45,7 +45,7 @@ func NewMissingRequiredArgumentError(capUrn, argumentName string) *ValidationErr
 func NewInvalidArgumentTypeError(capUrn, argumentName string, expectedType ArgumentType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidArgumentType",
-		CapID: capUrn,
+		CapUrn: capUrn,
 		ArgumentName: argumentName,
 		ExpectedType: string(expectedType),
 		ActualType:   actualType,
@@ -58,7 +58,7 @@ func NewInvalidArgumentTypeError(capUrn, argumentName string, expectedType Argum
 func NewArgumentValidationFailedError(capUrn, argumentName, rule string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "ArgumentValidationFailed",
-		CapID: capUrn,
+		CapUrn: capUrn,
 		ArgumentName: argumentName,
 		Rule:         rule,
 		ActualValue:  actualValue,
@@ -70,7 +70,7 @@ func NewArgumentValidationFailedError(capUrn, argumentName, rule string, actualV
 func NewInvalidOutputTypeError(capUrn string, expectedType OutputType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidOutputType",
-		CapID: capUrn,
+		CapUrn: capUrn,
 		ExpectedType: string(expectedType),
 		ActualType:   actualType,
 		ActualValue:  actualValue,
@@ -82,7 +82,7 @@ func NewInvalidOutputTypeError(capUrn string, expectedType OutputType, actualTyp
 func NewOutputValidationFailedError(capUrn, rule string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "OutputValidationFailed",
-		CapID: capUrn,
+		CapUrn: capUrn,
 		Rule:         rule,
 		ActualValue:  actualValue,
 		Message:      fmt.Sprintf("Cap '%s' output failed validation rule '%s' with value: %v", capUrn, rule, actualValue),
@@ -94,7 +94,7 @@ type InputValidator struct{}
 
 // ValidateArguments validates arguments against a cap's input schema
 func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) error {
-	capUrn := cap.IdString()
+	capUrn := cap.UrnString()
 	args := cap.Arguments
 
 	if args == nil {
@@ -106,7 +106,7 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 	if len(arguments) > maxArgs {
 		return &ValidationError{
 			Type:         "TooManyArguments",
-			CapID: capUrn,
+			CapUrn: capUrn,
 			Message:      fmt.Sprintf("Cap '%s' expects at most %d arguments but received %d", capUrn, maxArgs, len(arguments)),
 		}
 	}
@@ -151,7 +151,7 @@ func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, 
 }
 
 func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, value interface{}) error {
-	capUrn := cap.IdString()
+	capUrn := cap.UrnString()
 	actualType := getValueTypeName(value)
 
 	typeMatches := false
@@ -189,7 +189,7 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, va
 }
 
 func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, value interface{}) error {
-	capUrn := cap.IdString()
+	capUrn := cap.UrnString()
 	validation := argDef.Validation
 
 	if validation == nil {
@@ -265,13 +265,13 @@ type OutputValidator struct{}
 
 // ValidateOutput validates output against a cap's output schema
 func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
-	capUrn := cap.IdString()
+	capUrn := cap.UrnString()
 
 	outputDef := cap.GetOutput()
 	if outputDef == nil {
 		return &ValidationError{
 			Type:         "InvalidCapSchema",
-			CapID: capUrn,
+			CapUrn: capUrn,
 			Message:      fmt.Sprintf("Cap '%s' has no output definition specified", capUrn),
 		}
 	}
@@ -290,7 +290,7 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 }
 
 func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, value interface{}) error {
-	capUrn := cap.IdString()
+	capUrn := cap.UrnString()
 	actualType := getValueTypeName(value)
 
 	typeMatches := false
@@ -328,7 +328,7 @@ func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, va
 }
 
 func (ov *OutputValidator) validateOutputRules(cap *Cap, outputDef *CapOutput, value interface{}) error {
-	capUrn := cap.IdString()
+	capUrn := cap.UrnString()
 	validation := outputDef.Validation
 
 	if validation == nil {
@@ -414,7 +414,7 @@ func NewSchemaValidator() *SchemaValidator {
 
 // RegisterCap registers a cap schema for validation
 func (sv *SchemaValidator) RegisterCap(cap *Cap) {
-	sv.caps[cap.IdString()] = cap
+	sv.caps[cap.UrnString()] = cap
 }
 
 // GetCap gets a cap by ID
@@ -444,7 +444,7 @@ func (sv *SchemaValidator) ValidateOutput(capUrn string, output interface{}) err
 
 // ValidateCapSchema validates a cap definition itself
 func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
-	capUrn := cap.IdString()
+	capUrn := cap.UrnString()
 
 	if cap.Arguments == nil {
 		return nil
@@ -455,7 +455,7 @@ func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
 		if arg.Default != nil {
 			return &ValidationError{
 				Type:         "InvalidCapSchema",
-				CapID: capUrn,
+				CapUrn: capUrn,
 				Message:      fmt.Sprintf("Cap '%s' required argument '%s' cannot have a default value", capUrn, arg.Name),
 			}
 		}
@@ -468,7 +468,7 @@ func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
 			if existing, exists := positions[*arg.Position]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapSchema",
-					CapID: capUrn,
+					CapUrn: capUrn,
 					Message:      fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
 				}
 			}
@@ -480,7 +480,7 @@ func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
 			if existing, exists := positions[*arg.Position]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapSchema",
-					CapID: capUrn,
+					CapUrn: capUrn,
 					Message:      fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
 				}
 			}
@@ -495,7 +495,7 @@ func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
 			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapSchema",
-					CapID: capUrn,
+					CapUrn: capUrn,
 					Message:      fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
 				}
 			}
@@ -507,7 +507,7 @@ func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
 			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
 					Type:         "InvalidCapSchema",
-					CapID: capUrn,
+					CapUrn: capUrn,
 					Message:      fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
 				}
 			}

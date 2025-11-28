@@ -1,4 +1,4 @@
-// Package capns provides the fundamental cap identifier system used across
+// Package capns provides the fundamental cap URN system used across
 // all FMIO plugins and providers. It defines the formal structure for cap
 // identifiers with flat tag-based naming, wildcard support, and specificity comparison.
 package capns
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// CapUrn represents a cap identifier using flat, ordered tags
+// CapUrn represents a cap URN using flat, ordered tags
 //
 // Examples:
 // - action=generate;ext=pdf;output=binary;target=thumbnail;
@@ -22,7 +22,7 @@ type CapUrn struct {
 	tags map[string]string
 }
 
-// CapUrnError represents errors that can occur during cap identifier operations
+// CapUrnError represents errors that can occur during cap URN operations
 type CapUrnError struct {
 	Code    int
 	Message string
@@ -32,7 +32,7 @@ func (e *CapUrnError) Error() string {
 	return e.Message
 }
 
-// Error codes for cap identifier operations
+// Error codes for cap URN operations
 const (
 	ErrorInvalidFormat     = 1
 	ErrorEmptyTag         = 2
@@ -43,7 +43,7 @@ const (
 
 var validTagComponentPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-\*]+$`)
 
-// NewCapUrnFromString creates a cap identifier from a string
+// NewCapUrnFromString creates a cap URN from a string
 // Format: cap:key1=value1;key2=value2;...
 // The "cap:" prefix is mandatory
 // Trailing semicolons are optional and ignored
@@ -52,7 +52,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if s == "" {
 		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
-			Message: "cap identifier cannot be empty",
+			Message: "cap URN cannot be empty",
 		}
 	}
 
@@ -60,7 +60,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if !strings.HasPrefix(s, "cap:") {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingCapPrefix,
-			Message: "cap identifier must start with 'cap:'",
+			Message: "cap URN must start with 'cap:'",
 		}
 	}
 
@@ -69,7 +69,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if tagsPart == "" {
 		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
-			Message: "cap identifier cannot be empty",
+			Message: "cap URN cannot be empty",
 		}
 	}
 
@@ -116,7 +116,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if len(tags) == 0 {
 		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
-			Message: "cap identifier cannot be empty",
+			Message: "cap URN cannot be empty",
 		}
 	}
 
@@ -125,7 +125,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 	}, nil
 }
 
-// NewCapUrnFromTags creates a cap identifier from tags
+// NewCapUrnFromTags creates a cap URN from tags
 func NewCapUrnFromTags(tags map[string]string) *CapUrn {
 	result := make(map[string]string)
 	for k, v := range tags {
@@ -306,7 +306,7 @@ func (c *CapUrn) Merge(other *CapUrn) *CapUrn {
 	return &CapUrn{tags: newTags}
 }
 
-// ToString returns the canonical string representation of this cap identifier
+// ToString returns the canonical string representation of this cap URN
 // Always includes "cap:" prefix
 // Tags are sorted alphabetically for consistent representation
 // No trailing semicolon in canonical form
@@ -337,7 +337,7 @@ func (c *CapUrn) String() string {
 	return c.ToString()
 }
 
-// Equals checks if this cap identifier is equal to another
+// Equals checks if this cap URN is equal to another
 func (c *CapUrn) Equals(other *CapUrn) bool {
 	if other == nil {
 		return false
@@ -357,8 +357,8 @@ func (c *CapUrn) Equals(other *CapUrn) bool {
 	return true
 }
 
-// Hash returns a hash of this cap identifier
-// Two equivalent cap identifiers will have the same hash
+// Hash returns a hash of this cap URN
+// Two equivalent cap URNs will have the same hash
 func (c *CapUrn) Hash() string {
 	// Use canonical string representation for consistent hashing
 	canonical := c.ToString()
@@ -461,7 +461,7 @@ func (b *CapUrnBuilder) Build() (*CapUrn, error) {
 	if len(b.tags) == 0 {
 		return nil, &CapUrnError{
 			Code:    ErrorInvalidFormat,
-			Message: "cap identifier cannot be empty",
+			Message: "cap URN cannot be empty",
 		}
 	}
 

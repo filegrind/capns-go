@@ -14,7 +14,7 @@ func TestCapCreation(t *testing.T) {
 	
 	cap := NewCap(id, "1.0.0", "test-command")
 	
-	assert.Equal(t, "cap:action=transform;format=json;type=data_processing", cap.IdString())
+	assert.Equal(t, "cap:action=transform;format=json;type=data_processing", cap.UrnString())
 	assert.Equal(t, "1.0.0", cap.Version)
 	assert.Equal(t, "test-command", cap.Command)
 	assert.Nil(t, cap.Description)

@@ -70,10 +70,10 @@ type CapOutput struct {
 // Cap represents a formal cap definition
 //
 // This defines the structure for formal cap definitions that include
-// the cap identifier, versioning, metadata, and arguments. Caps are general-purpose
+// the cap URN, versioning, metadata, and arguments. Caps are general-purpose
 // and do not assume any specific domain like files or documents.
 type Cap struct {
-	// Id is the formal cap identifier with hierarchical naming
+	// Id is the formal cap URN with hierarchical naming
 	Id *CapUrn `json:"id"`
 
 	// Version is the cap version
@@ -415,8 +415,8 @@ func (c *Cap) SetOutput(output *CapOutput) {
 	c.Output = output
 }
 
-// IdString gets the cap identifier as a string
-func (c *Cap) IdString() string {
+// UrnString gets the cap URN as a string
+func (c *Cap) UrnString() string {
 	return c.Id.ToString()
 }
 
