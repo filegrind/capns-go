@@ -155,7 +155,7 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, va
 	actualType := getValueTypeName(value)
 
 	typeMatches := false
-	switch argDef.Type {
+	switch argDef.ArgType {
 	case ArgumentTypeString:
 		_, typeMatches = value.(string)
 	case ArgumentTypeInteger:
@@ -182,7 +182,7 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, va
 	}
 
 	if !typeMatches {
-		return NewInvalidArgumentTypeError(capUrn, argDef.Name, argDef.Type, actualType, value)
+		return NewInvalidArgumentTypeError(capUrn, argDef.Name, argDef.ArgType, actualType, value)
 	}
 
 	return nil
@@ -294,7 +294,7 @@ func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, va
 	actualType := getValueTypeName(value)
 
 	typeMatches := false
-	switch outputDef.Type {
+	switch outputDef.OutputType {
 	case OutputTypeString:
 		_, typeMatches = value.(string)
 	case OutputTypeInteger:
@@ -321,7 +321,7 @@ func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, va
 	}
 
 	if !typeMatches {
-		return NewInvalidOutputTypeError(capUrn, outputDef.Type, actualType, value)
+		return NewInvalidOutputTypeError(capUrn, outputDef.OutputType, actualType, value)
 	}
 
 	return nil
@@ -452,7 +452,7 @@ func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
 
 	// Validate that required arguments don't have default values
 	for _, arg := range cap.Arguments.Required {
-		if arg.Default != nil {
+		if arg.DefaultValue != nil {
 			return &ValidationError{
 				Type:         "InvalidCapSchema",
 				CapUrn: capUrn,

@@ -32,7 +32,7 @@ func (e *CacheEntry) isExpired() bool {
 type RegistryCapResponse struct {
 	Urn          interface{} `json:"urn"`          // Can be string or object with tags
 	Version      string      `json:"version"`
-	Description  *string     `json:"description,omitempty"`
+	CapDescription  *string     `json:"cap_description,omitempty"`
 	Metadata     map[string]string `json:"metadata"`
 	Command      string      `json:"command"`
 	Arguments    CapArguments `json:"arguments"`
@@ -72,7 +72,7 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 	}
 	
 	cap := NewCap(capUrn, r.Version, r.Command)
-	cap.Description = r.Description
+	cap.CapDescription = r.CapDescription
 	if r.Metadata != nil {
 		cap.Metadata = r.Metadata
 	}

@@ -29,13 +29,13 @@ type ArgumentValidation struct {
 
 // CapArgument represents a single argument definition for a cap
 type CapArgument struct {
-	Name        string               `json:"name"`
-	Type        ArgumentType         `json:"type"`
-	Description string               `json:"description"`
-	CliFlag     string               `json:"cli_flag"`
-	Position    *int                 `json:"position,omitempty"`
-	Validation  *ArgumentValidation  `json:"validation,omitempty"`
-	Default     interface{}          `json:"default,omitempty"`
+	Name           string               `json:"name"`
+	ArgType        ArgumentType         `json:"arg_type"`
+	ArgDescription string               `json:"arg_description"`
+	CliFlag        string               `json:"cli_flag"`
+	Position       *int                 `json:"position,omitempty"`
+	Validation     *ArgumentValidation  `json:"validation,omitempty"`
+	DefaultValue   interface{}          `json:"default_value,omitempty"`
 }
 
 // CapArguments represents the collection of arguments for a cap
@@ -60,11 +60,11 @@ const (
 
 // CapOutput represents the output definition for a cap
 type CapOutput struct {
-	Type        OutputType           `json:"type"`
-	SchemaRef   *string              `json:"schema_ref,omitempty"`
-	ContentType *string              `json:"content_type,omitempty"`
-	Validation  *ArgumentValidation  `json:"validation,omitempty"`
-	Description string               `json:"description"`
+	OutputType        OutputType           `json:"output_type"`
+	SchemaRef         *string              `json:"schema_ref,omitempty"`
+	ContentType       *string              `json:"content_type,omitempty"`
+	Validation        *ArgumentValidation  `json:"validation,omitempty"`
+	OutputDescription string               `json:"output_description"`
 }
 
 // Cap represents a formal cap definition
@@ -79,8 +79,8 @@ type Cap struct {
 	// Version is the cap version
 	Version string `json:"version"`
 
-	// Description is an optional description
-	Description *string `json:"description,omitempty"`
+	// CapDescription is an optional description
+	CapDescription *string `json:"cap_description,omitempty">`
 
 	// Metadata contains optional metadata as key-value pairs
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -101,10 +101,10 @@ type Cap struct {
 // NewCapArgument creates a new cap argument
 func NewCapArgument(name string, argType ArgumentType, description string, cliFlag string) CapArgument {
 	return CapArgument{
-		Name:        name,
-		Type:        argType,
-		Description: description,
-		CliFlag:     cliFlag,
+		Name:           name,
+		ArgType:        argType,
+		ArgDescription: description,
+		CliFlag:        cliFlag,
 	}
 }
 
@@ -116,11 +116,11 @@ func NewCapArgumentWithCliFlag(name string, argType ArgumentType, description st
 // NewCapArgumentWithPosition creates an argument with position
 func NewCapArgumentWithPosition(name string, argType ArgumentType, description string, cliFlag string, position int) CapArgument {
 	return CapArgument{
-		Name:        name,
-		Type:        argType,
-		Description: description,
-		CliFlag:     cliFlag,
-		Position:    &position,
+		Name:           name,
+		ArgType:        argType,
+		ArgDescription: description,
+		CliFlag:        cliFlag,
+		Position:       &position,
 	}
 }
 
@@ -157,26 +157,26 @@ func NewArgumentValidationAllowedValues(values []string) *ArgumentValidation {
 // NewCapOutput creates a new output definition
 func NewCapOutput(outputType OutputType, description string) *CapOutput {
 	return &CapOutput{
-		Type:        outputType,
-		Description: description,
+		OutputType:        outputType,
+		OutputDescription: description,
 	}
 }
 
 // NewCapOutputWithContentType creates output with content type
 func NewCapOutputWithContentType(outputType OutputType, description string, contentType string) *CapOutput {
 	return &CapOutput{
-		Type:        outputType,
-		Description: description,
-		ContentType: &contentType,
+		OutputType:        outputType,
+		OutputDescription: description,
+		ContentType:       &contentType,
 	}
 }
 
 // NewCapOutputWithSchema creates output with schema reference
 func NewCapOutputWithSchema(outputType OutputType, description string, schemaRef string) *CapOutput {
 	return &CapOutput{
-		Type:        outputType,
-		Description: description,
-		SchemaRef:   &schemaRef,
+		OutputType:        outputType,
+		OutputDescription: description,
+		SchemaRef:         &schemaRef,
 	}
 }
 
@@ -272,12 +272,12 @@ func NewCap(urn *CapUrn, version string, command string) *Cap {
 // NewCapWithDescription creates a new cap with description
 func NewCapWithDescription(urn *CapUrn, version string, command string, description string) *Cap {
 	return &Cap{
-		Urn:          urn,
-		Version:     version,
-		Command:     command,
-		Description: &description,
-		Metadata:    make(map[string]string),
-		Arguments:   NewCapArguments(),
+		Urn:            urn,
+		Version:        version,
+		Command:        command,
+		CapDescription: &description,
+		Metadata:       make(map[string]string),
+		Arguments:      NewCapArguments(),
 	}
 }
 
@@ -301,11 +301,11 @@ func NewCapWithDescriptionAndMetadata(urn *CapUrn, version string, description s
 		metadata = make(map[string]string)
 	}
 	return &Cap{
-		Urn:          urn,
-		Version:     version,
-		Description: &description,
-		Metadata:    metadata,
-		Arguments:   NewCapArguments(),
+		Urn:            urn,
+		Version:        version,
+		CapDescription: &description,
+		Metadata:       metadata,
+		Arguments:      NewCapArguments(),
 	}
 }
 
@@ -434,11 +434,11 @@ func (c *Cap) Equals(other *Cap) bool {
 		return false
 	}
 
-	if (c.Description == nil) != (other.Description == nil) {
+	if (c.CapDescription == nil) != (other.CapDescription == nil) {
 		return false
 	}
 
-	if c.Description != nil && *c.Description != *other.Description {
+	if c.CapDescription != nil && *c.CapDescription != *other.CapDescription {
 		return false
 	}
 
