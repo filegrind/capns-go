@@ -63,13 +63,13 @@ func TestCapRequestHandling(t *testing.T) {
 	cap1 := NewCap(id, "1.0.0", "extract-cmd")
 	cap2 := NewCap(id, "1.0.0", "extract-cmd")
 	
-	assert.True(t, cap1.CanHandleRequest(cap2.Id))
+	assert.True(t, cap1.CanHandleRequest(cap2.Urn))
 	
 	otherId, err := NewCapUrnFromString("cap:action=generate;type=image")
 	require.NoError(t, err)
 	cap3 := NewCap(otherId, "1.0.0", "generate-cmd")
 	
-	assert.False(t, cap1.CanHandleRequest(cap3.Id))
+	assert.False(t, cap1.CanHandleRequest(cap3.Urn))
 }
 
 func TestCapEquality(t *testing.T) {
