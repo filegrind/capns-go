@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -85,8 +87,10 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 
 // CapRegistry handles communication with the capns registry
 type CapRegistry struct {
-	client   *http.Client
-	cacheDir string
+	client     *http.Client
+	cacheDir   string
+	cachedCaps map[string]*Cap
+	mutex      sync.RWMutex
 }
 
 // NewCapRegistry creates a new registry client
@@ -104,22 +108,41 @@ func NewCapRegistry() (*CapRegistry, error) {
 		Timeout: HTTPTimeoutSeconds * time.Second,
 	}
 
+	// Load all cached caps into memory
+	cachedCaps, err := loadAllCachedCaps(cacheDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load cached caps: %w", err)
+	}
+
 	return &CapRegistry{
-		client:   client,
-		cacheDir: cacheDir,
+		client:     client,
+		cacheDir:   cacheDir,
+		cachedCaps: cachedCaps,
 	}, nil
 }
 
-// GetCap gets a cap from registry or cache. Never returns nil - either returns a Cap or an error.
+// GetCap gets a cap from in-memory cache or fetch from registry
 func (r *CapRegistry) GetCap(urn string) (*Cap, error) {
-	// Try cache first
-	cap, err := r.loadFromCache(urn)
-	if err == nil {
+	// Check in-memory cache first
+	r.mutex.RLock()
+	if cap, exists := r.cachedCaps[urn]; exists {
+		r.mutex.RUnlock()
 		return cap, nil
 	}
+	r.mutex.RUnlock()
 
-	// Cache miss or expired, fetch from registry
-	return r.fetchFromRegistry(urn)
+	// Not in cache, fetch from registry and update in-memory cache
+	cap, err := r.fetchFromRegistry(urn)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update in-memory cache
+	r.mutex.Lock()
+	r.cachedCaps[urn] = cap
+	r.mutex.Unlock()
+
+	return cap, nil
 }
 
 // GetCaps gets multiple caps at once - fails if any cap is not available
@@ -163,8 +186,26 @@ func (r *CapRegistry) CapExists(urn string) bool {
 	return err == nil
 }
 
+// GetCachedCaps gets all currently cached caps from in-memory cache
+func (r *CapRegistry) GetCachedCaps() []*Cap {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	caps := make([]*Cap, 0, len(r.cachedCaps))
+	for _, cap := range r.cachedCaps {
+		caps = append(caps, cap)
+	}
+	return caps
+}
+
 // ClearCache removes all cached registry definitions
 func (r *CapRegistry) ClearCache() error {
+	// Clear in-memory cache
+	r.mutex.Lock()
+	r.cachedCaps = make(map[string]*Cap)
+	r.mutex.Unlock()
+
+	// Clear filesystem cache
 	if err := os.RemoveAll(r.cacheDir); err != nil {
 		return fmt.Errorf("failed to clear cache: %w", err)
 	}
@@ -201,25 +242,45 @@ func (r *CapRegistry) cacheFilePath(urn string) string {
 	return filepath.Join(r.cacheDir, key+".json")
 }
 
-func (r *CapRegistry) loadFromCache(urn string) (*Cap, error) {
-	cacheFile := r.cacheFilePath(urn)
-	
-	data, err := os.ReadFile(cacheFile)
+func loadAllCachedCaps(cacheDir string) (map[string]*Cap, error) {
+	caps := make(map[string]*Cap)
+
+	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
+		return caps, nil
+	}
+
+	files, err := os.ReadDir(cacheDir)
 	if err != nil {
-		return nil, fmt.Errorf("cap '%s' not found in cache", urn)
+		return nil, fmt.Errorf("failed to read cache directory: %w", err)
 	}
 
-	var entry CacheEntry
-	if err := json.Unmarshal(data, &entry); err != nil {
-		return nil, fmt.Errorf("failed to parse cache file: %w", err)
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
+
+		filePath := filepath.Join(cacheDir, file.Name())
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read cache file %s: %w", filePath, err)
+		}
+
+		var entry CacheEntry
+		if err := json.Unmarshal(data, &entry); err != nil {
+			return nil, fmt.Errorf("failed to parse cache file %s: %w", filePath, err)
+		}
+
+		if entry.isExpired() {
+			// Remove expired cache file
+			os.Remove(filePath)
+			continue
+		}
+
+		urn := entry.Definition.UrnString()
+		caps[urn] = &entry.Definition
 	}
 
-	if entry.isExpired() {
-		os.Remove(cacheFile) // Clean up expired cache
-		return nil, fmt.Errorf("cached cap '%s' has expired", urn)
-	}
-
-	return &entry.Definition, nil
+	return caps, nil
 }
 
 func (r *CapRegistry) saveToCache(cap *Cap) error {
