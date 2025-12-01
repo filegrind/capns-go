@@ -70,17 +70,14 @@ type CapOutput struct {
 // Cap represents a formal cap definition
 //
 // This defines the structure for formal cap definitions that include
-// the cap URN, versioning, metadata, and arguments. Caps are general-purpose
+// the cap URN, metadata, and arguments. Caps are general-purpose
 // and do not assume any specific domain like files or documents.
 type Cap struct {
 	// Urn is the formal cap URN with hierarchical naming
 	Urn *CapUrn `json:"urn"`
 
-	// Version is the cap version
-	Version string `json:"version"`
-
 	// CapDescription is an optional description
-	CapDescription *string `json:"cap_description,omitempty">`
+	CapDescription *string `json:"cap_description,omitempty"`
 
 	// Metadata contains optional metadata as key-value pairs
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -259,10 +256,9 @@ func (ca *CapArguments) GetFlagArgs() []CapArgument {
 }
 
 // NewCap creates a new cap
-func NewCap(urn *CapUrn, version string, command string) *Cap {
+func NewCap(urn *CapUrn, command string) *Cap {
 	return &Cap{
 		Urn:       urn,
-		Version:  version,
 		Command:  command,
 		Metadata: make(map[string]string),
 		Arguments: NewCapArguments(),
@@ -270,10 +266,9 @@ func NewCap(urn *CapUrn, version string, command string) *Cap {
 }
 
 // NewCapWithDescription creates a new cap with description
-func NewCapWithDescription(urn *CapUrn, version string, command string, description string) *Cap {
+func NewCapWithDescription(urn *CapUrn, command string, description string) *Cap {
 	return &Cap{
 		Urn:            urn,
-		Version:        version,
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       make(map[string]string),
@@ -282,13 +277,12 @@ func NewCapWithDescription(urn *CapUrn, version string, command string, descript
 }
 
 // NewCapWithMetadata creates a new cap with metadata
-func NewCapWithMetadata(urn *CapUrn, version string, command string, metadata map[string]string) *Cap {
+func NewCapWithMetadata(urn *CapUrn, command string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
 	return &Cap{
 		Urn:        urn,
-		Version:   version,
 		Command:   command,
 		Metadata:  metadata,
 		Arguments: NewCapArguments(),
@@ -296,13 +290,13 @@ func NewCapWithMetadata(urn *CapUrn, version string, command string, metadata ma
 }
 
 // NewCapWithDescriptionAndMetadata creates a new cap with description and metadata
-func NewCapWithDescriptionAndMetadata(urn *CapUrn, version string, description string, metadata map[string]string) *Cap {
+func NewCapWithDescriptionAndMetadata(urn *CapUrn, command string, description string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
 	return &Cap{
 		Urn:            urn,
-		Version:        version,
+		Command:        command,
 		CapDescription: &description,
 		Metadata:       metadata,
 		Arguments:      NewCapArguments(),
@@ -427,10 +421,6 @@ func (c *Cap) Equals(other *Cap) bool {
 	}
 
 	if !c.Urn.Equals(other.Urn) {
-		return false
-	}
-
-	if c.Version != other.Version {
 		return false
 	}
 

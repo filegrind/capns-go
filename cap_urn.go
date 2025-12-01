@@ -48,6 +48,7 @@ var validTagComponentPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-\*]+$`)
 // The "cap:" prefix is mandatory
 // Trailing semicolons are optional and ignored
 // Tags are automatically sorted alphabetically for canonical form
+// All input is normalized to lowercase for case-insensitive matching
 func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if s == "" {
 		return nil, &CapUrnError{
@@ -55,6 +56,9 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 			Message: "cap URN cannot be empty",
 		}
 	}
+
+	// Normalize to lowercase for case-insensitive handling
+	s = strings.ToLower(s)
 
 	// Ensure "cap:" prefix is present
 	if !strings.HasPrefix(s, "cap:") {
@@ -126,10 +130,11 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 }
 
 // NewCapUrnFromTags creates a cap URN from tags
+// All keys and values are normalized to lowercase for case-insensitive matching
 func NewCapUrnFromTags(tags map[string]string) *CapUrn {
 	result := make(map[string]string)
 	for k, v := range tags {
-		result[k] = v
+		result[strings.ToLower(k)] = strings.ToLower(v)
 	}
 	return &CapUrn{
 		tags: result,
@@ -137,30 +142,35 @@ func NewCapUrnFromTags(tags map[string]string) *CapUrn {
 }
 
 // GetTag returns the value of a specific tag
+// Key is normalized to lowercase for case-insensitive lookup
 func (c *CapUrn) GetTag(key string) (string, bool) {
-	value, exists := c.tags[key]
+	value, exists := c.tags[strings.ToLower(key)]
 	return value, exists
 }
 
 // HasTag checks if this cap has a specific tag with a specific value
+// Both key and value are normalized to lowercase for case-insensitive comparison
 func (c *CapUrn) HasTag(key, value string) bool {
-	tagValue, exists := c.tags[key]
-	return exists && tagValue == value
+	tagValue, exists := c.tags[strings.ToLower(key)]
+	return exists && tagValue == strings.ToLower(value)
 }
 
 // WithTag returns a new cap URN with an added or updated tag
+// Both key and value are normalized to lowercase
 func (c *CapUrn) WithTag(key, value string) *CapUrn {
 	newTags := make(map[string]string)
 	for k, v := range c.tags {
 		newTags[k] = v
 	}
-	newTags[key] = value
+	newTags[strings.ToLower(key)] = strings.ToLower(value)
 	return &CapUrn{tags: newTags}
 }
 
 // WithoutTag returns a new cap URN with a tag removed
+// Key is normalized to lowercase for case-insensitive removal
 func (c *CapUrn) WithoutTag(key string) *CapUrn {
 	newTags := make(map[string]string)
+	key = strings.ToLower(key)
 	for k, v := range c.tags {
 		if k != key {
 			newTags[k] = v
@@ -451,8 +461,9 @@ func NewCapUrnBuilder() *CapUrnBuilder {
 }
 
 // Tag adds or updates a tag
+// Both key and value are normalized to lowercase
 func (b *CapUrnBuilder) Tag(key, value string) *CapUrnBuilder {
-	b.tags[key] = value
+	b.tags[strings.ToLower(key)] = strings.ToLower(value)
 	return b
 }
 

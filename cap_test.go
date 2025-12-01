@@ -12,10 +12,9 @@ func TestCapCreation(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap := NewCap(id, "1.0.0", "test-command")
+	cap := NewCap(id, "test-command")
 	
 	assert.Equal(t, "cap:action=transform;format=json;type=data_processing", cap.UrnString())
-	assert.Equal(t, "1.0.0", cap.Version)
 	assert.Equal(t, "test-command", cap.Command)
 	assert.Nil(t, cap.CapDescription)
 	assert.NotNil(t, cap.Metadata)
@@ -31,7 +30,7 @@ func TestCapWithMetadata(t *testing.T) {
 		"operations": "add,subtract,multiply,divide",
 	}
 	
-	cap := NewCapWithMetadata(id, "2.1.0", "calc-command", metadata)
+	cap := NewCapWithMetadata(id, "calc-command", metadata)
 	
 	precision, exists := cap.GetMetadata("precision")
 	assert.True(t, exists)
@@ -48,7 +47,7 @@ func TestCapMatching(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap := NewCap(id, "1.0.0", "test-command")
+	cap := NewCap(id, "test-command")
 	
 	assert.True(t, cap.MatchesRequest("cap:action=transform;format=json;type=data_processing"))
 	assert.True(t, cap.MatchesRequest("cap:action=transform;format=*;type=data_processing")) // Request wants any format, cap handles json specifically
@@ -60,14 +59,14 @@ func TestCapRequestHandling(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
-	cap1 := NewCap(id, "1.0.0", "extract-cmd")
-	cap2 := NewCap(id, "1.0.0", "extract-cmd")
+	cap1 := NewCap(id, "extract-cmd")
+	cap2 := NewCap(id, "extract-cmd")
 	
 	assert.True(t, cap1.CanHandleRequest(cap2.Urn))
 	
 	otherId, err := NewCapUrnFromString("cap:action=generate;type=image")
 	require.NoError(t, err)
-	cap3 := NewCap(otherId, "1.0.0", "generate-cmd")
+	cap3 := NewCap(otherId, "generate-cmd")
 	
 	assert.False(t, cap1.CanHandleRequest(cap3.Urn))
 }
@@ -76,8 +75,8 @@ func TestCapEquality(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap1 := NewCap(id, "1.0.0", "test-command")
-	cap2 := NewCap(id, "1.0.0", "test-command")
+	cap1 := NewCap(id, "test-command")
+	cap2 := NewCap(id, "test-command")
 	
 	assert.True(t, cap1.Equals(cap2))
 }
@@ -86,11 +85,11 @@ func TestCapDescription(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=parse;format=json;type=data")
 	require.NoError(t, err)
 	
-	cap1 := NewCapWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
-	cap2 := NewCapWithDescription(id, "2.0.0", "parse-cmd", "Parse JSON data v2")
-	cap3 := NewCapWithDescription(id, "1.0.0", "parse-cmd", "Parse JSON data")
+	cap1 := NewCapWithDescription(id, "parse-cmd", "Parse JSON data")
+	cap2 := NewCapWithDescription(id, "parse-cmd", "Parse JSON data v2")
+	cap3 := NewCapWithDescription(id, "parse-cmd", "Parse JSON data")
 	
-	assert.False(t, cap1.Equals(cap2)) // Different versions
+	assert.False(t, cap1.Equals(cap2)) // Different descriptions
 	assert.True(t, cap1.Equals(cap3))  // Same everything
 }
 
@@ -98,7 +97,7 @@ func TestCapAcceptsStdin(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=generate;target=embeddings")
 	require.NoError(t, err)
 	
-	cap := NewCap(id, "1.0.0", "generate")
+	cap := NewCap(id, "generate")
 	
 	// By default, caps should not accept stdin
 	assert.False(t, cap.AcceptsStdin)

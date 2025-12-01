@@ -32,7 +32,7 @@ func TestRegistryValidation(t *testing.T) {
 	// Create a test cap
 	capUrn, err := NewCapUrnFromString("cap:action=test;target=fake")
 	require.NoError(t, err)
-	cap := NewCap(capUrn, "1.0.0", "test-cmd")
+	cap := NewCap(capUrn, "test-cmd")
 
 	// Validation should fail since this cap doesn't exist in registry
 	err = ValidateCapCanonical(registry, cap)

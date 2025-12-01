@@ -333,3 +333,93 @@ func TestJSONSerialization(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, original.Equals(&decoded))
 }
+
+func TestCapUrnCaseInsensitive(t *testing.T) {
+	// Test that different casing produces the same URN
+	cap1, err := NewCapUrnFromString("cap:ACTION=Generate;EXT=PDF;Target=Thumbnail;")
+	require.NoError(t, err)
+	
+	cap2, err := NewCapUrnFromString("cap:action=generate;ext=pdf;target=thumbnail;")
+	require.NoError(t, err)
+	
+	// Both should be normalized to lowercase
+	action, exists := cap1.GetTag("action")
+	assert.True(t, exists)
+	assert.Equal(t, "generate", action)
+	
+	ext, exists := cap1.GetTag("ext")
+	assert.True(t, exists)
+	assert.Equal(t, "pdf", ext)
+	
+	target, exists := cap1.GetTag("target")
+	assert.True(t, exists)
+	assert.Equal(t, "thumbnail", target)
+	
+	// URNs should be identical after normalization
+	assert.Equal(t, cap1.ToString(), cap2.ToString())
+	
+	// PartialEq should work correctly - URNs with different case should be equal
+	assert.True(t, cap1.Equals(cap2))
+	
+	// Case-insensitive tag lookup should work
+	action2, exists := cap1.GetTag("ACTION")
+	assert.True(t, exists)
+	assert.Equal(t, "generate", action2)
+	
+	action3, exists := cap1.GetTag("Action")
+	assert.True(t, exists)
+	assert.Equal(t, "generate", action3)
+	
+	assert.True(t, cap1.HasTag("ACTION", "Generate"))
+	assert.True(t, cap1.HasTag("action", "GENERATE"))
+	
+	// Matching should work case-insensitively
+	assert.True(t, cap1.Matches(cap2))
+	assert.True(t, cap2.Matches(cap1))
+}
+
+func TestCapUrnBuilderCaseInsensitive(t *testing.T) {
+	cap, err := NewCapUrnBuilder().
+		Tag("ACTION", "Generate").
+		Tag("Target", "Thumbnail").
+		Tag("EXT", "PDF").
+		Tag("output", "BINARY").
+		Build()
+	require.NoError(t, err)
+	
+	// All tags should be normalized to lowercase
+	action, exists := cap.GetTag("action")
+	assert.True(t, exists)
+	assert.Equal(t, "generate", action)
+	
+	output, exists := cap.GetTag("output")
+	assert.True(t, exists)
+	assert.Equal(t, "binary", output)
+	
+	// Should be able to retrieve with different case
+	action2, exists := cap.GetTag("ACTION")
+	assert.True(t, exists)
+	assert.Equal(t, "generate", action2)
+}
+
+func TestCapUrnWithTagCaseInsensitive(t *testing.T) {
+	original, err := NewCapUrnFromString("cap:action=generate")
+	require.NoError(t, err)
+	
+	modified := original.WithTag("EXT", "PDF")
+	
+	// Tag should be normalized to lowercase
+	ext, exists := modified.GetTag("ext")
+	assert.True(t, exists)
+	assert.Equal(t, "pdf", ext)
+	
+	// Should be retrievable with different case
+	ext2, exists := modified.GetTag("EXT")
+	assert.True(t, exists)
+	assert.Equal(t, "pdf", ext2)
+	
+	assert.Equal(t, "cap:action=generate;ext=pdf", modified.ToString())
+	
+	// Original should be unchanged
+	assert.Equal(t, "cap:action=generate", original.ToString())
+}

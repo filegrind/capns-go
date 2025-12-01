@@ -73,7 +73,7 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 		return nil, fmt.Errorf("URN must be string or object")
 	}
 	
-	cap := NewCap(capUrn, r.Version, r.Command)
+	cap := NewCap(capUrn, r.Command)
 	cap.CapDescription = r.CapDescription
 	if r.Metadata != nil {
 		cap.Metadata = r.Metadata
@@ -163,10 +163,6 @@ func (r *CapRegistry) ValidateCap(cap *Cap) error {
 	canonicalCap, err := r.GetCap(cap.UrnString())
 	if err != nil {
 		return err
-	}
-
-	if cap.Version != canonicalCap.Version {
-		return fmt.Errorf("version mismatch. Local: %s, Canonical: %s", cap.Version, canonicalCap.Version)
 	}
 
 	if cap.Command != canonicalCap.Command {

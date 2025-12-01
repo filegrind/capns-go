@@ -12,7 +12,7 @@ func TestCapManifestCreation(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
-	cap := NewCap(id, "1.0.0", "extract-metadata")
+	cap := NewCap(id, "extract-metadata")
 	
 	manifest := NewCapManifest(
 		"TestComponent",
@@ -32,7 +32,7 @@ func TestCapManifestWithAuthor(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
-	cap := NewCap(id, "1.0.0", "extract-metadata")
+	cap := NewCap(id, "extract-metadata")
 	
 	manifest := NewCapManifest(
 		"TestComponent",
@@ -49,7 +49,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
 	
-	cap := NewCap(id, "1.0.0", "extract-metadata")
+	cap := NewCap(id, "extract-metadata")
 	cap.AcceptsStdin = true
 	
 	manifest := NewCapManifest(
@@ -105,12 +105,12 @@ func TestCapManifestRequiredFields(t *testing.T) {
 func TestCapManifestWithMultipleCaps(t *testing.T) {
 	id1, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
 	require.NoError(t, err)
-	cap1 := NewCap(id1, "1.0.0", "extract-metadata")
+	cap1 := NewCap(id1, "extract-metadata")
 	
 	id2, err := NewCapUrnFromString("cap:action=extract;target=outline;")
 	require.NoError(t, err)
 	metadata := map[string]string{"supports_outline": "true"}
-	cap2 := NewCapWithMetadata(id2, "1.0.0", "extract-outline", metadata)
+	cap2 := NewCapWithMetadata(id2, "extract-outline", metadata)
 	
 	manifest := NewCapManifest(
 		"MultiCapComponent",
@@ -148,7 +148,7 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 func TestCapManifestOptionalAuthorField(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=validate;type=file")
 	require.NoError(t, err)
-	cap := NewCap(id, "1.0.0", "validate")
+	cap := NewCap(id, "validate")
 	
 	manifestWithoutAuthor := NewCapManifest(
 		"ValidatorComponent",
@@ -195,7 +195,7 @@ func TestComponentMetadataInterface(t *testing.T) {
 	
 	id, err := NewCapUrnFromString("cap:action=test;type=component")
 	require.NoError(t, err)
-	cap := NewCap(id, "1.0.0", "test")
+	cap := NewCap(id, "test")
 	
 	component := &testComponent{
 		name:         "TestImpl",
@@ -215,7 +215,7 @@ func TestCapManifestValidation(t *testing.T) {
 	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;") 
 	require.NoError(t, err)
 	
-	cap := NewCap(id, "1.0.0", "extract-metadata")
+	cap := NewCap(id, "extract-metadata")
 	cap.AcceptsStdin = true
 	
 	manifest := NewCapManifest(
@@ -234,7 +234,7 @@ func TestCapManifestValidation(t *testing.T) {
 	// Validate cap integrity
 	assert.Len(t, manifest.Caps, 1)
 	capInManifest := manifest.Caps[0]
-	assert.Equal(t, "1.0.0", capInManifest.Version)
+	// Version field removed from Cap struct
 	assert.Equal(t, "extract-metadata", capInManifest.Command)
 	assert.True(t, capInManifest.AcceptsStdin)
 }
@@ -243,7 +243,7 @@ func TestCapManifestCompatibility(t *testing.T) {
 	// Test that manifest format is compatible between different types
 	id, err := NewCapUrnFromString("cap:action=process")
 	require.NoError(t, err)
-	cap := NewCap(id, "1.0.0", "process")
+	cap := NewCap(id, "process")
 	
 	// Create manifest similar to what a plugin would have
 	pluginStyleManifest := NewCapManifest(
