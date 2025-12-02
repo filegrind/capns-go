@@ -39,9 +39,13 @@ const (
 	ErrorInvalidCharacter = 3
 	ErrorInvalidTagFormat = 4
 	ErrorMissingCapPrefix = 5
+	ErrorDuplicateKey     = 6
+	ErrorNumericKey       = 7
 )
 
-var validTagComponentPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-\*]+$`)
+var validKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:]+$`)
+var validValuePattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:*]+$`)
+var numericPattern = regexp.MustCompile(`^[0-9]+$`)
 
 // NewCapUrnFromString creates a cap URN from a string
 // Format: cap:key1=value1;key2=value2;...
@@ -70,17 +74,16 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 
 	// Remove the "cap:" prefix
 	tagsPart := s[4:]
-	if tagsPart == "" {
-		return nil, &CapUrnError{
-			Code:    ErrorInvalidFormat,
-			Message: "cap URN cannot be empty",
-		}
-	}
-
+	
 	tags := make(map[string]string)
 
 	// Remove trailing semicolon if present
 	normalizedTagsPart := strings.TrimSuffix(tagsPart, ";")
+
+	// Handle empty cap URN (cap: with no tags)
+	if normalizedTagsPart == "" {
+		return &CapUrn{tags: tags}, nil
+	}
 
 	for _, tagStr := range strings.Split(normalizedTagsPart, ";") {
 		tagStr = strings.TrimSpace(tagStr)
@@ -106,22 +109,31 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 			}
 		}
 
+		// Check for duplicate keys
+		if _, exists := tags[key]; exists {
+			return nil, &CapUrnError{
+				Code:    ErrorDuplicateKey,
+				Message: fmt.Sprintf("duplicate tag key: %s", key),
+			}
+		}
+
+		// Validate key cannot be purely numeric
+		if numericPattern.MatchString(key) {
+			return nil, &CapUrnError{
+				Code:    ErrorNumericKey,
+				Message: fmt.Sprintf("tag key cannot be purely numeric: %s", key),
+			}
+		}
+
 		// Validate key and value characters
-		if !validTagComponentPattern.MatchString(key) || !validTagComponentPattern.MatchString(value) {
+		if !validKeyPattern.MatchString(key) || !validValuePattern.MatchString(value) {
 			return nil, &CapUrnError{
 				Code:    ErrorInvalidCharacter,
-				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -, *): %s", tagStr),
+				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -, /, :, * in values only): %s", tagStr),
 			}
 		}
 
 		tags[key] = value
-	}
-
-	if len(tags) == 0 {
-		return nil, &CapUrnError{
-			Code:    ErrorInvalidFormat,
-			Message: "cap URN cannot be empty",
-		}
 	}
 
 	return &CapUrn{
@@ -322,7 +334,7 @@ func (c *CapUrn) Merge(other *CapUrn) *CapUrn {
 // No trailing semicolon in canonical form
 func (c *CapUrn) ToString() string {
 	if len(c.tags) == 0 {
-		return ""
+		return "cap:"
 	}
 
 	// Sort keys for canonical representation

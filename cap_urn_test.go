@@ -423,3 +423,92 @@ func TestCapUrnWithTagCaseInsensitive(t *testing.T) {
 	// Original should be unchanged
 	assert.Equal(t, "cap:action=generate", original.ToString())
 }
+
+// Test for new rules
+
+func TestEmptyCapUrn(t *testing.T) {
+	// Empty cap URN should be valid and match everything
+	empty, err := NewCapUrnFromString("cap:")
+	assert.NoError(t, err)
+	assert.NotNil(t, empty)
+	assert.Equal(t, 0, len(empty.tags))
+	assert.Equal(t, "cap:", empty.ToString())
+	
+	// Should match any other cap
+	specific, err := NewCapUrnFromString("cap:action=generate;ext=pdf")
+	assert.NoError(t, err)
+	assert.True(t, empty.Matches(specific))
+	assert.True(t, empty.Matches(empty))
+}
+
+func TestExtendedCharacterSupport(t *testing.T) {
+	// Test forward slashes and colons in tag components
+	cap, err := NewCapUrnFromString("cap:url=https://example_org/api;path=/some/file")
+	assert.NoError(t, err)
+	assert.NotNil(t, cap)
+	
+	url, exists := cap.GetTag("url")
+	assert.True(t, exists)
+	assert.Equal(t, "https://example_org/api", url)
+	
+	path, exists := cap.GetTag("path")
+	assert.True(t, exists)
+	assert.Equal(t, "/some/file", path)
+}
+
+func TestWildcardRestrictions(t *testing.T) {
+	// Wildcard should be rejected in keys
+	invalidKey, err := NewCapUrnFromString("cap:*=value")
+	assert.Error(t, err)
+	assert.Nil(t, invalidKey)
+	capError, ok := err.(*CapUrnError)
+	assert.True(t, ok)
+	assert.Equal(t, ErrorInvalidCharacter, capError.Code)
+	
+	// Wildcard should be accepted in values
+	validValue, err := NewCapUrnFromString("cap:key=*")
+	assert.NoError(t, err)
+	assert.NotNil(t, validValue)
+	
+	value, exists := validValue.GetTag("key")
+	assert.True(t, exists)
+	assert.Equal(t, "*", value)
+}
+
+func TestDuplicateKeyRejection(t *testing.T) {
+	// Duplicate keys should be rejected
+	duplicate, err := NewCapUrnFromString("cap:key=value1;key=value2")
+	assert.Error(t, err)
+	assert.Nil(t, duplicate)
+	capError, ok := err.(*CapUrnError)
+	assert.True(t, ok)
+	assert.Equal(t, ErrorDuplicateKey, capError.Code)
+}
+
+func TestNumericKeyRestriction(t *testing.T) {
+	// Pure numeric keys should be rejected
+	numericKey, err := NewCapUrnFromString("cap:123=value")
+	assert.Error(t, err)
+	assert.Nil(t, numericKey)
+	capError, ok := err.(*CapUrnError)
+	assert.True(t, ok)
+	assert.Equal(t, ErrorNumericKey, capError.Code)
+	
+	// Mixed alphanumeric keys should be allowed
+	mixedKey1, err := NewCapUrnFromString("cap:key123=value")
+	assert.NoError(t, err)
+	assert.NotNil(t, mixedKey1)
+	
+	mixedKey2, err := NewCapUrnFromString("cap:123key=value")
+	assert.NoError(t, err)
+	assert.NotNil(t, mixedKey2)
+	
+	// Pure numeric values should be allowed
+	numericValue, err := NewCapUrnFromString("cap:key=123")
+	assert.NoError(t, err)
+	assert.NotNil(t, numericValue)
+	
+	value, exists := numericValue.GetTag("key")
+	assert.True(t, exists)
+	assert.Equal(t, "123", value)
+}
