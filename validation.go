@@ -89,8 +89,35 @@ func NewOutputValidationFailedError(capUrn, rule string, actualValue interface{}
 	}
 }
 
+// NewSchemaValidationFailedError creates an error for schema validation failures
+func NewSchemaValidationFailedError(capUrn, argumentName, details string, actualValue interface{}) *ValidationError {
+	return &ValidationError{
+		Type:         "SchemaValidationFailed",
+		CapUrn:       capUrn,
+		ArgumentName: argumentName,
+		ActualValue:  actualValue,
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' failed schema validation: %s", capUrn, argumentName, details),
+	}
+}
+
 // InputValidator validates arguments against cap input schemas
-type InputValidator struct{}
+type InputValidator struct{
+	schemaValidator *SchemaValidator
+}
+
+// NewInputValidator creates a new input validator
+func NewInputValidator() *InputValidator {
+	return &InputValidator{
+		schemaValidator: NewSchemaValidator(),
+	}
+}
+
+// NewInputValidatorWithSchemaResolver creates a new input validator with schema resolver
+func NewInputValidatorWithSchemaResolver(resolver SchemaResolver) *InputValidator {
+	return &InputValidator{
+		schemaValidator: NewSchemaValidatorWithResolver(resolver),
+	}
+}
 
 // ValidateArguments validates arguments against a cap's input schema
 func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) error {
@@ -144,6 +171,28 @@ func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, 
 
 	// Validation rules
 	if err := iv.validateArgumentRules(cap, argDef, value); err != nil {
+		return err
+	}
+
+	// Schema validation for object/array types
+	if err := iv.validateArgumentSchema(cap, argDef, value); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateArgumentSchema validates argument against JSON schema
+func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArgument, value interface{}) error {
+	// Only validate structured types that have schemas
+	if argDef.ArgType != ArgumentTypeObject && argDef.ArgType != ArgumentTypeArray {
+		return nil
+	}
+
+	if err := iv.schemaValidator.ValidateArgument(argDef, value); err != nil {
+		if schemaErr, ok := err.(*SchemaValidationError); ok {
+			return NewSchemaValidationFailedError(cap.UrnString(), argDef.Name, schemaErr.Details, value)
+		}
 		return err
 	}
 
@@ -261,7 +310,23 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 }
 
 // OutputValidator validates output against cap output schemas
-type OutputValidator struct{}
+type OutputValidator struct{
+	schemaValidator *SchemaValidator
+}
+
+// NewOutputValidator creates a new output validator
+func NewOutputValidator() *OutputValidator {
+	return &OutputValidator{
+		schemaValidator: NewSchemaValidator(),
+	}
+}
+
+// NewOutputValidatorWithSchemaResolver creates a new output validator with schema resolver
+func NewOutputValidatorWithSchemaResolver(resolver SchemaResolver) *OutputValidator {
+	return &OutputValidator{
+		schemaValidator: NewSchemaValidatorWithResolver(resolver),
+	}
+}
 
 // ValidateOutput validates output against a cap's output schema
 func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
@@ -283,6 +348,28 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 
 	// Validation rules
 	if err := ov.validateOutputRules(cap, outputDef, output); err != nil {
+		return err
+	}
+
+	// Schema validation for structured outputs
+	if err := ov.validateOutputSchema(cap, outputDef, output); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateOutputSchema validates output against JSON schema
+func (ov *OutputValidator) validateOutputSchema(cap *Cap, outputDef *CapOutput, value interface{}) error {
+	// Only validate structured types that have schemas
+	if outputDef.OutputType != OutputTypeObject && outputDef.OutputType != OutputTypeArray {
+		return nil
+	}
+
+	if err := ov.schemaValidator.ValidateOutput(outputDef, value); err != nil {
+		if schemaErr, ok := err.(*SchemaValidationError); ok {
+			return NewOutputValidationFailedError(cap.UrnString(), "schema validation: "+schemaErr.Details, value)
+		}
 		return err
 	}
 
@@ -396,54 +483,63 @@ func (ov *OutputValidator) validateOutputRules(cap *Cap, outputDef *CapOutput, v
 	return nil
 }
 
-// SchemaValidator provides centralized validation coordination
-type SchemaValidator struct {
-	caps   map[string]*Cap
-	inputValidator *InputValidator
+// CapValidationCoordinator provides centralized validation coordination
+type CapValidationCoordinator struct {
+	caps            map[string]*Cap
+	inputValidator  *InputValidator
 	outputValidator *OutputValidator
 }
 
-// NewSchemaValidator creates a new schema validator
-func NewSchemaValidator() *SchemaValidator {
-	return &SchemaValidator{
-		caps:    make(map[string]*Cap),
-		inputValidator:  &InputValidator{},
-		outputValidator: &OutputValidator{},
+// NewCapValidationCoordinator creates a new validation coordinator
+func NewCapValidationCoordinator() *CapValidationCoordinator {
+	return &CapValidationCoordinator{
+		caps:            make(map[string]*Cap),
+		inputValidator:  NewInputValidator(),
+		outputValidator: NewOutputValidator(),
+	}
+}
+
+// NewCapValidationCoordinatorWithSchemaResolver creates a coordinator with schema resolver
+func NewCapValidationCoordinatorWithSchemaResolver(resolver SchemaResolver) *CapValidationCoordinator {
+	return &CapValidationCoordinator{
+		caps:            make(map[string]*Cap),
+		inputValidator:  NewInputValidatorWithSchemaResolver(resolver),
+		outputValidator: NewOutputValidatorWithSchemaResolver(resolver),
 	}
 }
 
 // RegisterCap registers a cap schema for validation
-func (sv *SchemaValidator) RegisterCap(cap *Cap) {
-	sv.caps[cap.UrnString()] = cap
+func (cvc *CapValidationCoordinator) RegisterCap(cap *Cap) {
+	cvc.caps[cap.UrnString()] = cap
 }
 
 // GetCap gets a cap by ID
-func (sv *SchemaValidator) GetCap(capUrn string) *Cap {
-	return sv.caps[capUrn]
+func (cvc *CapValidationCoordinator) GetCap(capUrn string) *Cap {
+	return cvc.caps[capUrn]
 }
 
 // ValidateInputs validates arguments against a cap's input schema
-func (sv *SchemaValidator) ValidateInputs(capUrn string, arguments []interface{}) error {
-	cap := sv.GetCap(capUrn)
+func (cvc *CapValidationCoordinator) ValidateInputs(capUrn string, arguments []interface{}) error {
+	cap := cvc.GetCap(capUrn)
 	if cap == nil {
 		return NewUnknownCapError(capUrn)
 	}
 
-	return sv.inputValidator.ValidateArguments(cap, arguments)
+	return cvc.inputValidator.ValidateArguments(cap, arguments)
 }
 
 // ValidateOutput validates output against a cap's output schema
-func (sv *SchemaValidator) ValidateOutput(capUrn string, output interface{}) error {
-	cap := sv.GetCap(capUrn)
+func (cvc *CapValidationCoordinator) ValidateOutput(capUrn string, output interface{}) error {
+	cap := cvc.GetCap(capUrn)
 	if cap == nil {
 		return NewUnknownCapError(capUrn)
 	}
 
-	return sv.outputValidator.ValidateOutput(cap, output)
+	return cvc.outputValidator.ValidateOutput(cap, output)
 }
 
 // ValidateCapSchema validates a cap definition itself
-func (sv *SchemaValidator) ValidateCapSchema(cap *Cap) error {
+func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 	capUrn := cap.UrnString()
 
 	if cap.Arguments == nil {

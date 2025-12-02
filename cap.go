@@ -36,6 +36,8 @@ type CapArgument struct {
 	Position       *int                 `json:"position,omitempty"`
 	Validation     *ArgumentValidation  `json:"validation,omitempty"`
 	DefaultValue   interface{}          `json:"default_value,omitempty"`
+	SchemaRef      *string              `json:"schema_ref,omitempty"`
+	Schema         interface{}          `json:"schema,omitempty"`
 }
 
 // CapArguments represents the collection of arguments for a cap
@@ -62,6 +64,7 @@ const (
 type CapOutput struct {
 	OutputType        OutputType           `json:"output_type"`
 	SchemaRef         *string              `json:"schema_ref,omitempty"`
+	Schema            interface{}          `json:"schema,omitempty"`
 	ContentType       *string              `json:"content_type,omitempty"`
 	Validation        *ArgumentValidation  `json:"validation,omitempty"`
 	OutputDescription string               `json:"output_description"`
@@ -121,6 +124,28 @@ func NewCapArgumentWithPosition(name string, argType ArgumentType, description s
 	}
 }
 
+// NewCapArgumentWithSchema creates an argument with embedded schema
+func NewCapArgumentWithSchema(name string, argType ArgumentType, description string, cliFlag string, schema interface{}) CapArgument {
+	return CapArgument{
+		Name:           name,
+		ArgType:        argType,
+		ArgDescription: description,
+		CliFlag:        cliFlag,
+		Schema:         schema,
+	}
+}
+
+// NewCapArgumentWithSchemaRef creates an argument with schema reference
+func NewCapArgumentWithSchemaRef(name string, argType ArgumentType, description string, cliFlag string, schemaRef string) CapArgument {
+	return CapArgument{
+		Name:           name,
+		ArgType:        argType,
+		ArgDescription: description,
+		CliFlag:        cliFlag,
+		SchemaRef:      &schemaRef,
+	}
+}
+
 // NewArgumentValidationNumericRange creates validation with numeric constraints
 func NewArgumentValidationNumericRange(min, max *float64) *ArgumentValidation {
 	return &ArgumentValidation{
@@ -168,12 +193,21 @@ func NewCapOutputWithContentType(outputType OutputType, description string, cont
 	}
 }
 
-// NewCapOutputWithSchema creates output with schema reference
-func NewCapOutputWithSchema(outputType OutputType, description string, schemaRef string) *CapOutput {
+// NewCapOutputWithSchemaRef creates output with schema reference
+func NewCapOutputWithSchemaRef(outputType OutputType, description string, schemaRef string) *CapOutput {
 	return &CapOutput{
 		OutputType:        outputType,
 		OutputDescription: description,
 		SchemaRef:         &schemaRef,
+	}
+}
+
+// NewCapOutputWithEmbeddedSchema creates output with embedded schema
+func NewCapOutputWithEmbeddedSchema(outputType OutputType, description string, schema interface{}) *CapOutput {
+	return &CapOutput{
+		OutputType:        outputType,
+		OutputDescription: description,
+		Schema:            schema,
 	}
 }
 

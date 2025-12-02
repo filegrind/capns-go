@@ -161,10 +161,23 @@ func (cc *CapCaller) isJsonCap() bool {
 
 // validateInputs validates input arguments against cap definition
 func (cc *CapCaller) validateInputs(positionalArgs, namedArgs []interface{}) error {
-	// For now, we'll validate positional args since that's what most caps use
-	// Named args validation can be added later when we have caps that use them
-	inputValidator := &InputValidator{}
-	return inputValidator.ValidateArguments(cc.capDefinition, positionalArgs)
+	// Create enhanced input validator with schema support
+	inputValidator := NewInputValidator()
+	
+	// Convert named args to map for validation
+	namedArgsMap := make(map[string]interface{})
+	for _, arg := range namedArgs {
+		if argMap, ok := arg.(map[string]interface{}); ok {
+			if name, nameOk := argMap["name"].(string); nameOk {
+				if value, valueOk := argMap["value"]; valueOk {
+					namedArgsMap[name] = value
+				}
+			}
+		}
+	}
+	
+	// Use schema validator for comprehensive validation
+	return inputValidator.schemaValidator.ValidateArguments(cc.capDefinition, positionalArgs, namedArgsMap)
 }
 
 // validateOutput validates output against cap definition
@@ -199,6 +212,6 @@ func (cc *CapCaller) validateOutput(response *ResponseWrapper) error {
 		outputValue = text
 	}
 
-	outputValidator := &OutputValidator{}
+	outputValidator := NewOutputValidator()
 	return outputValidator.ValidateOutput(cc.capDefinition, outputValue)
 }
