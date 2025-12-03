@@ -43,8 +43,8 @@ const (
 	ErrorNumericKey       = 7
 )
 
-var validKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:]+$`)
-var validValuePattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:*]+$`)
+var validKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:.]+$`)
+var validValuePattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:.*]+$`)
 var numericPattern = regexp.MustCompile(`^[0-9]+$`)
 
 // NewCapUrnFromString creates a cap URN from a string
@@ -129,7 +129,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 		if !validKeyPattern.MatchString(key) || !validValuePattern.MatchString(value) {
 			return nil, &CapUrnError{
 				Code:    ErrorInvalidCharacter,
-				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -, /, :, * in values only): %s", tagStr),
+				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -, /, :, ., * in values only): %s", tagStr),
 			}
 		}
 

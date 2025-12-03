@@ -102,7 +102,7 @@ func TestBestCapHostSelection(t *testing.T) {
 	registry.RegisterCapHost("specific", specificHost, []*Cap{specificCap})
 	
 	// Request should match the more specific host
-	bestHost, err := registry.FindBestCapHost("cap:action=generate;type=text;model=gpt-4;temperature=0.7")
+	bestHost, bestCap, err := registry.FindBestCapHost("cap:action=generate;type=text;model=gpt-4;temperature=0.7")
 	if err != nil {
 		t.Fatalf("Failed to find best cap host: %v", err)
 	}
@@ -110,6 +110,9 @@ func TestBestCapHostSelection(t *testing.T) {
 	// Should get the specific host (though we can't directly compare interfaces)
 	if bestHost == nil {
 		t.Error("Expected a host, got nil")
+	}
+	if bestCap == nil {
+		t.Error("Expected a cap definition, got nil")
 	}
 	
 	// Both hosts should match

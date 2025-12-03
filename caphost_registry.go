@@ -103,21 +103,22 @@ func (r *CapHostRegistry) FindCapHosts(requestUrn string) ([]CapHost, error) {
 	return matchingHosts, nil
 }
 
-// FindBestCapHost finds the best capability host for the request using specificity ranking
-func (r *CapHostRegistry) FindBestCapHost(requestUrn string) (CapHost, error) {
+// FindBestCapHost finds the best capability host and cap definition for the request using specificity ranking
+func (r *CapHostRegistry) FindBestCapHost(requestUrn string) (CapHost, *Cap, error) {
 	request, err := NewCapUrnFromString(requestUrn)
 	if err != nil {
-		return nil, NewInvalidUrnError(requestUrn, err.Error())
+		return nil, nil, NewInvalidUrnError(requestUrn, err.Error())
 	}
 	
 	var bestHost CapHost
+	var bestCap *Cap
 	var bestSpecificity int = -1
 	
 	for _, entry := range r.hosts {
 		for _, cap := range entry.capabilities {
 			capUrn, err := NewCapUrnFromString(cap.Urn.String())
 			if err != nil {
-				return nil, NewRegistryError(
+				return nil, nil, NewRegistryError(
 					fmt.Sprintf("Invalid capability URN in registry for host %s: %s", entry.name, err.Error()),
 				)
 			}
@@ -126,6 +127,7 @@ func (r *CapHostRegistry) FindBestCapHost(requestUrn string) (CapHost, error) {
 				specificity := capUrn.Specificity()
 				if bestSpecificity == -1 || specificity > bestSpecificity {
 					bestHost = entry.host
+					bestCap = cap
 					bestSpecificity = specificity
 				}
 				break // Found a matching capability for this host, check next host
@@ -134,10 +136,10 @@ func (r *CapHostRegistry) FindBestCapHost(requestUrn string) (CapHost, error) {
 	}
 	
 	if bestHost == nil {
-		return nil, NewNoHostsFoundError(requestUrn)
+		return nil, nil, NewNoHostsFoundError(requestUrn)
 	}
 	
-	return bestHost, nil
+	return bestHost, bestCap, nil
 }
 
 // GetHostNames returns all registered capability host names
