@@ -2,6 +2,7 @@ package capns
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 // ArgumentType represents the type of a cap argument
@@ -476,6 +477,10 @@ func (c *Cap) Equals(other *Cap) bool {
 	}
 
 
+	if c.Title != other.Title {
+		return false
+	}
+
 	if c.Command != other.Command {
 		return false
 	}
@@ -503,13 +508,128 @@ func (c *Cap) Equals(other *Cap) bool {
 
 // MarshalJSON implements custom JSON marshaling
 func (c *Cap) MarshalJSON() ([]byte, error) {
-	type CapAlias Cap
-	return json.Marshal((*CapAlias)(c))
+	capData := map[string]interface{}{
+		"urn": map[string]interface{}{
+			"tags": c.Urn.tags,
+		},
+		"title":   c.Title,
+		"command": c.Command,
+	}
+	
+	if c.CapDescription != nil {
+		capData["cap_description"] = *c.CapDescription
+	}
+	
+	if len(c.Metadata) > 0 {
+		capData["metadata"] = c.Metadata
+	}
+	
+	if c.Arguments != nil && !c.Arguments.IsEmpty() {
+		capData["arguments"] = c.Arguments
+	}
+	
+	if c.Output != nil {
+		capData["output"] = c.Output
+	}
+	
+	if c.AcceptsStdin {
+		capData["accepts_stdin"] = c.AcceptsStdin
+	}
+	
+	return json.Marshal(capData)
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling
 func (c *Cap) UnmarshalJSON(data []byte) error {
-	type CapAlias Cap
-	aux := (*CapAlias)(c)
-	return json.Unmarshal(data, aux)
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	
+	// Handle urn field - can be string or object with tags
+	urnField, ok := raw["urn"]
+	if !ok {
+		return fmt.Errorf("missing required field 'urn'")
+	}
+	
+	var urn *CapUrn
+	var err error
+	switch v := urnField.(type) {
+	case string:
+		urn, err = NewCapUrnFromString(v)
+		if err != nil {
+			return fmt.Errorf("failed to parse URN string: %v", err)
+		}
+	case map[string]interface{}:
+		tagsField, ok := v["tags"]
+		if !ok {
+			return fmt.Errorf("URN object missing 'tags' field")
+		}
+		tagsMap, ok := tagsField.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("URN tags field must be an object")
+		}
+		
+		tags := make(map[string]string)
+		for k, v := range tagsMap {
+			if s, ok := v.(string); ok {
+				tags[k] = s
+			}
+		}
+		urn = NewCapUrnFromTags(tags)
+	default:
+		return fmt.Errorf("URN field must be string or object")
+	}
+	
+	c.Urn = urn
+	
+	// Handle required fields
+	if title, ok := raw["title"].(string); ok {
+		c.Title = title
+	} else {
+		return fmt.Errorf("missing required field 'title'")
+	}
+	
+	if command, ok := raw["command"].(string); ok {
+		c.Command = command
+	} else {
+		return fmt.Errorf("missing required field 'command'")
+	}
+	
+	// Handle optional fields
+	if desc, ok := raw["cap_description"].(string); ok {
+		c.CapDescription = &desc
+	}
+	
+	if metadata, ok := raw["metadata"].(map[string]interface{}); ok {
+		c.Metadata = make(map[string]string)
+		for k, v := range metadata {
+			if s, ok := v.(string); ok {
+				c.Metadata[k] = s
+			}
+		}
+	}
+	
+	if acceptsStdin, ok := raw["accepts_stdin"].(bool); ok {
+		c.AcceptsStdin = acceptsStdin
+	}
+	
+	// Handle arguments and output if present
+	if args, ok := raw["arguments"]; ok {
+		argsBytes, _ := json.Marshal(args)
+		var arguments CapArguments
+		if err := json.Unmarshal(argsBytes, &arguments); err == nil {
+			c.Arguments = &arguments
+		}
+	}
+	
+	if output, ok := raw["output"]; ok {
+		outputBytes, _ := json.Marshal(output)
+		var capOutput CapOutput
+		if err := json.Unmarshal(outputBytes, &capOutput); err == nil {
+			c.Output = &capOutput
+		}
+	}
+	
+	return nil
 }

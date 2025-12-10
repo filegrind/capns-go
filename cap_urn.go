@@ -397,7 +397,7 @@ func (c *CapUrn) MarshalJSON() ([]byte, error) {
 func (c *CapUrn) UnmarshalJSON(data []byte) error {
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal CapUrn: expected string, got: %s", string(data))
 	}
 
 	capUrn, err := NewCapUrnFromString(s)
