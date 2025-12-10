@@ -13,7 +13,7 @@ func main() {
 	fmt.Println("=== Example 1: Basic Schema Validation ===")
 	
 	urn, _ := capns.NewCapUrnFromString("cap:action=query;target=structured;")
-	cap := capns.NewCap(urn, "query-command")
+	cap := capns.NewCap(urn, "Query Command", "query-command")
 
 	// Define JSON schema for user data
 	userSchema := map[string]interface{}{

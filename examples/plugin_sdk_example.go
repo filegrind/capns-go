@@ -12,7 +12,7 @@ func main() {
 
 	// Create a capability using the plugin SDK
 	urn, _ := sdk.NewCapUrnFromString("cap:action=query;target=structured;")
-	cap := sdk.NewCap(urn, "plugin-query-command")
+	cap := sdk.NewCap(urn, "Plugin Query Command", "plugin-query-command")
 
 	// Define a comprehensive schema for document query parameters
 	querySchema := map[string]interface{}{

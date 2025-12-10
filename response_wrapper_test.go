@@ -146,11 +146,11 @@ func TestResponseWrapperGetContentType(t *testing.T) {
 func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	// Setup cap definitions
 	stringCapUrn, _ := NewCapUrnFromString("cap:action=test")
-	stringCap := NewCap(stringCapUrn, "test")
+	stringCap := NewCap(stringCapUrn, "String Test", "test")
 	stringCap.SetOutput(NewCapOutput(OutputTypeString, "String output"))
 	
 	binaryCapUrn, _ := NewCapUrnFromString("cap:action=test")
-	binaryCap := NewCap(binaryCapUrn, "test")
+	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
 	binaryCap.SetOutput(NewCapOutput(OutputTypeBinary, "Binary output"))
 	
 	// Test text response with string output type

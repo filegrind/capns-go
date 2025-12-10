@@ -73,7 +73,13 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 		return nil, fmt.Errorf("URN must be string or object")
 	}
 	
-	cap := NewCap(capUrn, r.Command)
+	// Use description as title if available, otherwise use a default based on command
+	title := "Registry Capability"
+	if r.CapDescription != nil && *r.CapDescription != "" {
+		title = *r.CapDescription
+	}
+	
+	cap := NewCap(capUrn, title, r.Command)
 	cap.CapDescription = r.CapDescription
 	if r.Metadata != nil {
 		cap.Metadata = r.Metadata

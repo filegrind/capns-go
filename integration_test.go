@@ -14,14 +14,14 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=transform;format=json;type=data_processing")
 	require.NoError(t, err)
 	
-	cap := NewCap(urn, "transform-command")
+	cap := NewCap(urn, "Data Transformer", "transform-command")
 	
 	// Verify the cap doesn't have version field
 	assert.Equal(t, "cap:action=transform;format=json;type=data_processing", cap.UrnString())
 	assert.Equal(t, "transform-command", cap.Command)
 	
 	// Test case 2: Create cap with description but no version
-	cap2 := NewCapWithDescription(urn, "transform-command", "Transforms data")
+	cap2 := NewCapWithDescription(urn, "Data Transformer", "transform-command", "Transforms data")
 	assert.NotNil(t, cap2.CapDescription)
 	assert.Equal(t, "Transforms data", *cap2.CapDescription)
 	
@@ -30,7 +30,7 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	
 	// Different caps should not be equal
 	urn2, _ := NewCapUrnFromString("cap:action=generate;format=pdf")
-	cap3 := NewCap(urn2, "generate-command")
+	cap3 := NewCap(urn2, "PDF Generator", "generate-command")
 	assert.False(t, cap.Equals(cap3))
 }
 
@@ -79,7 +79,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=extract;target=metadata;output=json")
 	require.NoError(t, err)
 	
-	capDef := NewCap(urn, "extract-metadata")
+	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
 	capDef.SetOutput(NewCapOutput(OutputTypeObject, "Extracted metadata"))
 	
 	// Add required argument
@@ -129,7 +129,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=generate;target=thumbnail;output=binary")
 	require.NoError(t, err)
 	
-	capDef := NewCap(urn, "generate-thumbnail")
+	capDef := NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
 	capDef.SetOutput(NewCapOutput(OutputTypeBinary, "Generated thumbnail"))
 	
 	// Mock host that returns binary data
@@ -182,7 +182,7 @@ func TestIntegrationProductionQuality(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=test")
 	require.NoError(t, err)
 	
-	capDef := NewCap(urn, "test")
+	capDef := NewCap(urn, "Test Capability", "test")
 	capDef.SetOutput(NewCapOutput(OutputTypeString, "Test output"))
 	
 	// Add required string argument

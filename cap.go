@@ -79,6 +79,9 @@ type Cap struct {
 	// Urn is the formal cap URN with hierarchical naming
 	Urn *CapUrn `json:"urn"`
 
+	// Title is the human-readable title of the capability (required)
+	Title string `json:"title"`
+
 	// CapDescription is an optional description
 	CapDescription *string `json:"cap_description,omitempty"`
 
@@ -290,19 +293,21 @@ func (ca *CapArguments) GetFlagArgs() []CapArgument {
 }
 
 // NewCap creates a new cap
-func NewCap(urn *CapUrn, command string) *Cap {
+func NewCap(urn *CapUrn, title string, command string) *Cap {
 	return &Cap{
 		Urn:       urn,
-		Command:  command,
-		Metadata: make(map[string]string),
+		Title:     title,
+		Command:   command,
+		Metadata:  make(map[string]string),
 		Arguments: NewCapArguments(),
 	}
 }
 
 // NewCapWithDescription creates a new cap with description
-func NewCapWithDescription(urn *CapUrn, command string, description string) *Cap {
+func NewCapWithDescription(urn *CapUrn, title string, command string, description string) *Cap {
 	return &Cap{
 		Urn:            urn,
+		Title:          title,
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       make(map[string]string),
@@ -311,12 +316,13 @@ func NewCapWithDescription(urn *CapUrn, command string, description string) *Cap
 }
 
 // NewCapWithMetadata creates a new cap with metadata
-func NewCapWithMetadata(urn *CapUrn, command string, metadata map[string]string) *Cap {
+func NewCapWithMetadata(urn *CapUrn, title string, command string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
 	return &Cap{
-		Urn:        urn,
+		Urn:       urn,
+		Title:     title,
 		Command:   command,
 		Metadata:  metadata,
 		Arguments: NewCapArguments(),
@@ -324,12 +330,13 @@ func NewCapWithMetadata(urn *CapUrn, command string, metadata map[string]string)
 }
 
 // NewCapWithDescriptionAndMetadata creates a new cap with description and metadata
-func NewCapWithDescriptionAndMetadata(urn *CapUrn, command string, description string, metadata map[string]string) *Cap {
+func NewCapWithDescriptionAndMetadata(urn *CapUrn, title string, command string, description string, metadata map[string]string) *Cap {
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
 	return &Cap{
 		Urn:            urn,
+		Title:          title,
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       metadata,
@@ -397,6 +404,16 @@ func (c *Cap) HasMetadata(key string) bool {
 	return exists
 }
 
+// GetTitle gets the title
+func (c *Cap) GetTitle() string {
+	return c.Title
+}
+
+// SetTitle sets the title
+func (c *Cap) SetTitle(title string) {
+	c.Title = title
+}
+
 // GetCommand gets the command
 func (c *Cap) GetCommand() string {
 	return c.Command
@@ -455,6 +472,14 @@ func (c *Cap) Equals(other *Cap) bool {
 	}
 
 	if !c.Urn.Equals(other.Urn) {
+		return false
+	}
+
+	if c.Title != other.Title {
+		return false
+	}
+
+	if c.Command != other.Command {
 		return false
 	}
 

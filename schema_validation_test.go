@@ -163,7 +163,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=query;target=structured;")
 	require.NoError(t, err)
 
-	cap := NewCap(urn, "test-command")
+	cap := NewCap(urn, "Query Processor", "test-command")
 
 	// Add argument with schema
 	userSchema := map[string]interface{}{
@@ -277,7 +277,7 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=test;")
 	require.NoError(t, err)
 
-	cap := NewCap(urn, "test-command")
+	cap := NewCap(urn, "Config Validator", "test-command")
 
 	// Add argument with schema
 	schema := map[string]interface{}{
@@ -320,7 +320,7 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=test;")
 	require.NoError(t, err)
 
-	cap := NewCap(urn, "test-command")
+	cap := NewCap(urn, "Output Validator", "test-command")
 
 	// Add output with schema
 	schema := map[string]interface{}{
@@ -369,7 +369,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 	urn, err := NewCapUrnFromString("cap:action=query;target=structured;")
 	require.NoError(t, err)
 
-	cap := NewCap(urn, "query-command")
+	cap := NewCap(urn, "Structured Query", "query-command")
 
 	// Add input argument with schema
 	inputSchema := map[string]interface{}{
