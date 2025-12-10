@@ -475,9 +475,6 @@ func (c *Cap) Equals(other *Cap) bool {
 		return false
 	}
 
-	if c.Title != other.Title {
-		return false
-	}
 
 	if c.Command != other.Command {
 		return false
