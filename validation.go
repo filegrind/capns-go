@@ -41,6 +41,16 @@ func NewMissingRequiredArgumentError(capUrn, argumentName string) *ValidationErr
 	}
 }
 
+// NewUnknownArgumentError creates an error for unknown arguments
+func NewUnknownArgumentError(capUrn, argumentName string) *ValidationError {
+	return &ValidationError{
+		Type:         "UnknownArgument",
+		CapUrn: capUrn,
+		ArgumentName: argumentName,
+		Message:      fmt.Sprintf("Cap '%s' does not accept argument '%s' - check capability definition for valid arguments", capUrn, argumentName),
+	}
+}
+
 // NewInvalidArgumentTypeError creates an error for invalid argument types
 func NewInvalidArgumentTypeError(capUrn, argumentName string, expectedType ArgumentType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
@@ -157,6 +167,65 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 			if err := iv.validateSingleArgument(cap, &optArg, arguments[argIndex]); err != nil {
 				return err
 			}
+		}
+	}
+
+	return nil
+}
+
+// ValidateNamedArguments validates named arguments against a cap's input schema
+func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[string]interface{}) error {
+	capUrn := cap.UrnString()
+	args := cap.Arguments
+
+	if args == nil {
+		args = NewCapArguments()
+	}
+
+	// Extract named argument values into a map
+	providedArgs := make(map[string]interface{})
+	for _, arg := range namedArgs {
+		if name, hasName := arg["name"].(string); hasName {
+			if value, hasValue := arg["value"]; hasValue {
+				providedArgs[name] = value
+			}
+		}
+	}
+
+	// Check that all required arguments are provided as named arguments
+	for _, reqArg := range args.Required {
+		if _, provided := providedArgs[reqArg.Name]; !provided {
+			return NewMissingRequiredArgumentError(capUrn, fmt.Sprintf("%s (expected as named argument)", reqArg.Name))
+		}
+
+		// Validate the provided argument value
+		providedValue := providedArgs[reqArg.Name]
+		if err := iv.validateSingleArgument(cap, &reqArg, providedValue); err != nil {
+			return err
+		}
+	}
+
+	// Validate optional arguments if provided
+	for _, optArg := range args.Optional {
+		if providedValue, provided := providedArgs[optArg.Name]; provided {
+			if err := iv.validateSingleArgument(cap, &optArg, providedValue); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Check for unknown arguments
+	knownArgNames := make(map[string]bool)
+	for _, reqArg := range args.Required {
+		knownArgNames[reqArg.Name] = true
+	}
+	for _, optArg := range args.Optional {
+		knownArgNames[optArg.Name] = true
+	}
+
+	for providedName := range providedArgs {
+		if !knownArgNames[providedName] {
+			return NewUnknownArgumentError(capUrn, providedName)
 		}
 	}
 
