@@ -39,6 +39,7 @@ type CapArgument struct {
 	DefaultValue   interface{}          `json:"default_value,omitempty"`
 	SchemaRef      *string              `json:"schema_ref,omitempty"`
 	Schema         interface{}          `json:"schema,omitempty"`
+	Metadata       interface{}          `json:"metadata,omitempty"`
 }
 
 // CapArguments represents the collection of arguments for a cap
@@ -69,6 +70,7 @@ type CapOutput struct {
 	ContentType       *string              `json:"content_type,omitempty"`
 	Validation        *ArgumentValidation  `json:"validation,omitempty"`
 	OutputDescription string               `json:"output_description"`
+	Metadata          interface{}          `json:"metadata,omitempty"`
 }
 
 // Cap represents a formal cap definition
@@ -103,6 +105,9 @@ type Cap struct {
 
 	// AcceptsStdin indicates whether this cap accepts input via stdin
 	AcceptsStdin bool `json:"accepts_stdin,omitempty"`
+
+	// MetadataJSON contains arbitrary metadata as JSON object
+	MetadataJSON interface{} `json:"metadata_json,omitempty"`
 }
 
 // NewCapArgument creates a new cap argument
@@ -483,6 +488,51 @@ func (c *Cap) SetOutput(output *CapOutput) {
 	c.Output = output
 }
 
+// GetMetadataJSON gets the metadata JSON
+func (c *Cap) GetMetadataJSON() interface{} {
+	return c.MetadataJSON
+}
+
+// SetMetadataJSON sets the metadata JSON
+func (c *Cap) SetMetadataJSON(metadata interface{}) {
+	c.MetadataJSON = metadata
+}
+
+// ClearMetadataJSON clears the metadata JSON
+func (c *Cap) ClearMetadataJSON() {
+	c.MetadataJSON = nil
+}
+
+// GetMetadata gets the metadata JSON for CapArgument
+func (ca *CapArgument) GetMetadata() interface{} {
+	return ca.Metadata
+}
+
+// SetMetadata sets the metadata JSON for CapArgument
+func (ca *CapArgument) SetMetadata(metadata interface{}) {
+	ca.Metadata = metadata
+}
+
+// ClearMetadata clears the metadata JSON for CapArgument
+func (ca *CapArgument) ClearMetadata() {
+	ca.Metadata = nil
+}
+
+// GetMetadata gets the metadata JSON for CapOutput
+func (co *CapOutput) GetMetadata() interface{} {
+	return co.Metadata
+}
+
+// SetMetadata sets the metadata JSON for CapOutput
+func (co *CapOutput) SetMetadata(metadata interface{}) {
+	co.Metadata = metadata
+}
+
+// ClearMetadata clears the metadata JSON for CapOutput
+func (co *CapOutput) ClearMetadata() {
+	co.Metadata = nil
+}
+
 // UrnString gets the cap URN as a string
 func (c *Cap) UrnString() string {
 	return c.Urn.ToString()
@@ -568,6 +618,10 @@ func (c *Cap) MarshalJSON() ([]byte, error) {
 	
 	if c.AcceptsStdin {
 		capData["accepts_stdin"] = c.AcceptsStdin
+	}
+	
+	if c.MetadataJSON != nil {
+		capData["metadata_json"] = c.MetadataJSON
 	}
 	
 	return json.Marshal(capData)
@@ -667,6 +721,10 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(outputBytes, &capOutput); err == nil {
 			c.Output = &capOutput
 		}
+	}
+	
+	if metadataJSON, ok := raw["metadata_json"]; ok {
+		c.MetadataJSON = metadataJSON
 	}
 	
 	return nil
