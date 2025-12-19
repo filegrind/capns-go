@@ -85,9 +85,6 @@ type Cap struct {
 	// Title is the human-readable title of the capability (required)
 	Title string `json:"title"`
 
-	// Category is optional category for visual grouping and display of caps
-	Category *string `json:"category,omitempty"`
-
 	// CapDescription is an optional description
 	CapDescription *string `json:"cap_description,omitempty"`
 
@@ -306,7 +303,6 @@ func NewCap(urn *CapUrn, title string, command string) *Cap {
 	return &Cap{
 		Urn:       urn,
 		Title:     title,
-		Category:  nil,
 		Command:   command,
 		Metadata:  make(map[string]string),
 		Arguments: NewCapArguments(),
@@ -318,7 +314,6 @@ func NewCapWithDescription(urn *CapUrn, title string, command string, descriptio
 	return &Cap{
 		Urn:            urn,
 		Title:          title,
-		Category:       nil,
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       make(map[string]string),
@@ -334,7 +329,6 @@ func NewCapWithMetadata(urn *CapUrn, title string, command string, metadata map[
 	return &Cap{
 		Urn:       urn,
 		Title:     title,
-		Category:  nil,
 		Command:   command,
 		Metadata:  metadata,
 		Arguments: NewCapArguments(),
@@ -349,7 +343,6 @@ func NewCapWithDescriptionAndMetadata(urn *CapUrn, title string, command string,
 	return &Cap{
 		Urn:            urn,
 		Title:          title,
-		Category:       nil,
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       metadata,
@@ -425,21 +418,6 @@ func (c *Cap) GetTitle() string {
 // SetTitle sets the title
 func (c *Cap) SetTitle(title string) {
 	c.Title = title
-}
-
-// GetCategory gets the category
-func (c *Cap) GetCategory() *string {
-	return c.Category
-}
-
-// SetCategory sets the category
-func (c *Cap) SetCategory(category string) {
-	c.Category = &category
-}
-
-// ClearCategory clears the category
-func (c *Cap) ClearCategory() {
-	c.Category = nil
 }
 
 // GetCommand gets the command
@@ -553,14 +531,6 @@ func (c *Cap) Equals(other *Cap) bool {
 		return false
 	}
 
-	if (c.Category == nil) != (other.Category == nil) {
-		return false
-	}
-
-	if c.Category != nil && *c.Category != *other.Category {
-		return false
-	}
-
 	if c.Command != other.Command {
 		return false
 	}
@@ -594,10 +564,6 @@ func (c *Cap) MarshalJSON() ([]byte, error) {
 		},
 		"title":   c.Title,
 		"command": c.Command,
-	}
-	
-	if c.Category != nil {
-		capData["category"] = *c.Category
 	}
 	
 	if c.CapDescription != nil {
@@ -682,11 +648,6 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		c.Command = command
 	} else {
 		return fmt.Errorf("missing required field 'command'")
-	}
-	
-	// Handle optional fields
-	if category, ok := raw["category"].(string); ok {
-		c.Category = &category
 	}
 	
 	if desc, ok := raw["cap_description"].(string); ok {
