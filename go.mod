@@ -1,4 +1,4 @@
-module github.com/fmio/cap-sdk-go
+module github.com/fgrnd/cap-sdk-go
 
 go 1.21
 
