@@ -120,9 +120,9 @@ func main() {
 
 	err := coordinator.ValidateInputs(cap.UrnString(), []interface{}{validQuery})
 	if err != nil {
-		fmt.Printf("❌ Valid input validation failed: %v\n", err)
+		fmt.Printf("ERR Valid input validation failed: %v\n", err)
 	} else {
-		fmt.Printf("✅ Valid input passed validation\n")
+		fmt.Printf("OK Valid input passed validation\n")
 	}
 
 	// Test with invalid input
@@ -137,9 +137,9 @@ func main() {
 
 	err = coordinator.ValidateInputs(cap.UrnString(), []interface{}{invalidQuery})
 	if err != nil {
-		fmt.Printf("✅ Invalid input correctly rejected:\n%v\n", err)
+		fmt.Printf("OK Invalid input correctly rejected:\n%v\n", err)
 	} else {
-		fmt.Printf("❌ Invalid input incorrectly accepted\n")
+		fmt.Printf("ERR Invalid input incorrectly accepted\n")
 	}
 
 	// Test with valid output
@@ -182,9 +182,9 @@ func main() {
 
 	err = coordinator.ValidateOutput(cap.UrnString(), validResult)
 	if err != nil {
-		fmt.Printf("❌ Valid output validation failed: %v\n", err)
+		fmt.Printf("ERR Valid output validation failed: %v\n", err)
 	} else {
-		fmt.Printf("✅ Valid output passed validation\n")
+		fmt.Printf("OK Valid output passed validation\n")
 	}
 
 	// Test with invalid output
@@ -204,9 +204,9 @@ func main() {
 
 	err = coordinator.ValidateOutput(cap.UrnString(), invalidResult)
 	if err != nil {
-		fmt.Printf("✅ Invalid output correctly rejected:\n%v\n", err)
+		fmt.Printf("OK Invalid output correctly rejected:\n%v\n", err)
 	} else {
-		fmt.Printf("❌ Invalid output incorrectly accepted\n")
+		fmt.Printf("ERR Invalid output incorrectly accepted\n")
 	}
 
 	// Demonstrate schema resolver functionality
@@ -222,9 +222,9 @@ func main() {
 	validator := sdk.NewSchemaValidatorWithResolver(resolver)
 	err = validator.ValidateArgument(&schemaRefArg, map[string]interface{}{"test": "data"})
 	if err != nil {
-		fmt.Printf("✅ Schema reference resolution failed as expected (no file): %v\n", err)
+		fmt.Printf("OK Schema reference resolution failed as expected (no file): %v\n", err)
 	} else {
-		fmt.Printf("❌ Schema reference should have failed\n")
+		fmt.Printf("ERR Schema reference should have failed\n")
 	}
 
 	fmt.Println("\n=== Plugin SDK schema integration examples completed! ===")
