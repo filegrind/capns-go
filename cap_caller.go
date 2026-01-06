@@ -139,24 +139,33 @@ func (cc *CapCaller) capToCommand(cap string) string {
 	return strings.ReplaceAll(cap, "_", "-")
 }
 
-// isBinaryCap checks if this cap produces binary output
+// isBinaryCap checks if this cap produces binary output based on media_spec
 func (cc *CapCaller) isBinaryCap() bool {
 	capUrn, err := NewCapUrnFromString(cc.cap)
 	if err != nil {
 		return false
 	}
-	output, exists := capUrn.GetTag("output")
-	return exists && output == "binary"
+
+	mediaSpec, err := GetMediaSpecFromCapUrn(capUrn)
+	if err != nil {
+		return false
+	}
+	return mediaSpec.IsBinary()
 }
 
-// isJsonCap checks if this cap should produce JSON output
+// isJsonCap checks if this cap should produce JSON output based on media_spec
 func (cc *CapCaller) isJsonCap() bool {
 	capUrn, err := NewCapUrnFromString(cc.cap)
 	if err != nil {
 		return false
 	}
-	output, exists := capUrn.GetTag("output")
-	return !exists || output != "binary"
+
+	mediaSpec, err := GetMediaSpecFromCapUrn(capUrn)
+	if err != nil {
+		// Default to text/plain (not JSON) if no media_spec is specified
+		return false
+	}
+	return mediaSpec.IsJSON()
 }
 
 // validateInputs validates input arguments against cap definition
