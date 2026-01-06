@@ -10,14 +10,15 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // CapUrn represents a cap URN using flat, ordered tags
 //
 // Examples:
-// - action=generate;ext=pdf;output=binary;target=thumbnail;
-// - action=extract;target=metadata;
-// - action=analysis;format=en;type=constrained
+// - cap:action=generate;ext=pdf;output=binary;target=thumbnail
+// - cap:action=extract;target=metadata
+// - cap:key="Value With Spaces"
 type CapUrn struct {
 	tags map[string]string
 }
@@ -34,25 +35,76 @@ func (e *CapUrnError) Error() string {
 
 // Error codes for cap URN operations
 const (
-	ErrorInvalidFormat     = 1
-	ErrorEmptyTag         = 2
-	ErrorInvalidCharacter = 3
-	ErrorInvalidTagFormat = 4
-	ErrorMissingCapPrefix = 5
-	ErrorDuplicateKey     = 6
-	ErrorNumericKey       = 7
+	ErrorInvalidFormat         = 1
+	ErrorEmptyTag              = 2
+	ErrorInvalidCharacter      = 3
+	ErrorInvalidTagFormat      = 4
+	ErrorMissingCapPrefix      = 5
+	ErrorDuplicateKey          = 6
+	ErrorNumericKey            = 7
+	ErrorUnterminatedQuote     = 8
+	ErrorInvalidEscapeSequence = 9
 )
 
-var validKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:.]+$`)
-var validValuePattern = regexp.MustCompile(`^[a-zA-Z0-9_\-/:.*]+$`)
+// Parser states for state machine
+type parseState int
+
+const (
+	stateExpectingKey parseState = iota
+	stateInKey
+	stateExpectingValue
+	stateInUnquotedValue
+	stateInQuotedValue
+	stateInQuotedValueEscape
+	stateExpectingSemiOrEnd
+)
+
 var numericPattern = regexp.MustCompile(`^[0-9]+$`)
 
+// isValidKeyChar checks if a character is valid for a key
+func isValidKeyChar(c rune) bool {
+	return unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_' || c == '-' || c == '/' || c == ':' || c == '.'
+}
+
+// isValidUnquotedValueChar checks if a character is valid for an unquoted value
+func isValidUnquotedValueChar(c rune) bool {
+	return unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_' || c == '-' || c == '/' || c == ':' || c == '.' || c == '*'
+}
+
+// needsQuoting checks if a value needs quoting for serialization
+func needsQuoting(value string) bool {
+	for _, c := range value {
+		if c == ';' || c == '=' || c == '"' || c == '\\' || c == ' ' || unicode.IsUpper(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// quoteValue quotes a value for serialization
+func quoteValue(value string) string {
+	var result strings.Builder
+	result.WriteRune('"')
+	for _, c := range value {
+		if c == '"' || c == '\\' {
+			result.WriteRune('\\')
+		}
+		result.WriteRune(c)
+	}
+	result.WriteRune('"')
+	return result.String()
+}
+
 // NewCapUrnFromString creates a cap URN from a string
-// Format: cap:key1=value1;key2=value2;...
+// Format: cap:key1=value1;key2=value2;... or cap:key1="value with spaces";key2=simple
 // The "cap:" prefix is mandatory
 // Trailing semicolons are optional and ignored
 // Tags are automatically sorted alphabetically for canonical form
-// All input is normalized to lowercase for case-insensitive matching
+//
+// Case handling:
+// - Keys: Always normalized to lowercase
+// - Unquoted values: Normalized to lowercase
+// - Quoted values: Case preserved exactly as specified
 func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if s == "" {
 		return nil, &CapUrnError{
@@ -61,57 +113,48 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 		}
 	}
 
-	// Normalize to lowercase for case-insensitive handling
-	s = strings.ToLower(s)
-
-	// Ensure "cap:" prefix is present
-	if !strings.HasPrefix(s, "cap:") {
+	// Check for "cap:" prefix (case-insensitive)
+	if len(s) < 4 || !strings.EqualFold(s[:4], "cap:") {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingCapPrefix,
 			Message: "cap URN must start with 'cap:'",
 		}
 	}
 
-	// Remove the "cap:" prefix
 	tagsPart := s[4:]
-	
 	tags := make(map[string]string)
 
-	// Remove trailing semicolon if present
-	normalizedTagsPart := strings.TrimSuffix(tagsPart, ";")
-
-	// Handle empty cap URN (cap: with no tags)
-	if normalizedTagsPart == "" {
+	// Handle empty cap URN (cap: with no tags or just semicolon)
+	if tagsPart == "" || tagsPart == ";" {
 		return &CapUrn{tags: tags}, nil
 	}
 
-	for _, tagStr := range strings.Split(normalizedTagsPart, ";") {
-		tagStr = strings.TrimSpace(tagStr)
-		if tagStr == "" {
-			continue
-		}
+	state := stateExpectingKey
+	var currentKey strings.Builder
+	var currentValue strings.Builder
+	chars := []rune(tagsPart)
+	pos := 0
 
-		parts := strings.Split(tagStr, "=")
-		if len(parts) != 2 {
-			return nil, &CapUrnError{
-				Code:    ErrorInvalidTagFormat,
-				Message: fmt.Sprintf("invalid tag format (must be key=value): %s", tagStr),
+	finishTag := func() error {
+		key := currentKey.String()
+		value := currentValue.String()
+
+		if key == "" {
+			return &CapUrnError{
+				Code:    ErrorEmptyTag,
+				Message: "empty key",
 			}
 		}
-
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-
-		if key == "" || value == "" {
-			return nil, &CapUrnError{
+		if value == "" {
+			return &CapUrnError{
 				Code:    ErrorEmptyTag,
-				Message: fmt.Sprintf("tag key or value cannot be empty: %s", tagStr),
+				Message: fmt.Sprintf("empty value for key '%s'", key),
 			}
 		}
 
 		// Check for duplicate keys
 		if _, exists := tags[key]; exists {
-			return nil, &CapUrnError{
+			return &CapUrnError{
 				Code:    ErrorDuplicateKey,
 				Message: fmt.Sprintf("duplicate tag key: %s", key),
 			}
@@ -119,62 +162,186 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 
 		// Validate key cannot be purely numeric
 		if numericPattern.MatchString(key) {
-			return nil, &CapUrnError{
+			return &CapUrnError{
 				Code:    ErrorNumericKey,
 				Message: fmt.Sprintf("tag key cannot be purely numeric: %s", key),
 			}
 		}
 
-		// Validate key and value characters
-		if !validKeyPattern.MatchString(key) || !validValuePattern.MatchString(value) {
-			return nil, &CapUrnError{
-				Code:    ErrorInvalidCharacter,
-				Message: fmt.Sprintf("invalid character in tag (use alphanumeric, _, -, /, :, ., * in values only): %s", tagStr),
+		tags[key] = value
+		currentKey.Reset()
+		currentValue.Reset()
+		return nil
+	}
+
+	for pos < len(chars) {
+		c := chars[pos]
+
+		switch state {
+		case stateExpectingKey:
+			if c == ';' {
+				// Empty segment, skip
+				pos++
+				continue
+			} else if isValidKeyChar(c) {
+				currentKey.WriteRune(unicode.ToLower(c))
+				state = stateInKey
+			} else {
+				return nil, &CapUrnError{
+					Code:    ErrorInvalidCharacter,
+					Message: fmt.Sprintf("invalid character '%c' at position %d", c, pos),
+				}
+			}
+
+		case stateInKey:
+			if c == '=' {
+				if currentKey.Len() == 0 {
+					return nil, &CapUrnError{
+						Code:    ErrorEmptyTag,
+						Message: "empty key",
+					}
+				}
+				state = stateExpectingValue
+			} else if isValidKeyChar(c) {
+				currentKey.WriteRune(unicode.ToLower(c))
+			} else {
+				return nil, &CapUrnError{
+					Code:    ErrorInvalidCharacter,
+					Message: fmt.Sprintf("invalid character '%c' in key at position %d", c, pos),
+				}
+			}
+
+		case stateExpectingValue:
+			if c == '"' {
+				state = stateInQuotedValue
+			} else if c == ';' {
+				return nil, &CapUrnError{
+					Code:    ErrorEmptyTag,
+					Message: fmt.Sprintf("empty value for key '%s'", currentKey.String()),
+				}
+			} else if isValidUnquotedValueChar(c) {
+				currentValue.WriteRune(unicode.ToLower(c))
+				state = stateInUnquotedValue
+			} else {
+				return nil, &CapUrnError{
+					Code:    ErrorInvalidCharacter,
+					Message: fmt.Sprintf("invalid character '%c' in value at position %d", c, pos),
+				}
+			}
+
+		case stateInUnquotedValue:
+			if c == ';' {
+				if err := finishTag(); err != nil {
+					return nil, err
+				}
+				state = stateExpectingKey
+			} else if isValidUnquotedValueChar(c) {
+				currentValue.WriteRune(unicode.ToLower(c))
+			} else {
+				return nil, &CapUrnError{
+					Code:    ErrorInvalidCharacter,
+					Message: fmt.Sprintf("invalid character '%c' in unquoted value at position %d", c, pos),
+				}
+			}
+
+		case stateInQuotedValue:
+			if c == '"' {
+				state = stateExpectingSemiOrEnd
+			} else if c == '\\' {
+				state = stateInQuotedValueEscape
+			} else {
+				// Any character allowed in quoted value, preserve case
+				currentValue.WriteRune(c)
+			}
+
+		case stateInQuotedValueEscape:
+			if c == '"' || c == '\\' {
+				currentValue.WriteRune(c)
+				state = stateInQuotedValue
+			} else {
+				return nil, &CapUrnError{
+					Code:    ErrorInvalidEscapeSequence,
+					Message: fmt.Sprintf("invalid escape sequence at position %d (only \\\" and \\\\ allowed)", pos),
+				}
+			}
+
+		case stateExpectingSemiOrEnd:
+			if c == ';' {
+				if err := finishTag(); err != nil {
+					return nil, err
+				}
+				state = stateExpectingKey
+			} else {
+				return nil, &CapUrnError{
+					Code:    ErrorInvalidCharacter,
+					Message: fmt.Sprintf("expected ';' or end after quoted value, got '%c' at position %d", c, pos),
+				}
 			}
 		}
 
-		tags[key] = value
+		pos++
 	}
 
-	return &CapUrn{
-		tags: tags,
-	}, nil
+	// Handle end of input
+	switch state {
+	case stateInUnquotedValue, stateExpectingSemiOrEnd:
+		if err := finishTag(); err != nil {
+			return nil, err
+		}
+	case stateExpectingKey:
+		// Valid - trailing semicolon or empty input after prefix
+	case stateInQuotedValue, stateInQuotedValueEscape:
+		return nil, &CapUrnError{
+			Code:    ErrorUnterminatedQuote,
+			Message: fmt.Sprintf("unterminated quote at position %d", pos),
+		}
+	case stateInKey:
+		return nil, &CapUrnError{
+			Code:    ErrorInvalidTagFormat,
+			Message: fmt.Sprintf("incomplete tag '%s'", currentKey.String()),
+		}
+	case stateExpectingValue:
+		return nil, &CapUrnError{
+			Code:    ErrorEmptyTag,
+			Message: fmt.Sprintf("empty value for key '%s'", currentKey.String()),
+		}
+	}
+
+	return &CapUrn{tags: tags}, nil
 }
 
 // NewCapUrnFromTags creates a cap URN from tags
-// All keys and values are normalized to lowercase for case-insensitive matching
+// Keys are normalized to lowercase; values are preserved as-is
 func NewCapUrnFromTags(tags map[string]string) *CapUrn {
 	result := make(map[string]string)
 	for k, v := range tags {
-		result[strings.ToLower(k)] = strings.ToLower(v)
+		result[strings.ToLower(k)] = v
 	}
-	return &CapUrn{
-		tags: result,
-	}
+	return &CapUrn{tags: result}
 }
 
 // GetTag returns the value of a specific tag
-// Key is normalized to lowercase for case-insensitive lookup
+// Key is normalized to lowercase for lookup
 func (c *CapUrn) GetTag(key string) (string, bool) {
 	value, exists := c.tags[strings.ToLower(key)]
 	return value, exists
 }
 
 // HasTag checks if this cap has a specific tag with a specific value
-// Both key and value are normalized to lowercase for case-insensitive comparison
+// Key is normalized to lowercase; value comparison is case-sensitive
 func (c *CapUrn) HasTag(key, value string) bool {
 	tagValue, exists := c.tags[strings.ToLower(key)]
-	return exists && tagValue == strings.ToLower(value)
+	return exists && tagValue == value
 }
 
 // WithTag returns a new cap URN with an added or updated tag
-// Both key and value are normalized to lowercase
+// Key is normalized to lowercase; value is preserved as-is
 func (c *CapUrn) WithTag(key, value string) *CapUrn {
 	newTags := make(map[string]string)
 	for k, v := range c.tags {
 		newTags[k] = v
 	}
-	newTags[strings.ToLower(key)] = strings.ToLower(value)
+	newTags[strings.ToLower(key)] = value
 	return &CapUrn{tags: newTags}
 }
 
@@ -332,6 +499,7 @@ func (c *CapUrn) Merge(other *CapUrn) *CapUrn {
 // Always includes "cap:" prefix
 // Tags are sorted alphabetically for consistent representation
 // No trailing semicolon in canonical form
+// Values are quoted only when necessary (smart quoting)
 func (c *CapUrn) ToString() string {
 	if len(c.tags) == 0 {
 		return "cap:"
@@ -344,10 +512,15 @@ func (c *CapUrn) ToString() string {
 	}
 	sort.Strings(keys)
 
-	// Build tag string
+	// Build tag string with smart quoting
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%s", key, c.tags[key]))
+		value := c.tags[key]
+		if needsQuoting(value) {
+			parts = append(parts, fmt.Sprintf("%s=%s", key, quoteValue(value)))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s=%s", key, value))
+		}
 	}
 
 	tagsStr := strings.Join(parts, ";")
@@ -473,9 +646,9 @@ func NewCapUrnBuilder() *CapUrnBuilder {
 }
 
 // Tag adds or updates a tag
-// Both key and value are normalized to lowercase
+// Key is normalized to lowercase; value is preserved as-is
 func (b *CapUrnBuilder) Tag(key, value string) *CapUrnBuilder {
-	b.tags[strings.ToLower(key)] = strings.ToLower(value)
+	b.tags[strings.ToLower(key)] = value
 	return b
 }
 
@@ -488,5 +661,5 @@ func (b *CapUrnBuilder) Build() (*CapUrn, error) {
 		}
 	}
 
-	return NewCapUrnFromTags(b.tags), nil
+	return &CapUrn{tags: b.tags}, nil
 }

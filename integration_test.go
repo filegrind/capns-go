@@ -56,21 +56,24 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 	assert.True(t, exists)
 	assert.Equal(t, "transform", action2)
 	
-	// Test case 3: Case-insensitive HasTag
-	assert.True(t, urn1.HasTag("ACTION", "Transform"))
-	assert.True(t, urn1.HasTag("action", "TRANSFORM"))
+	// Test case 3: HasTag - keys case-insensitive, values case-sensitive
+	// Unquoted values were normalized to lowercase, so "transform" is stored
+	assert.True(t, urn1.HasTag("ACTION", "transform"))
+	assert.True(t, urn1.HasTag("action", "transform"))
 	assert.True(t, urn1.HasTag("Action", "transform"))
-	
-	// Test case 4: Case-insensitive builder
+	// Different case values should NOT match
+	assert.False(t, urn1.HasTag("action", "TRANSFORM"))
+
+	// Test case 4: Builder preserves value case
 	urn3, err := NewCapUrnBuilder().
-		Tag("ACTION", "Transform").
-		Tag("Format", "JSON").
+		Tag("ACTION", "Transform"). // value case preserved
+		Tag("Format", "JSON").      // value case preserved
 		Build()
 	require.NoError(t, err)
-	
-	// Should match the other URNs
-	assert.True(t, urn3.HasTag("action", "transform"))
-	assert.True(t, urn3.HasTag("format", "json"))
+
+	// Builder preserves case, so we need exact match
+	assert.True(t, urn3.HasTag("action", "Transform"))
+	assert.True(t, urn3.HasTag("format", "JSON"))
 }
 
 // TestIntegrationCallerAndResponseSystem verifies the caller and response system
