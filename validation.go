@@ -9,7 +9,7 @@ import (
 // ValidationError represents validation errors with descriptive failure information
 type ValidationError struct {
 	Type         string
-	CapUrn string
+	CapUrn       string
 	ArgumentName string
 	ExpectedType string
 	ActualType   string
@@ -25,9 +25,9 @@ func (e *ValidationError) Error() string {
 // NewUnknownCapError creates an error for unknown caps
 func NewUnknownCapError(capUrn string) *ValidationError {
 	return &ValidationError{
-		Type:         "UnknownCap",
-		CapUrn: capUrn,
-		Message:      fmt.Sprintf("Unknown cap '%s' - cap not registered or advertised", capUrn),
+		Type:    "UnknownCap",
+		CapUrn:  capUrn,
+		Message: fmt.Sprintf("Unknown cap '%s' - cap not registered or advertised", capUrn),
 	}
 }
 
@@ -35,7 +35,7 @@ func NewUnknownCapError(capUrn string) *ValidationError {
 func NewMissingRequiredArgumentError(capUrn, argumentName string) *ValidationError {
 	return &ValidationError{
 		Type:         "MissingRequiredArgument",
-		CapUrn: capUrn,
+		CapUrn:       capUrn,
 		ArgumentName: argumentName,
 		Message:      fmt.Sprintf("Cap '%s' requires argument '%s' but it was not provided", capUrn, argumentName),
 	}
@@ -45,22 +45,32 @@ func NewMissingRequiredArgumentError(capUrn, argumentName string) *ValidationErr
 func NewUnknownArgumentError(capUrn, argumentName string) *ValidationError {
 	return &ValidationError{
 		Type:         "UnknownArgument",
-		CapUrn: capUrn,
+		CapUrn:       capUrn,
 		ArgumentName: argumentName,
 		Message:      fmt.Sprintf("Cap '%s' does not accept argument '%s' - check capability definition for valid arguments", capUrn, argumentName),
 	}
 }
 
-// NewInvalidArgumentTypeError creates an error for invalid argument types
-func NewInvalidArgumentTypeError(capUrn, argumentName string, expectedType ArgumentType, actualType string, actualValue interface{}) *ValidationError {
+// NewInvalidArgumentTypeErrorFromSpecID creates an error for invalid argument types using spec IDs
+func NewInvalidArgumentTypeErrorFromSpecID(capUrn, argumentName, specID, expectedType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidArgumentType",
-		CapUrn: capUrn,
+		CapUrn:       capUrn,
 		ArgumentName: argumentName,
-		ExpectedType: string(expectedType),
+		ExpectedType: expectedType,
 		ActualType:   actualType,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Cap '%s' argument '%s' expects type '%s' but received '%s' with value: %v", capUrn, argumentName, expectedType, actualType, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' (spec: %s) expects type '%s' but received '%s' with value: %v", capUrn, argumentName, specID, expectedType, actualType, actualValue),
+	}
+}
+
+// NewUnresolvableSpecIDError creates an error for unresolvable spec IDs in validation
+func NewUnresolvableSpecIDErrorForValidation(capUrn, argumentName, specID string) *ValidationError {
+	return &ValidationError{
+		Type:         "UnresolvableSpecID",
+		CapUrn:       capUrn,
+		ArgumentName: argumentName,
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' has unresolvable spec ID '%s' - not found in media_specs and not a built-in", capUrn, argumentName, specID),
 	}
 }
 
@@ -68,7 +78,7 @@ func NewInvalidArgumentTypeError(capUrn, argumentName string, expectedType Argum
 func NewArgumentValidationFailedError(capUrn, argumentName, rule string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "ArgumentValidationFailed",
-		CapUrn: capUrn,
+		CapUrn:       capUrn,
 		ArgumentName: argumentName,
 		Rule:         rule,
 		ActualValue:  actualValue,
@@ -76,26 +86,26 @@ func NewArgumentValidationFailedError(capUrn, argumentName, rule string, actualV
 	}
 }
 
-// NewInvalidOutputTypeError creates an error for invalid output types
-func NewInvalidOutputTypeError(capUrn string, expectedType OutputType, actualType string, actualValue interface{}) *ValidationError {
+// NewInvalidOutputTypeErrorFromSpecID creates an error for invalid output types using spec IDs
+func NewInvalidOutputTypeErrorFromSpecID(capUrn, specID, expectedType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidOutputType",
-		CapUrn: capUrn,
-		ExpectedType: string(expectedType),
+		CapUrn:       capUrn,
+		ExpectedType: expectedType,
 		ActualType:   actualType,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Cap '%s' output expects type '%s' but received '%s' with value: %v", capUrn, expectedType, actualType, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' output (spec: %s) expects type '%s' but received '%s' with value: %v", capUrn, specID, expectedType, actualType, actualValue),
 	}
 }
 
 // NewOutputValidationFailedError creates an error for output validation failures
 func NewOutputValidationFailedError(capUrn, rule string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
-		Type:         "OutputValidationFailed",
-		CapUrn: capUrn,
-		Rule:         rule,
-		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Cap '%s' output failed validation rule '%s' with value: %v", capUrn, rule, actualValue),
+		Type:        "OutputValidationFailed",
+		CapUrn:      capUrn,
+		Rule:        rule,
+		ActualValue: actualValue,
+		Message:     fmt.Sprintf("Cap '%s' output failed validation rule '%s' with value: %v", capUrn, rule, actualValue),
 	}
 }
 
@@ -111,7 +121,7 @@ func NewSchemaValidationFailedError(capUrn, argumentName, details string, actual
 }
 
 // InputValidator validates arguments against cap input schemas
-type InputValidator struct{
+type InputValidator struct {
 	schemaValidator *SchemaValidator
 }
 
@@ -142,9 +152,9 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 	maxArgs := len(args.Required) + len(args.Optional)
 	if len(arguments) > maxArgs {
 		return &ValidationError{
-			Type:         "TooManyArguments",
-			CapUrn: capUrn,
-			Message:      fmt.Sprintf("Cap '%s' expects at most %d arguments but received %d", capUrn, maxArgs, len(arguments)),
+			Type:    "TooManyArguments",
+			CapUrn:  capUrn,
+			Message: fmt.Sprintf("Cap '%s' expects at most %d arguments but received %d", capUrn, maxArgs, len(arguments)),
 		}
 	}
 
@@ -233,8 +243,14 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 }
 
 func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, value interface{}) error {
-	// Type validation
-	if err := iv.validateArgumentType(cap, argDef, value); err != nil {
+	// Resolve the spec ID to determine the expected type
+	resolved, err := argDef.Resolve(cap.GetMediaSpecs())
+	if err != nil {
+		return NewUnresolvableSpecIDErrorForValidation(cap.UrnString(), argDef.Name, argDef.MediaSpec)
+	}
+
+	// Type validation based on resolved media spec
+	if err := iv.validateArgumentType(cap, argDef, resolved, value); err != nil {
 		return err
 	}
 
@@ -244,7 +260,7 @@ func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, 
 	}
 
 	// Schema validation for object/array types
-	if err := iv.validateArgumentSchema(cap, argDef, value); err != nil {
+	if err := iv.validateArgumentSchema(cap, argDef, resolved, value); err != nil {
 		return err
 	}
 
@@ -252,13 +268,19 @@ func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, 
 }
 
 // validateArgumentSchema validates argument against JSON schema
-func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArgument, value interface{}) error {
-	// Only validate structured types that have schemas
-	if argDef.ArgType != ArgumentTypeObject && argDef.ArgType != ArgumentTypeArray {
+func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArgument, resolved *ResolvedMediaSpec, value interface{}) error {
+	// Only validate structured types (JSON) that have schemas
+	if !resolved.IsJSON() {
 		return nil
 	}
 
-	if err := iv.schemaValidator.ValidateArgument(argDef, value); err != nil {
+	// Get schema from resolved media spec
+	schema := resolved.Schema
+	if schema == nil {
+		return nil // No schema to validate against
+	}
+
+	if err := iv.schemaValidator.ValidateArgumentWithSchema(argDef, schema, value); err != nil {
 		if schemaErr, ok := err.(*SchemaValidationError); ok {
 			return NewSchemaValidationFailedError(cap.UrnString(), argDef.Name, schemaErr.Details, value)
 		}
@@ -268,15 +290,18 @@ func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArgument, 
 	return nil
 }
 
-func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, value interface{}) error {
+func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, resolved *ResolvedMediaSpec, value interface{}) error {
 	capUrn := cap.UrnString()
 	actualType := getValueTypeName(value)
 
+	// Determine expected type from spec ID
+	expectedType := getExpectedTypeFromSpecID(argDef.MediaSpec, resolved)
+
 	typeMatches := false
-	switch argDef.ArgType {
-	case ArgumentTypeString:
+	switch expectedType {
+	case "string":
 		_, typeMatches = value.(string)
-	case ArgumentTypeInteger:
+	case "integer":
 		if num, ok := value.(float64); ok {
 			typeMatches = num == float64(int64(num))
 		} else if _, ok := value.(int); ok {
@@ -284,26 +309,65 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, va
 		} else if _, ok := value.(int64); ok {
 			typeMatches = true
 		}
-	case ArgumentTypeNumber:
+	case "number":
 		_, ok1 := value.(float64)
 		_, ok2 := value.(int)
 		_, ok3 := value.(int64)
 		typeMatches = ok1 || ok2 || ok3
-	case ArgumentTypeBoolean:
+	case "boolean":
 		_, typeMatches = value.(bool)
-	case ArgumentTypeArray:
+	case "array":
 		_, typeMatches = value.([]interface{})
-	case ArgumentTypeObject:
+	case "object":
 		_, typeMatches = value.(map[string]interface{})
-	case ArgumentTypeBinary:
+	case "binary":
 		_, typeMatches = value.(string) // Binary as base64 string
+	default:
+		// For unknown types from custom specs, accept any value
+		typeMatches = true
 	}
 
 	if !typeMatches {
-		return NewInvalidArgumentTypeError(capUrn, argDef.Name, argDef.ArgType, actualType, value)
+		return NewInvalidArgumentTypeErrorFromSpecID(capUrn, argDef.Name, argDef.MediaSpec, expectedType, actualType, value)
 	}
 
 	return nil
+}
+
+// getExpectedTypeFromSpecID determines the expected Go type from a spec ID
+func getExpectedTypeFromSpecID(specID string, resolved *ResolvedMediaSpec) string {
+	// First try built-in spec IDs
+	switch specID {
+	case SpecIDStr:
+		return "string"
+	case SpecIDInt:
+		return "integer"
+	case SpecIDNum:
+		return "number"
+	case SpecIDBool:
+		return "boolean"
+	case SpecIDObj:
+		return "object"
+	case SpecIDStrArray, SpecIDIntArray, SpecIDNumArray, SpecIDBoolArray, SpecIDObjArray:
+		return "array"
+	case SpecIDBinary:
+		return "binary"
+	}
+
+	// For non-builtin specs, infer from media type
+	if resolved != nil {
+		if resolved.IsBinary() {
+			return "binary"
+		}
+		if resolved.IsJSON() {
+			return "object" // JSON types are objects or arrays
+		}
+		if resolved.IsText() {
+			return "string"
+		}
+	}
+
+	return "unknown"
 }
 
 func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, value interface{}) error {
@@ -379,7 +443,7 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 }
 
 // OutputValidator validates output against cap output schemas
-type OutputValidator struct{
+type OutputValidator struct {
 	schemaValidator *SchemaValidator
 }
 
@@ -404,14 +468,24 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 	outputDef := cap.GetOutput()
 	if outputDef == nil {
 		return &ValidationError{
-			Type:         "InvalidCapSchema",
-			CapUrn: capUrn,
-			Message:      fmt.Sprintf("Cap '%s' has no output definition specified", capUrn),
+			Type:    "InvalidCapSchema",
+			CapUrn:  capUrn,
+			Message: fmt.Sprintf("Cap '%s' has no output definition specified", capUrn),
+		}
+	}
+
+	// Resolve the spec ID
+	resolved, err := outputDef.Resolve(cap.GetMediaSpecs())
+	if err != nil {
+		return &ValidationError{
+			Type:    "UnresolvableSpecID",
+			CapUrn:  capUrn,
+			Message: fmt.Sprintf("Cap '%s' output has unresolvable spec ID '%s'", capUrn, outputDef.MediaSpec),
 		}
 	}
 
 	// Type validation
-	if err := ov.validateOutputType(cap, outputDef, output); err != nil {
+	if err := ov.validateOutputType(cap, outputDef, resolved, output); err != nil {
 		return err
 	}
 
@@ -421,7 +495,7 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 	}
 
 	// Schema validation for structured outputs
-	if err := ov.validateOutputSchema(cap, outputDef, output); err != nil {
+	if err := ov.validateOutputSchema(cap, outputDef, resolved, output); err != nil {
 		return err
 	}
 
@@ -429,13 +503,19 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 }
 
 // validateOutputSchema validates output against JSON schema
-func (ov *OutputValidator) validateOutputSchema(cap *Cap, outputDef *CapOutput, value interface{}) error {
-	// Only validate structured types that have schemas
-	if outputDef.OutputType != OutputTypeObject && outputDef.OutputType != OutputTypeArray {
+func (ov *OutputValidator) validateOutputSchema(cap *Cap, outputDef *CapOutput, resolved *ResolvedMediaSpec, value interface{}) error {
+	// Only validate structured types (JSON) that have schemas
+	if !resolved.IsJSON() {
 		return nil
 	}
 
-	if err := ov.schemaValidator.ValidateOutput(outputDef, value); err != nil {
+	// Get schema from resolved media spec
+	schema := resolved.Schema
+	if schema == nil {
+		return nil // No schema to validate against
+	}
+
+	if err := ov.schemaValidator.ValidateOutputWithSchema(outputDef, schema, value); err != nil {
 		if schemaErr, ok := err.(*SchemaValidationError); ok {
 			return NewOutputValidationFailedError(cap.UrnString(), "schema validation: "+schemaErr.Details, value)
 		}
@@ -445,15 +525,18 @@ func (ov *OutputValidator) validateOutputSchema(cap *Cap, outputDef *CapOutput, 
 	return nil
 }
 
-func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, value interface{}) error {
+func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, resolved *ResolvedMediaSpec, value interface{}) error {
 	capUrn := cap.UrnString()
 	actualType := getValueTypeName(value)
 
+	// Determine expected type from spec ID
+	expectedType := getExpectedTypeFromSpecID(outputDef.MediaSpec, resolved)
+
 	typeMatches := false
-	switch outputDef.OutputType {
-	case OutputTypeString:
+	switch expectedType {
+	case "string":
 		_, typeMatches = value.(string)
-	case OutputTypeInteger:
+	case "integer":
 		if num, ok := value.(float64); ok {
 			typeMatches = num == float64(int64(num))
 		} else if _, ok := value.(int); ok {
@@ -461,23 +544,26 @@ func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, va
 		} else if _, ok := value.(int64); ok {
 			typeMatches = true
 		}
-	case OutputTypeNumber:
+	case "number":
 		_, ok1 := value.(float64)
 		_, ok2 := value.(int)
 		_, ok3 := value.(int64)
 		typeMatches = ok1 || ok2 || ok3
-	case OutputTypeBoolean:
+	case "boolean":
 		_, typeMatches = value.(bool)
-	case OutputTypeArray:
+	case "array":
 		_, typeMatches = value.([]interface{})
-	case OutputTypeObject:
+	case "object":
 		_, typeMatches = value.(map[string]interface{})
-	case OutputTypeBinary:
+	case "binary":
 		_, typeMatches = value.(string) // Binary as base64 string
+	default:
+		// For unknown types from custom specs, accept any value
+		typeMatches = true
 	}
 
 	if !typeMatches {
-		return NewInvalidOutputTypeError(capUrn, outputDef.OutputType, actualType, value)
+		return NewInvalidOutputTypeErrorFromSpecID(capUrn, outputDef.MediaSpec, expectedType, actualType, value)
 	}
 
 	return nil
@@ -619,9 +705,42 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 	for _, arg := range cap.Arguments.Required {
 		if arg.DefaultValue != nil {
 			return &ValidationError{
+				Type:    "InvalidCapSchema",
+				CapUrn:  capUrn,
+				Message: fmt.Sprintf("Cap '%s' required argument '%s' cannot have a default value", capUrn, arg.Name),
+			}
+		}
+	}
+
+	// Validate that all argument spec IDs can be resolved
+	for _, arg := range cap.Arguments.Required {
+		if _, err := arg.Resolve(cap.GetMediaSpecs()); err != nil {
+			return &ValidationError{
 				Type:         "InvalidCapSchema",
-				CapUrn: capUrn,
-				Message:      fmt.Sprintf("Cap '%s' required argument '%s' cannot have a default value", capUrn, arg.Name),
+				CapUrn:       capUrn,
+				ArgumentName: arg.Name,
+				Message:      fmt.Sprintf("Cap '%s' required argument '%s' has unresolvable spec ID '%s'", capUrn, arg.Name, arg.MediaSpec),
+			}
+		}
+	}
+	for _, arg := range cap.Arguments.Optional {
+		if _, err := arg.Resolve(cap.GetMediaSpecs()); err != nil {
+			return &ValidationError{
+				Type:         "InvalidCapSchema",
+				CapUrn:       capUrn,
+				ArgumentName: arg.Name,
+				Message:      fmt.Sprintf("Cap '%s' optional argument '%s' has unresolvable spec ID '%s'", capUrn, arg.Name, arg.MediaSpec),
+			}
+		}
+	}
+
+	// Validate output spec ID if present
+	if cap.Output != nil {
+		if _, err := cap.Output.Resolve(cap.GetMediaSpecs()); err != nil {
+			return &ValidationError{
+				Type:    "InvalidCapSchema",
+				CapUrn:  capUrn,
+				Message: fmt.Sprintf("Cap '%s' output has unresolvable spec ID '%s'", capUrn, cap.Output.MediaSpec),
 			}
 		}
 	}
@@ -632,9 +751,9 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 		if arg.Position != nil {
 			if existing, exists := positions[*arg.Position]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapSchema",
-					CapUrn: capUrn,
-					Message:      fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
+					Type:    "InvalidCapSchema",
+					CapUrn:  capUrn,
+					Message: fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
 				}
 			}
 			positions[*arg.Position] = arg.Name
@@ -644,9 +763,9 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 		if arg.Position != nil {
 			if existing, exists := positions[*arg.Position]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapSchema",
-					CapUrn: capUrn,
-					Message:      fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
+					Type:    "InvalidCapSchema",
+					CapUrn:  capUrn,
+					Message: fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
 				}
 			}
 			positions[*arg.Position] = arg.Name
@@ -659,9 +778,9 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 		if arg.CliFlag != "" {
 			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapSchema",
-					CapUrn: capUrn,
-					Message:      fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
+					Type:    "InvalidCapSchema",
+					CapUrn:  capUrn,
+					Message: fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
 				}
 			}
 			cliFlags[arg.CliFlag] = arg.Name
@@ -671,9 +790,9 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 		if arg.CliFlag != "" {
 			if existing, exists := cliFlags[arg.CliFlag]; exists {
 				return &ValidationError{
-					Type:         "InvalidCapSchema",
-					CapUrn: capUrn,
-					Message:      fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
+					Type:    "InvalidCapSchema",
+					CapUrn:  capUrn,
+					Message: fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
 				}
 			}
 			cliFlags[arg.CliFlag] = arg.Name

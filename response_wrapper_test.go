@@ -15,14 +15,14 @@ func TestResponseWrapperFromJSON(t *testing.T) {
 	}
 	jsonBytes, err := json.Marshal(testData)
 	require.NoError(t, err)
-	
+
 	response := NewResponseWrapperFromJSON(jsonBytes)
-	
+
 	assert.True(t, response.IsJSON())
 	assert.False(t, response.IsText())
 	assert.False(t, response.IsBinary())
 	assert.Equal(t, len(jsonBytes), response.Size())
-	
+
 	var parsed map[string]interface{}
 	err = response.AsType(&parsed)
 	assert.NoError(t, err)
@@ -33,11 +33,11 @@ func TestResponseWrapperFromJSON(t *testing.T) {
 func TestResponseWrapperFromText(t *testing.T) {
 	testText := "Hello, World!"
 	response := NewResponseWrapperFromText([]byte(testText))
-	
+
 	assert.False(t, response.IsJSON())
 	assert.True(t, response.IsText())
 	assert.False(t, response.IsBinary())
-	
+
 	result, err := response.AsString()
 	assert.NoError(t, err)
 	assert.Equal(t, testText, result)
@@ -46,14 +46,14 @@ func TestResponseWrapperFromText(t *testing.T) {
 func TestResponseWrapperFromBinary(t *testing.T) {
 	testData := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header
 	response := NewResponseWrapperFromBinary(testData)
-	
+
 	assert.False(t, response.IsJSON())
 	assert.False(t, response.IsText())
 	assert.True(t, response.IsBinary())
-	
+
 	assert.Equal(t, testData, response.AsBytes())
 	assert.Equal(t, len(testData), response.Size())
-	
+
 	// Should fail to convert to string
 	_, err := response.AsString()
 	assert.Error(t, err)
@@ -65,13 +65,13 @@ func TestResponseWrapperAsInt(t *testing.T) {
 	result, err := response.AsInt()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(42), result)
-	
+
 	// Test from JSON
 	response2 := NewResponseWrapperFromJSON([]byte("123"))
 	result2, err := response2.AsInt()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(123), result2)
-	
+
 	// Test invalid conversion
 	response3 := NewResponseWrapperFromText([]byte("not_a_number"))
 	_, err = response3.AsInt()
@@ -84,7 +84,7 @@ func TestResponseWrapperAsFloat(t *testing.T) {
 	result, err := response.AsFloat()
 	assert.NoError(t, err)
 	assert.Equal(t, 3.14, result)
-	
+
 	// Test from JSON
 	response2 := NewResponseWrapperFromJSON([]byte("2.71"))
 	result2, err := response2.AsFloat()
@@ -106,12 +106,12 @@ func TestResponseWrapperAsBool(t *testing.T) {
 		{"no", false, false},
 		{"invalid", false, true},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
 			response := NewResponseWrapperFromText([]byte(tc.input))
 			result, err := response.AsBool()
-			
+
 			if tc.hasError {
 				assert.Error(t, err)
 			} else {
@@ -126,7 +126,7 @@ func TestResponseWrapperIsEmpty(t *testing.T) {
 	// Empty response
 	response := NewResponseWrapperFromText([]byte{})
 	assert.True(t, response.IsEmpty())
-	
+
 	// Non-empty response
 	response2 := NewResponseWrapperFromText([]byte("test"))
 	assert.False(t, response2.IsEmpty())
@@ -135,36 +135,74 @@ func TestResponseWrapperIsEmpty(t *testing.T) {
 func TestResponseWrapperGetContentType(t *testing.T) {
 	jsonResponse := NewResponseWrapperFromJSON([]byte("{}"))
 	assert.Equal(t, "application/json", jsonResponse.GetContentType())
-	
+
 	textResponse := NewResponseWrapperFromText([]byte("test"))
 	assert.Equal(t, "text/plain", textResponse.GetContentType())
-	
+
 	binaryResponse := NewResponseWrapperFromBinary([]byte{1, 2, 3})
 	assert.Equal(t, "application/octet-stream", binaryResponse.GetContentType())
 }
 
 func TestResponseWrapperMatchesOutputType(t *testing.T) {
-	// Setup cap definitions
-	stringCapUrn, _ := NewCapUrnFromString("cap:action=test")
+	// Setup cap definitions with spec IDs
+	stringCapUrn, _ := NewCapUrnFromString("cap:op=test")
 	stringCap := NewCap(stringCapUrn, "String Test", "test")
-	stringCap.SetOutput(NewCapOutput(OutputTypeString, "String output"))
-	
-	binaryCapUrn, _ := NewCapUrnFromString("cap:action=test")
+	stringCap.SetOutput(NewCapOutput(SpecIDStr, "String output"))
+
+	binaryCapUrn, _ := NewCapUrnFromString("cap:op=test")
 	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
-	binaryCap.SetOutput(NewCapOutput(OutputTypeBinary, "Binary output"))
-	
+	binaryCap.SetOutput(NewCapOutput(SpecIDBinary, "Binary output"))
+
+	jsonCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	jsonCap := NewCap(jsonCapUrn, "JSON Test", "test")
+	jsonCap.SetOutput(NewCapOutput(SpecIDObj, "JSON output"))
+
 	// Test text response with string output type
 	textResponse := NewResponseWrapperFromText([]byte("test"))
 	assert.True(t, textResponse.MatchesOutputType(stringCap))
 	assert.False(t, textResponse.MatchesOutputType(binaryCap))
-	
+	assert.False(t, textResponse.MatchesOutputType(jsonCap))
+
 	// Test binary response with binary output type
 	binaryResponse := NewResponseWrapperFromBinary([]byte{1, 2, 3})
 	assert.False(t, binaryResponse.MatchesOutputType(stringCap))
 	assert.True(t, binaryResponse.MatchesOutputType(binaryCap))
-	
-	// Test JSON response (should match multiple types)
-	jsonResponse := NewResponseWrapperFromJSON([]byte("\"test\""))
-	assert.True(t, jsonResponse.MatchesOutputType(stringCap))
+	assert.False(t, binaryResponse.MatchesOutputType(jsonCap))
+
+	// Test JSON response (should match JSON types)
+	jsonResponse := NewResponseWrapperFromJSON([]byte(`{"test": "value"}`))
+	assert.False(t, jsonResponse.MatchesOutputType(stringCap))
 	assert.False(t, jsonResponse.MatchesOutputType(binaryCap))
+	assert.True(t, jsonResponse.MatchesOutputType(jsonCap))
+}
+
+func TestResponseWrapperValidateAgainstCap(t *testing.T) {
+	// Setup cap with output schema
+	capUrn, _ := NewCapUrnFromString("cap:op=test")
+	cap := NewCap(capUrn, "Test Cap", "test")
+
+	// Add custom spec with schema
+	cap.AddMediaSpec("my:result.v1", NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/result",
+		map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"status": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"status"},
+		},
+	))
+
+	cap.SetOutput(NewCapOutput("my:result.v1", "Result output"))
+
+	// Valid JSON response
+	validResponse := NewResponseWrapperFromJSON([]byte(`{"status": "ok"}`))
+	err := validResponse.ValidateAgainstCap(cap)
+	assert.NoError(t, err)
+
+	// Invalid JSON response (missing required field)
+	invalidResponse := NewResponseWrapperFromJSON([]byte(`{"other": "value"}`))
+	err = invalidResponse.ValidateAgainstCap(cap)
+	assert.Error(t, err)
 }

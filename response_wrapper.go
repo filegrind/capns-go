@@ -193,18 +193,22 @@ func (rw *ResponseWrapper) ValidateAgainstCap(cap *Cap) error {
 	case ResponseContentTypeBinary:
 		// Binary outputs can't be validated as JSON, validate the response type instead
 		if output := cap.GetOutput(); output != nil {
-			if output.OutputType != OutputTypeBinary {
+			resolved, err := output.Resolve(cap.GetMediaSpecs())
+			if err != nil {
+				return fmt.Errorf("failed to resolve output spec ID '%s': %w", output.MediaSpec, err)
+			}
+			if !resolved.IsBinary() {
 				return fmt.Errorf(
 					"cap %s expects %s output but received binary data",
 					cap.UrnString(),
-					output.OutputType,
+					resolved.MediaType,
 				)
 			}
 		}
 		return nil
 	}
 
-	outputValidator := &OutputValidator{}
+	outputValidator := NewOutputValidator()
 	return outputValidator.ValidateOutput(cap, value)
 }
 
@@ -228,19 +232,22 @@ func (rw *ResponseWrapper) MatchesOutputType(cap *Cap) bool {
 		return false
 	}
 
+	// Resolve the output spec ID to get the media type
+	resolved, err := output.Resolve(cap.GetMediaSpecs())
+	if err != nil {
+		return false
+	}
+
 	switch rw.contentType {
 	case ResponseContentTypeJSON:
-		// JSON can handle objects, arrays, and primitives
-		return output.OutputType == OutputTypeObject ||
-			output.OutputType == OutputTypeArray ||
-			output.OutputType == OutputTypeString ||
-			output.OutputType == OutputTypeInteger ||
-			output.OutputType == OutputTypeNumber ||
-			output.OutputType == OutputTypeBoolean
+		// JSON can handle JSON media types
+		return resolved.IsJSON()
 	case ResponseContentTypeText:
-		return output.OutputType == OutputTypeString
+		// Text can handle text media types
+		return resolved.IsText()
 	case ResponseContentTypeBinary:
-		return output.OutputType == OutputTypeBinary
+		// Binary can handle binary media types
+		return resolved.IsBinary()
 	}
 
 	return false

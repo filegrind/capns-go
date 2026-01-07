@@ -16,8 +16,8 @@ import (
 // CapUrn represents a cap URN using flat, ordered tags
 //
 // Examples:
-// - cap:action=generate;ext=pdf;output=binary;target=thumbnail
-// - cap:action=extract;target=metadata
+// - cap:op=generate;ext=pdf;out=capns:ms:binary.v1;target=thumbnail
+// - cap:op=extract;target=metadata
 // - cap:key="Value With Spaces"
 type CapUrn struct {
 	tags map[string]string

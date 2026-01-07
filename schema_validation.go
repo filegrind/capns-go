@@ -10,12 +10,12 @@ import (
 
 // SchemaValidationError represents errors that occur during JSON schema validation
 type SchemaValidationError struct {
-	Type      string      `json:"type"`
-	CapUrn    string      `json:"cap_urn,omitempty"`
-	Argument  string      `json:"argument,omitempty"`
-	Details   string      `json:"details"`
-	Context   string      `json:"context,omitempty"`
-	Value     interface{} `json:"value,omitempty"`
+	Type     string      `json:"type"`
+	CapUrn   string      `json:"cap_urn,omitempty"`
+	Argument string      `json:"argument,omitempty"`
+	Details  string      `json:"details"`
+	Context  string      `json:"context,omitempty"`
+	Value    interface{} `json:"value,omitempty"`
 }
 
 func (e *SchemaValidationError) Error() string {
@@ -47,7 +47,7 @@ func (f *FileSchemaResolver) ResolveSchema(schemaRef string) (interface{}, error
 	// This is a simple implementation - in production you might want
 	// to support HTTP URLs, caching, etc.
 	schemaPath := f.basePath + "/" + schemaRef
-	
+
 	// For now, return an error indicating that file resolution is not implemented
 	// In a full implementation, you would read the file and parse the JSON
 	return nil, &SchemaValidationError{
@@ -73,51 +73,31 @@ func NewSchemaValidatorWithResolver(resolver SchemaResolver) *SchemaValidator {
 	}
 }
 
-// ValidateArgument validates a single argument value against its schema
-func (sv *SchemaValidator) ValidateArgument(arg *CapArgument, value interface{}) error {
-	// Only validate object and array types that have schemas defined
-	if arg.ArgType != ArgumentTypeObject && arg.ArgType != ArgumentTypeArray {
-		return nil
-	}
-
-	schema, err := sv.resolveArgumentSchema(arg)
-	if err != nil {
-		return err
-	}
-
-	// No schema specified, skip validation
+// ValidateArgumentWithSchema validates an argument value against a provided schema
+// The schema comes from the resolved media spec
+func (sv *SchemaValidator) ValidateArgumentWithSchema(arg *CapArgument, schema interface{}, value interface{}) error {
 	if schema == nil {
-		return nil
+		return nil // No schema to validate against
 	}
-
 	return sv.validateValueAgainstSchema(arg.Name, value, schema, "argument")
 }
 
-// ValidateOutput validates output value against its schema
-func (sv *SchemaValidator) ValidateOutput(output *CapOutput, value interface{}) error {
-	// Only validate object and array types that have schemas defined
-	if output.OutputType != OutputTypeObject && output.OutputType != OutputTypeArray {
-		return nil
-	}
-
-	schema, err := sv.resolveOutputSchema(output)
-	if err != nil {
-		return err
-	}
-
-	// No schema specified, skip validation
+// ValidateOutputWithSchema validates output value against a provided schema
+// The schema comes from the resolved media spec
+func (sv *SchemaValidator) ValidateOutputWithSchema(output *CapOutput, schema interface{}, value interface{}) error {
 	if schema == nil {
-		return nil
+		return nil // No schema to validate against
 	}
-
 	return sv.validateValueAgainstSchema("output", value, schema, "output")
 }
 
-// ValidateArguments validates all arguments for a capability
+// ValidateArguments validates all arguments for a capability using media specs
 func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, namedArgs map[string]interface{}) error {
 	if cap.Arguments == nil {
 		return nil
 	}
+
+	mediaSpecs := cap.GetMediaSpecs()
 
 	// Validate positional required arguments
 	for i, argDef := range cap.Arguments.Required {
@@ -145,8 +125,21 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 		}
 
 		if found {
-			if err := sv.ValidateArgument(&argDef, value); err != nil {
-				return err
+			// Resolve the spec ID to get the schema
+			resolved, err := argDef.Resolve(mediaSpecs)
+			if err != nil {
+				return &SchemaValidationError{
+					Type:     "UnresolvableSpecID",
+					Argument: argDef.Name,
+					Details:  fmt.Sprintf("Could not resolve spec ID '%s'", argDef.MediaSpec),
+				}
+			}
+
+			// Only validate if there's a schema
+			if resolved.Schema != nil {
+				if err := sv.ValidateArgumentWithSchema(&argDef, resolved.Schema, value); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -173,56 +166,26 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 		}
 
 		if found {
-			if err := sv.ValidateArgument(&argDef, value); err != nil {
-				return err
+			// Resolve the spec ID to get the schema
+			resolved, err := argDef.Resolve(mediaSpecs)
+			if err != nil {
+				return &SchemaValidationError{
+					Type:     "UnresolvableSpecID",
+					Argument: argDef.Name,
+					Details:  fmt.Sprintf("Could not resolve spec ID '%s'", argDef.MediaSpec),
+				}
+			}
+
+			// Only validate if there's a schema
+			if resolved.Schema != nil {
+				if err := sv.ValidateArgumentWithSchema(&argDef, resolved.Schema, value); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
 	return nil
-}
-
-// resolveArgumentSchema resolves the schema for an argument
-func (sv *SchemaValidator) resolveArgumentSchema(arg *CapArgument) (interface{}, error) {
-	// Prefer embedded schema over schema reference
-	if arg.Schema != nil {
-		return arg.Schema, nil
-	}
-
-	if arg.SchemaRef != nil {
-		if sv.resolver == nil {
-			return nil, &SchemaValidationError{
-				Type:     "SchemaRefNotResolved",
-				Argument: arg.Name,
-				Details:  fmt.Sprintf("Schema reference '%s' specified but no resolver configured", *arg.SchemaRef),
-			}
-		}
-		return sv.resolver.ResolveSchema(*arg.SchemaRef)
-	}
-
-	// No schema specified
-	return nil, nil
-}
-
-// resolveOutputSchema resolves the schema for output
-func (sv *SchemaValidator) resolveOutputSchema(output *CapOutput) (interface{}, error) {
-	// Prefer embedded schema over schema reference
-	if output.Schema != nil {
-		return output.Schema, nil
-	}
-
-	if output.SchemaRef != nil {
-		if sv.resolver == nil {
-			return nil, &SchemaValidationError{
-				Type:    "SchemaRefNotResolved",
-				Details: fmt.Sprintf("Schema reference '%s' specified but no resolver configured", *output.SchemaRef),
-			}
-		}
-		return sv.resolver.ResolveSchema(*output.SchemaRef)
-	}
-
-	// No schema specified
-	return nil, nil
 }
 
 // validateValueAgainstSchema performs the actual JSON schema validation
@@ -287,4 +250,3 @@ func (sv *SchemaValidator) validateValueAgainstSchema(name string, value interfa
 
 	return nil
 }
-

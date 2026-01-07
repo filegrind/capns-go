@@ -146,11 +146,18 @@ func (cc *CapCaller) isBinaryCap() bool {
 		return false
 	}
 
-	mediaSpec, err := GetMediaSpecFromCapUrn(capUrn)
+	// Get the 'out' tag which contains the spec ID
+	specID, exists := capUrn.GetTag("out")
+	if !exists {
+		return false
+	}
+
+	// Resolve the spec ID using the cap definition's media_specs
+	resolved, err := ResolveSpecID(specID, cc.capDefinition.GetMediaSpecs())
 	if err != nil {
 		return false
 	}
-	return mediaSpec.IsBinary()
+	return resolved.IsBinary()
 }
 
 // isJsonCap checks if this cap should produce JSON output based on media_spec
@@ -160,19 +167,27 @@ func (cc *CapCaller) isJsonCap() bool {
 		return false
 	}
 
-	mediaSpec, err := GetMediaSpecFromCapUrn(capUrn)
-	if err != nil {
-		// Default to text/plain (not JSON) if no media_spec is specified
+	// Get the 'out' tag which contains the spec ID
+	specID, exists := capUrn.GetTag("out")
+	if !exists {
+		// Default to text/plain (not JSON) if no out tag is specified
 		return false
 	}
-	return mediaSpec.IsJSON()
+
+	// Resolve the spec ID using the cap definition's media_specs
+	resolved, err := ResolveSpecID(specID, cc.capDefinition.GetMediaSpecs())
+	if err != nil {
+		// Default to text/plain (not JSON) if spec ID cannot be resolved
+		return false
+	}
+	return resolved.IsJSON()
 }
 
 // validateInputs validates input arguments against cap definition
 func (cc *CapCaller) validateInputs(positionalArgs, namedArgs []interface{}) error {
 	// Create enhanced input validator with schema support
 	inputValidator := NewInputValidator()
-	
+
 	// Convert named args to map for validation
 	namedArgsMap := make(map[string]interface{})
 	for _, arg := range namedArgs {
@@ -184,7 +199,7 @@ func (cc *CapCaller) validateInputs(positionalArgs, namedArgs []interface{}) err
 			}
 		}
 	}
-	
+
 	// Use schema validator for comprehensive validation
 	return inputValidator.schemaValidator.ValidateArguments(cc.capDefinition, positionalArgs, namedArgsMap)
 }
@@ -195,11 +210,15 @@ func (cc *CapCaller) validateOutput(response *ResponseWrapper) error {
 	if response.IsBinary() {
 		// For binary outputs, validate that the cap expects binary output
 		if output := cc.capDefinition.GetOutput(); output != nil {
-			if output.OutputType != OutputTypeBinary {
+			resolved, err := output.Resolve(cc.capDefinition.GetMediaSpecs())
+			if err != nil {
+				return fmt.Errorf("failed to resolve output spec ID '%s': %w", output.MediaSpec, err)
+			}
+			if !resolved.IsBinary() {
 				return fmt.Errorf(
 					"cap %s expects %s output but received binary data",
 					cc.cap,
-					output.OutputType,
+					resolved.MediaType,
 				)
 			}
 		}

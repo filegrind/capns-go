@@ -5,41 +5,76 @@ import (
 	"fmt"
 )
 
-// ArgumentType represents the type of a cap argument
-type ArgumentType string
-
-const (
-	ArgumentTypeString  ArgumentType = "string"
-	ArgumentTypeInteger ArgumentType = "integer"
-	ArgumentTypeNumber  ArgumentType = "number"
-	ArgumentTypeBoolean ArgumentType = "boolean"
-	ArgumentTypeArray   ArgumentType = "array"
-	ArgumentTypeObject  ArgumentType = "object"
-	ArgumentTypeBinary  ArgumentType = "binary"
-)
-
 // ArgumentValidation represents validation rules for cap arguments
 type ArgumentValidation struct {
-	Min          *float64  `json:"min,omitempty"`
-	Max          *float64  `json:"max,omitempty"`
-	MinLength    *int      `json:"min_length,omitempty"`
-	MaxLength    *int      `json:"max_length,omitempty"`
-	Pattern      *string   `json:"pattern,omitempty"`
+	Min           *float64 `json:"min,omitempty"`
+	Max           *float64 `json:"max,omitempty"`
+	MinLength     *int     `json:"min_length,omitempty"`
+	MaxLength     *int     `json:"max_length,omitempty"`
+	Pattern       *string  `json:"pattern,omitempty"`
 	AllowedValues []string `json:"allowed_values,omitempty"`
 }
 
 // CapArgument represents a single argument definition for a cap
 type CapArgument struct {
-	Name           string               `json:"name"`
-	ArgType        ArgumentType         `json:"arg_type"`
-	ArgDescription string               `json:"arg_description"`
-	CliFlag        string               `json:"cli_flag"`
-	Position       *int                 `json:"position,omitempty"`
-	Validation     *ArgumentValidation  `json:"validation,omitempty"`
-	DefaultValue   interface{}          `json:"default_value,omitempty"`
-	SchemaRef      *string              `json:"schema_ref,omitempty"`
-	Schema         interface{}          `json:"schema,omitempty"`
-	Metadata       interface{}          `json:"metadata,omitempty"`
+	Name           string              `json:"name"`
+	MediaSpec      string              `json:"media_spec"` // Spec ID, e.g., "capns:ms:str.v1"
+	ArgDescription string              `json:"arg_description"`
+	CliFlag        string              `json:"cli_flag"`
+	Position       *int                `json:"position,omitempty"`
+	Validation     *ArgumentValidation `json:"validation,omitempty"`
+	DefaultValue   interface{}         `json:"default_value,omitempty"`
+	Metadata       interface{}         `json:"metadata,omitempty"`
+}
+
+// Resolve resolves the argument's media spec to a ResolvedMediaSpec
+func (ca *CapArgument) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+	return ResolveSpecID(ca.MediaSpec, mediaSpecs)
+}
+
+// IsBinary checks if this argument expects binary data
+func (ca *CapArgument) IsBinary(mediaSpecs map[string]MediaSpecDef) bool {
+	resolved, err := ca.Resolve(mediaSpecs)
+	if err != nil {
+		return false
+	}
+	return resolved.IsBinary()
+}
+
+// IsJSON checks if this argument expects JSON data
+func (ca *CapArgument) IsJSON(mediaSpecs map[string]MediaSpecDef) bool {
+	resolved, err := ca.Resolve(mediaSpecs)
+	if err != nil {
+		return false
+	}
+	return resolved.IsJSON()
+}
+
+// GetMediaType returns the resolved media type for this argument
+func (ca *CapArgument) GetMediaType(mediaSpecs map[string]MediaSpecDef) string {
+	resolved, err := ca.Resolve(mediaSpecs)
+	if err != nil {
+		return ""
+	}
+	return resolved.MediaType
+}
+
+// GetProfileURI returns the resolved profile URI for this argument
+func (ca *CapArgument) GetProfileURI(mediaSpecs map[string]MediaSpecDef) string {
+	resolved, err := ca.Resolve(mediaSpecs)
+	if err != nil {
+		return ""
+	}
+	return resolved.ProfileURI
+}
+
+// GetSchema returns the resolved schema for this argument
+func (ca *CapArgument) GetSchema(mediaSpecs map[string]MediaSpecDef) interface{} {
+	resolved, err := ca.Resolve(mediaSpecs)
+	if err != nil {
+		return nil
+	}
+	return resolved.Schema
 }
 
 // CapArguments represents the collection of arguments for a cap
@@ -48,29 +83,62 @@ type CapArguments struct {
 	Optional []CapArgument `json:"optional,omitempty"`
 }
 
-
-// OutputType represents the type of output a cap returns
-type OutputType string
-
-const (
-	OutputTypeString  OutputType = "string"
-	OutputTypeInteger OutputType = "integer"
-	OutputTypeNumber  OutputType = "number"
-	OutputTypeBoolean OutputType = "boolean"
-	OutputTypeArray   OutputType = "array"
-	OutputTypeObject  OutputType = "object"
-	OutputTypeBinary  OutputType = "binary"
-)
-
 // CapOutput represents the output definition for a cap
 type CapOutput struct {
-	OutputType        OutputType           `json:"output_type"`
-	SchemaRef         *string              `json:"schema_ref,omitempty"`
-	Schema            interface{}          `json:"schema,omitempty"`
-	ContentType       *string              `json:"content_type,omitempty"`
-	Validation        *ArgumentValidation  `json:"validation,omitempty"`
-	OutputDescription string               `json:"output_description"`
-	Metadata          interface{}          `json:"metadata,omitempty"`
+	MediaSpec         string              `json:"media_spec"` // Spec ID, e.g., "capns:ms:obj.v1"
+	OutputDescription string              `json:"output_description"`
+	Validation        *ArgumentValidation `json:"validation,omitempty"`
+	Metadata          interface{}         `json:"metadata,omitempty"`
+}
+
+// Resolve resolves the output's media spec to a ResolvedMediaSpec
+func (co *CapOutput) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+	return ResolveSpecID(co.MediaSpec, mediaSpecs)
+}
+
+// IsBinary checks if this output produces binary data
+func (co *CapOutput) IsBinary(mediaSpecs map[string]MediaSpecDef) bool {
+	resolved, err := co.Resolve(mediaSpecs)
+	if err != nil {
+		return false
+	}
+	return resolved.IsBinary()
+}
+
+// IsJSON checks if this output produces JSON data
+func (co *CapOutput) IsJSON(mediaSpecs map[string]MediaSpecDef) bool {
+	resolved, err := co.Resolve(mediaSpecs)
+	if err != nil {
+		return false
+	}
+	return resolved.IsJSON()
+}
+
+// GetMediaType returns the resolved media type for this output
+func (co *CapOutput) GetMediaType(mediaSpecs map[string]MediaSpecDef) string {
+	resolved, err := co.Resolve(mediaSpecs)
+	if err != nil {
+		return ""
+	}
+	return resolved.MediaType
+}
+
+// GetProfileURI returns the resolved profile URI for this output
+func (co *CapOutput) GetProfileURI(mediaSpecs map[string]MediaSpecDef) string {
+	resolved, err := co.Resolve(mediaSpecs)
+	if err != nil {
+		return ""
+	}
+	return resolved.ProfileURI
+}
+
+// GetSchema returns the resolved schema for this output
+func (co *CapOutput) GetSchema(mediaSpecs map[string]MediaSpecDef) interface{} {
+	resolved, err := co.Resolve(mediaSpecs)
+	if err != nil {
+		return nil
+	}
+	return resolved.Schema
 }
 
 // Cap represents a formal cap definition
@@ -94,6 +162,11 @@ type Cap struct {
 	// Command defines the command string for this cap
 	Command string `json:"command"`
 
+	// MediaSpecs is the spec ID resolution table
+	// Maps spec IDs to their definitions (string or object form)
+	// Arguments and output media_spec fields reference entries here
+	MediaSpecs map[string]MediaSpecDef `json:"media_specs,omitempty"`
+
 	// Arguments defines the arguments for this cap
 	Arguments *CapArguments `json:"arguments,omitempty"`
 
@@ -107,51 +180,24 @@ type Cap struct {
 	MetadataJSON interface{} `json:"metadata_json,omitempty"`
 }
 
-// NewCapArgument creates a new cap argument
-func NewCapArgument(name string, argType ArgumentType, description string, cliFlag string) CapArgument {
+// NewCapArgument creates a new cap argument with a spec ID
+func NewCapArgument(name string, mediaSpec string, description string, cliFlag string) CapArgument {
 	return CapArgument{
 		Name:           name,
-		ArgType:        argType,
+		MediaSpec:      mediaSpec,
 		ArgDescription: description,
 		CliFlag:        cliFlag,
 	}
-}
-
-// NewCapArgumentWithCliFlag creates an argument with CLI flag (deprecated - use NewCapArgument)
-func NewCapArgumentWithCliFlag(name string, argType ArgumentType, description string, cliFlag string) CapArgument {
-	return NewCapArgument(name, argType, description, cliFlag)
 }
 
 // NewCapArgumentWithPosition creates an argument with position
-func NewCapArgumentWithPosition(name string, argType ArgumentType, description string, cliFlag string, position int) CapArgument {
+func NewCapArgumentWithPosition(name string, mediaSpec string, description string, cliFlag string, position int) CapArgument {
 	return CapArgument{
 		Name:           name,
-		ArgType:        argType,
+		MediaSpec:      mediaSpec,
 		ArgDescription: description,
 		CliFlag:        cliFlag,
 		Position:       &position,
-	}
-}
-
-// NewCapArgumentWithSchema creates an argument with embedded schema
-func NewCapArgumentWithSchema(name string, argType ArgumentType, description string, cliFlag string, schema interface{}) CapArgument {
-	return CapArgument{
-		Name:           name,
-		ArgType:        argType,
-		ArgDescription: description,
-		CliFlag:        cliFlag,
-		Schema:         schema,
-	}
-}
-
-// NewCapArgumentWithSchemaRef creates an argument with schema reference
-func NewCapArgumentWithSchemaRef(name string, argType ArgumentType, description string, cliFlag string, schemaRef string) CapArgument {
-	return CapArgument{
-		Name:           name,
-		ArgType:        argType,
-		ArgDescription: description,
-		CliFlag:        cliFlag,
-		SchemaRef:      &schemaRef,
 	}
 }
 
@@ -185,38 +231,11 @@ func NewArgumentValidationAllowedValues(values []string) *ArgumentValidation {
 	}
 }
 
-// NewCapOutput creates a new output definition
-func NewCapOutput(outputType OutputType, description string) *CapOutput {
+// NewCapOutput creates a new output definition with a spec ID
+func NewCapOutput(mediaSpec string, description string) *CapOutput {
 	return &CapOutput{
-		OutputType:        outputType,
+		MediaSpec:         mediaSpec,
 		OutputDescription: description,
-	}
-}
-
-// NewCapOutputWithContentType creates output with content type
-func NewCapOutputWithContentType(outputType OutputType, description string, contentType string) *CapOutput {
-	return &CapOutput{
-		OutputType:        outputType,
-		OutputDescription: description,
-		ContentType:       &contentType,
-	}
-}
-
-// NewCapOutputWithSchemaRef creates output with schema reference
-func NewCapOutputWithSchemaRef(outputType OutputType, description string, schemaRef string) *CapOutput {
-	return &CapOutput{
-		OutputType:        outputType,
-		OutputDescription: description,
-		SchemaRef:         &schemaRef,
-	}
-}
-
-// NewCapOutputWithEmbeddedSchema creates output with embedded schema
-func NewCapOutputWithEmbeddedSchema(outputType OutputType, description string, schema interface{}) *CapOutput {
-	return &CapOutput{
-		OutputType:        outputType,
-		OutputDescription: description,
-		Schema:            schema,
 	}
 }
 
@@ -301,11 +320,12 @@ func (ca *CapArguments) GetFlagArgs() []CapArgument {
 // NewCap creates a new cap
 func NewCap(urn *CapUrn, title string, command string) *Cap {
 	return &Cap{
-		Urn:       urn,
-		Title:     title,
-		Command:   command,
-		Metadata:  make(map[string]string),
-		Arguments: NewCapArguments(),
+		Urn:        urn,
+		Title:      title,
+		Command:    command,
+		Metadata:   make(map[string]string),
+		MediaSpecs: make(map[string]MediaSpecDef),
+		Arguments:  NewCapArguments(),
 	}
 }
 
@@ -317,6 +337,7 @@ func NewCapWithDescription(urn *CapUrn, title string, command string, descriptio
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       make(map[string]string),
+		MediaSpecs:     make(map[string]MediaSpecDef),
 		Arguments:      NewCapArguments(),
 	}
 }
@@ -327,11 +348,12 @@ func NewCapWithMetadata(urn *CapUrn, title string, command string, metadata map[
 		metadata = make(map[string]string)
 	}
 	return &Cap{
-		Urn:       urn,
-		Title:     title,
-		Command:   command,
-		Metadata:  metadata,
-		Arguments: NewCapArguments(),
+		Urn:        urn,
+		Title:      title,
+		Command:    command,
+		Metadata:   metadata,
+		MediaSpecs: make(map[string]MediaSpecDef),
+		Arguments:  NewCapArguments(),
 	}
 }
 
@@ -346,8 +368,35 @@ func NewCapWithDescriptionAndMetadata(urn *CapUrn, title string, command string,
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       metadata,
+		MediaSpecs:     make(map[string]MediaSpecDef),
 		Arguments:      NewCapArguments(),
 	}
+}
+
+// GetMediaSpecs returns the media specs table
+func (c *Cap) GetMediaSpecs() map[string]MediaSpecDef {
+	if c.MediaSpecs == nil {
+		c.MediaSpecs = make(map[string]MediaSpecDef)
+	}
+	return c.MediaSpecs
+}
+
+// SetMediaSpecs sets the media specs table
+func (c *Cap) SetMediaSpecs(mediaSpecs map[string]MediaSpecDef) {
+	c.MediaSpecs = mediaSpecs
+}
+
+// AddMediaSpec adds a media spec to the table
+func (c *Cap) AddMediaSpec(specID string, def MediaSpecDef) {
+	if c.MediaSpecs == nil {
+		c.MediaSpecs = make(map[string]MediaSpecDef)
+	}
+	c.MediaSpecs[specID] = def
+}
+
+// ResolveSpecID resolves a spec ID using this cap's media_specs table
+func (c *Cap) ResolveSpecID(specID string) (*ResolvedMediaSpec, error) {
+	return ResolveSpecID(specID, c.GetMediaSpecs())
 }
 
 // MatchesRequest checks if this cap matches a request string
@@ -526,7 +575,6 @@ func (c *Cap) Equals(other *Cap) bool {
 		return false
 	}
 
-
 	if c.Title != other.Title {
 		return false
 	}
@@ -565,31 +613,35 @@ func (c *Cap) MarshalJSON() ([]byte, error) {
 		"title":   c.Title,
 		"command": c.Command,
 	}
-	
+
 	if c.CapDescription != nil {
 		capData["cap_description"] = *c.CapDescription
 	}
-	
+
 	if len(c.Metadata) > 0 {
 		capData["metadata"] = c.Metadata
 	}
-	
+
+	if len(c.MediaSpecs) > 0 {
+		capData["media_specs"] = c.MediaSpecs
+	}
+
 	if c.Arguments != nil && !c.Arguments.IsEmpty() {
 		capData["arguments"] = c.Arguments
 	}
-	
+
 	if c.Output != nil {
 		capData["output"] = c.Output
 	}
-	
+
 	if c.AcceptsStdin {
 		capData["accepts_stdin"] = c.AcceptsStdin
 	}
-	
+
 	if c.MetadataJSON != nil {
 		capData["metadata_json"] = c.MetadataJSON
 	}
-	
+
 	return json.Marshal(capData)
 }
 
@@ -599,13 +651,13 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	
+
 	// Handle urn field - can be string or object with tags
 	urnField, ok := raw["urn"]
 	if !ok {
 		return fmt.Errorf("missing required field 'urn'")
 	}
-	
+
 	var urn *CapUrn
 	var err error
 	switch v := urnField.(type) {
@@ -623,7 +675,7 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		if !ok {
 			return fmt.Errorf("URN tags field must be an object")
 		}
-		
+
 		tags := make(map[string]string)
 		for k, v := range tagsMap {
 			if s, ok := v.(string); ok {
@@ -634,26 +686,26 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 	default:
 		return fmt.Errorf("URN field must be string or object")
 	}
-	
+
 	c.Urn = urn
-	
+
 	// Handle required fields
 	if title, ok := raw["title"].(string); ok {
 		c.Title = title
 	} else {
 		return fmt.Errorf("missing required field 'title'")
 	}
-	
+
 	if command, ok := raw["command"].(string); ok {
 		c.Command = command
 	} else {
 		return fmt.Errorf("missing required field 'command'")
 	}
-	
+
 	if desc, ok := raw["cap_description"].(string); ok {
 		c.CapDescription = &desc
 	}
-	
+
 	if metadata, ok := raw["metadata"].(map[string]interface{}); ok {
 		c.Metadata = make(map[string]string)
 		for k, v := range metadata {
@@ -662,11 +714,20 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
-	
+
+	// Handle media_specs
+	if mediaSpecsRaw, ok := raw["media_specs"]; ok {
+		mediaSpecsBytes, _ := json.Marshal(mediaSpecsRaw)
+		var mediaSpecs map[string]MediaSpecDef
+		if err := json.Unmarshal(mediaSpecsBytes, &mediaSpecs); err == nil {
+			c.MediaSpecs = mediaSpecs
+		}
+	}
+
 	if acceptsStdin, ok := raw["accepts_stdin"].(bool); ok {
 		c.AcceptsStdin = acceptsStdin
 	}
-	
+
 	// Handle arguments and output if present
 	if args, ok := raw["arguments"]; ok {
 		argsBytes, _ := json.Marshal(args)
@@ -675,7 +736,7 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 			c.Arguments = &arguments
 		}
 	}
-	
+
 	if output, ok := raw["output"]; ok {
 		outputBytes, _ := json.Marshal(output)
 		var capOutput CapOutput
@@ -683,10 +744,10 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 			c.Output = &capOutput
 		}
 	}
-	
+
 	if metadataJSON, ok := raw["metadata_json"]; ok {
 		c.MetadataJSON = metadataJSON
 	}
-	
+
 	return nil
 }

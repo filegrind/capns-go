@@ -7,7 +7,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSchemaValidator_ValidateArgument_Success(t *testing.T) {
+// Helper to create a cap with media specs for testing
+func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
+	urn, err := NewCapUrnFromString("cap:op=test;")
+	require.NoError(t, err)
+
+	cap := NewCap(urn, "Test Cap", "test-command")
+
+	// Add a custom media spec with the provided schema
+	cap.AddMediaSpec("test:obj.v1", NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://test.example.com/schema",
+		argSchema,
+	))
+
+	return cap
+}
+
+func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Define a JSON schema for user data
@@ -25,8 +42,8 @@ func TestSchemaValidator_ValidateArgument_Success(t *testing.T) {
 		"required": []interface{}{"name"},
 	}
 
-	// Create an argument with embedded schema
-	arg := NewCapArgumentWithSchema("user_data", ArgumentTypeObject, "User data", "--user", schema)
+	// Create an argument
+	arg := NewCapArgument("user_data", "test:obj.v1", "User data", "--user")
 
 	// Test valid data
 	validData := map[string]interface{}{
@@ -34,11 +51,11 @@ func TestSchemaValidator_ValidateArgument_Success(t *testing.T) {
 		"age":  30,
 	}
 
-	err := validator.ValidateArgument(&arg, validData)
+	err := validator.ValidateArgumentWithSchema(&arg, schema, validData)
 	assert.NoError(t, err)
 }
 
-func TestSchemaValidator_ValidateArgument_Failure(t *testing.T) {
+func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Define a JSON schema requiring name field
@@ -56,17 +73,17 @@ func TestSchemaValidator_ValidateArgument_Failure(t *testing.T) {
 		"required": []interface{}{"name"},
 	}
 
-	// Create an argument with embedded schema
-	arg := NewCapArgumentWithSchema("user_data", ArgumentTypeObject, "User data", "--user", schema)
+	// Create an argument
+	arg := NewCapArgument("user_data", "test:obj.v1", "User data", "--user")
 
 	// Test invalid data (missing required field)
 	invalidData := map[string]interface{}{
 		"age": 30,
 	}
 
-	err := validator.ValidateArgument(&arg, invalidData)
+	err := validator.ValidateArgumentWithSchema(&arg, schema, invalidData)
 	assert.Error(t, err)
-	
+
 	schemaErr, ok := err.(*SchemaValidationError)
 	require.True(t, ok)
 	assert.Equal(t, "ArgumentValidation", schemaErr.Type)
@@ -74,27 +91,18 @@ func TestSchemaValidator_ValidateArgument_Failure(t *testing.T) {
 	assert.Contains(t, schemaErr.Details, "name")
 }
 
-func TestSchemaValidator_ValidateArgument_SkipNonStructuredTypes(t *testing.T) {
+func TestSchemaValidator_ValidateArgumentWithSchema_NilSchema(t *testing.T) {
 	validator := NewSchemaValidator()
 
-	// String argument should not be schema validated
-	arg := NewCapArgument("simple_string", ArgumentTypeString, "Simple string", "--string")
+	// Create argument
+	arg := NewCapArgument("simple_string", SpecIDStr, "Simple string", "--string")
 
-	err := validator.ValidateArgument(&arg, "any string value")
+	// Nil schema should not validate
+	err := validator.ValidateArgumentWithSchema(&arg, nil, "any string value")
 	assert.NoError(t, err)
 }
 
-func TestSchemaValidator_ValidateArgument_NoSchemaSkipsValidation(t *testing.T) {
-	validator := NewSchemaValidator()
-
-	// Object argument without schema should not be validated
-	arg := NewCapArgument("data", ArgumentTypeObject, "Data object", "--data")
-
-	err := validator.ValidateArgument(&arg, map[string]interface{}{"any": "data"})
-	assert.NoError(t, err)
-}
-
-func TestSchemaValidator_ValidateOutput_Success(t *testing.T) {
+func TestSchemaValidator_ValidateOutputWithSchema_Success(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Define a JSON schema for result data
@@ -112,8 +120,8 @@ func TestSchemaValidator_ValidateOutput_Success(t *testing.T) {
 		"required": []interface{}{"result"},
 	}
 
-	// Create output with embedded schema
-	output := NewCapOutputWithEmbeddedSchema(OutputTypeObject, "Query result", schema)
+	// Create output
+	output := NewCapOutput("test:result.v1", "Query result")
 
 	// Test valid output data
 	validData := map[string]interface{}{
@@ -121,11 +129,11 @@ func TestSchemaValidator_ValidateOutput_Success(t *testing.T) {
 		"timestamp": "2023-01-01T00:00:00Z",
 	}
 
-	err := validator.ValidateOutput(output, validData)
+	err := validator.ValidateOutputWithSchema(output, schema, validData)
 	assert.NoError(t, err)
 }
 
-func TestSchemaValidator_ValidateOutput_Failure(t *testing.T) {
+func TestSchemaValidator_ValidateOutputWithSchema_Failure(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Define a JSON schema requiring result field
@@ -139,15 +147,15 @@ func TestSchemaValidator_ValidateOutput_Failure(t *testing.T) {
 		"required": []interface{}{"result"},
 	}
 
-	// Create output with embedded schema
-	output := NewCapOutputWithEmbeddedSchema(OutputTypeObject, "Query result", schema)
+	// Create output
+	output := NewCapOutput("test:result.v1", "Query result")
 
 	// Test invalid output data (missing required field)
 	invalidData := map[string]interface{}{
 		"status": "ok",
 	}
 
-	err := validator.ValidateOutput(output, invalidData)
+	err := validator.ValidateOutputWithSchema(output, schema, invalidData)
 	assert.Error(t, err)
 
 	schemaErr, ok := err.(*SchemaValidationError)
@@ -160,12 +168,12 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString("cap:action=query;target=structured;")
+	urn, err := NewCapUrnFromString("cap:op=query;target=structured;")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Query Processor", "test-command")
 
-	// Add argument with schema
+	// Add a custom media spec with schema
 	userSchema := map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
@@ -175,7 +183,14 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 		"required": []interface{}{"name"},
 	}
 
-	userArg := NewCapArgumentWithSchema("user", ArgumentTypeObject, "User data", "--user", userSchema)
+	cap.AddMediaSpec("my:user.v1", NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/user",
+		userSchema,
+	))
+
+	// Add argument referencing the custom spec
+	userArg := NewCapArgument("user", "my:user.v1", "User data", "--user")
 	cap.AddRequiredArgument(userArg)
 
 	// Test valid arguments
@@ -221,8 +236,8 @@ func TestSchemaValidator_ArraySchemaValidation(t *testing.T) {
 		"minItems": 1,
 	}
 
-	// Create an argument with array schema
-	arg := NewCapArgumentWithSchema("items", ArgumentTypeArray, "List of items", "--items", schema)
+	// Create an argument
+	arg := NewCapArgument("items", "my:items.v1", "List of items", "--items")
 
 	// Test valid array data
 	validData := []interface{}{
@@ -230,7 +245,7 @@ func TestSchemaValidator_ArraySchemaValidation(t *testing.T) {
 		map[string]interface{}{"id": 2, "name": "Item 2"},
 	}
 
-	err := validator.ValidateArgument(&arg, validData)
+	err := validator.ValidateArgumentWithSchema(&arg, schema, validData)
 	assert.NoError(t, err)
 
 	// Test invalid array data (missing required field)
@@ -238,48 +253,26 @@ func TestSchemaValidator_ArraySchemaValidation(t *testing.T) {
 		map[string]interface{}{"id": 1}, // Missing "name"
 	}
 
-	err = validator.ValidateArgument(&arg, invalidData)
+	err = validator.ValidateArgumentWithSchema(&arg, schema, invalidData)
 	assert.Error(t, err)
 
 	// Test empty array (violates minItems)
 	emptyData := []interface{}{}
 
-	err = validator.ValidateArgument(&arg, emptyData)
+	err = validator.ValidateArgumentWithSchema(&arg, schema, emptyData)
 	assert.Error(t, err)
-}
-
-func TestSchemaValidator_WithSchemaReference(t *testing.T) {
-	// Create a mock resolver that fails (to test error handling)
-	resolver := &mockSchemaResolver{
-		shouldFail: true,
-	}
-
-	validator := NewSchemaValidatorWithResolver(resolver)
-
-	// Create an argument with schema reference
-	arg := NewCapArgumentWithSchemaRef("user", ArgumentTypeObject, "User data", "--user", "user.schema.json")
-
-	// Test that validation fails when schema cannot be resolved
-	data := map[string]interface{}{"name": "John"}
-
-	err := validator.ValidateArgument(&arg, data)
-	assert.Error(t, err)
-
-	schemaErr, ok := err.(*SchemaValidationError)
-	require.True(t, ok)
-	assert.Equal(t, "SchemaRefNotResolved", schemaErr.Type)
 }
 
 func TestInputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewInputValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString("cap:action=test;")
+	urn, err := NewCapUrnFromString("cap:op=test;")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Config Validator", "test-command")
 
-	// Add argument with schema
+	// Add a custom media spec with schema
 	schema := map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
@@ -288,7 +281,13 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 		"required": []interface{}{"value"},
 	}
 
-	arg := NewCapArgumentWithSchema("config", ArgumentTypeObject, "Configuration", "--config", schema)
+	cap.AddMediaSpec("my:config.v1", NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/config",
+		schema,
+	))
+
+	arg := NewCapArgument("config", "my:config.v1", "Configuration", "--config")
 	cap.AddRequiredArgument(arg)
 
 	// Test valid input
@@ -317,12 +316,12 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewOutputValidator()
 
 	// Create a capability with schema-enabled output
-	urn, err := NewCapUrnFromString("cap:action=test;")
+	urn, err := NewCapUrnFromString("cap:op=test;")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Output Validator", "test-command")
 
-	// Add output with schema
+	// Add a custom media spec with schema for output
 	schema := map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
@@ -335,7 +334,13 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 		"required": []interface{}{"status"},
 	}
 
-	output := NewCapOutputWithEmbeddedSchema(OutputTypeObject, "Command result", schema)
+	cap.AddMediaSpec("my:result.v1", NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/result",
+		schema,
+	))
+
+	output := NewCapOutput("my:result.v1", "Command result")
 	cap.SetOutput(output)
 
 	// Test valid output
@@ -366,7 +371,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a capability with full schema validation
-	urn, err := NewCapUrnFromString("cap:action=query;target=structured;")
+	urn, err := NewCapUrnFromString("cap:op=query;target=structured;")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Structured Query", "query-command")
@@ -381,7 +386,13 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		"required": []interface{}{"query"},
 	}
 
-	queryArg := NewCapArgumentWithSchema("query_params", ArgumentTypeObject, "Query parameters", "--query", inputSchema)
+	cap.AddMediaSpec("my:query-params.v1", NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/query-params",
+		inputSchema,
+	))
+
+	queryArg := NewCapArgument("query_params", "my:query-params.v1", "Query parameters", "--query")
 	cap.AddRequiredArgument(queryArg)
 
 	// Add output with schema
@@ -403,7 +414,13 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		"required": []interface{}{"results", "total"},
 	}
 
-	output := NewCapOutputWithEmbeddedSchema(OutputTypeObject, "Query results", outputSchema)
+	cap.AddMediaSpec("my:query-results.v1", NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/query-results",
+		outputSchema,
+	))
+
+	output := NewCapOutput("my:query-results.v1", "Query results")
 	cap.SetOutput(output)
 
 	// Register the capability
@@ -455,30 +472,6 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// Mock schema resolver for testing
-type mockSchemaResolver struct {
-	shouldFail bool
-	schemas    map[string]interface{}
-}
-
-func (m *mockSchemaResolver) ResolveSchema(schemaRef string) (interface{}, error) {
-	if m.shouldFail {
-		return nil, &SchemaValidationError{
-			Type:    "SchemaRefNotResolved",
-			Details: "Mock resolver failure",
-		}
-	}
-
-	if schema, exists := m.schemas[schemaRef]; exists {
-		return schema, nil
-	}
-
-	return nil, &SchemaValidationError{
-		Type:    "SchemaRefNotResolved",
-		Details: "Schema not found in mock resolver",
-	}
-}
-
 func TestFileSchemaResolver_ErrorHandling(t *testing.T) {
 	resolver := NewFileSchemaResolver("/nonexistent/path")
 
@@ -528,7 +521,7 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 		"required": []interface{}{"user"},
 	}
 
-	arg := NewCapArgumentWithSchema("user_data", ArgumentTypeObject, "Complex user data", "--user-data", schema)
+	arg := NewCapArgument("user_data", "my:user-data.v1", "Complex user data", "--user-data")
 
 	// Test valid complex data
 	validData := map[string]interface{}{
@@ -544,7 +537,7 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 		},
 	}
 
-	err := validator.ValidateArgument(&arg, validData)
+	err := validator.ValidateArgumentWithSchema(&arg, schema, validData)
 	assert.NoError(t, err)
 
 	// Test invalid complex data (invalid permission)
@@ -557,6 +550,56 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 		},
 	}
 
-	err = validator.ValidateArgument(&arg, invalidData)
+	err = validator.ValidateArgumentWithSchema(&arg, schema, invalidData)
+	assert.Error(t, err)
+}
+
+func TestBuiltinSpecIDResolution(t *testing.T) {
+	// Test that built-in spec IDs can be resolved
+	resolved, err := ResolveSpecID(SpecIDStr, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "text/plain", resolved.MediaType)
+	assert.Equal(t, ProfileStr, resolved.ProfileURI)
+
+	resolved, err = ResolveSpecID(SpecIDInt, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "text/plain", resolved.MediaType)
+	assert.Equal(t, ProfileInt, resolved.ProfileURI)
+
+	resolved, err = ResolveSpecID(SpecIDObj, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "application/json", resolved.MediaType)
+	assert.Equal(t, ProfileObj, resolved.ProfileURI)
+
+	resolved, err = ResolveSpecID(SpecIDBinary, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "application/octet-stream", resolved.MediaType)
+	assert.True(t, resolved.IsBinary())
+}
+
+func TestCustomSpecIDResolution(t *testing.T) {
+	mediaSpecs := map[string]MediaSpecDef{
+		"my:custom.v1": NewMediaSpecDefString("text/html; profile=https://example.com/schema/html"),
+		"my:complex.v1": NewMediaSpecDefObjectWithSchema(
+			"application/json",
+			"https://example.com/schema/complex",
+			map[string]interface{}{"type": "object"},
+		),
+	}
+
+	// String form resolution
+	resolved, err := ResolveSpecID("my:custom.v1", mediaSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, "text/html", resolved.MediaType)
+	assert.Equal(t, "https://example.com/schema/html", resolved.ProfileURI)
+
+	// Object form resolution with schema
+	resolved, err = ResolveSpecID("my:complex.v1", mediaSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, "application/json", resolved.MediaType)
+	assert.NotNil(t, resolved.Schema)
+
+	// Unknown spec ID should fail
+	_, err = ResolveSpecID("unknown:spec.v1", mediaSpecs)
 	assert.Error(t, err)
 }
