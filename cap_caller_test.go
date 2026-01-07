@@ -67,42 +67,42 @@ func TestCapCallerConvertToString(t *testing.T) {
 
 func TestCapCallerIsBinaryCap(t *testing.T) {
 	// Test binary cap using the 'out' tag with spec ID
-	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=capns:ms:binary.v1")
+	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(binaryCapUrn, "Test Capability", "test-command")
 	mockHost := &MockCapHost{}
-	caller := NewCapCaller("cap:op=generate;out=capns:ms:binary.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=generate;out=std:binary.v1", mockHost, capDef)
 
 	assert.True(t, caller.isBinaryCap())
 
 	// Test non-binary cap (text output)
-	textCapUrn, err := NewCapUrnFromString("cap:op=generate;out=capns:ms:str.v1")
+	textCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:str.v1")
 	require.NoError(t, err)
 
 	capDef2 := NewCap(textCapUrn, "Test Capability", "test-command")
-	caller2 := NewCapCaller("cap:op=generate;out=capns:ms:str.v1", mockHost, capDef2)
+	caller2 := NewCapCaller("cap:op=generate;out=std:str.v1", mockHost, capDef2)
 
 	assert.False(t, caller2.isBinaryCap())
 }
 
 func TestCapCallerIsJsonCap(t *testing.T) {
 	// Test JSON cap with object output
-	jsonCapUrn, err := NewCapUrnFromString("cap:op=generate;out=capns:ms:obj.v1")
+	jsonCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:obj.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(jsonCapUrn, "Test Capability", "test-command")
 	mockHost := &MockCapHost{}
-	caller := NewCapCaller("cap:op=generate;out=capns:ms:obj.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=generate;out=std:obj.v1", mockHost, capDef)
 
 	assert.True(t, caller.isJsonCap())
 
 	// Test binary cap (not JSON)
-	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=capns:ms:binary.v1")
+	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
 	require.NoError(t, err)
 
 	capDef2 := NewCap(binaryCapUrn, "Test Capability", "test-command")
-	caller2 := NewCapCaller("cap:op=generate;out=capns:ms:binary.v1", mockHost, capDef2)
+	caller2 := NewCapCaller("cap:op=generate;out=std:binary.v1", mockHost, capDef2)
 
 	assert.False(t, caller2.isJsonCap())
 
@@ -118,20 +118,20 @@ func TestCapCallerIsJsonCap(t *testing.T) {
 
 func TestCapCallerCall(t *testing.T) {
 	// Setup test data
-	capUrn, err := NewCapUrnFromString("cap:op=test;out=capns:ms:str.v1")
+	capUrn, err := NewCapUrnFromString("cap:op=test;out=std:str.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
 	capDef.SetOutput(NewCapOutput(SpecIDStr, "Test output"))
 
 	mockHost := &MockCapHost{
-		expectedCapUrn: "cap:op=test;out=capns:ms:str.v1",
+		expectedCapUrn: "cap:op=test;out=std:str.v1",
 		returnResult: &HostResult{
 			TextOutput: "test result",
 		},
 	}
 
-	caller := NewCapCaller("cap:op=test;out=capns:ms:str.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=test;out=std:str.v1", mockHost, capDef)
 
 	// Test call with no arguments
 	ctx := context.Background()
@@ -147,7 +147,7 @@ func TestCapCallerCall(t *testing.T) {
 
 func TestCapCallerWithArguments(t *testing.T) {
 	// Setup test data with arguments
-	capUrn, err := NewCapUrnFromString("cap:op=process;out=capns:ms:obj.v1")
+	capUrn, err := NewCapUrnFromString("cap:op=process;out=std:obj.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
@@ -160,7 +160,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=process;out=capns:ms:obj.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=process;out=std:obj.v1", mockHost, capDef)
 
 	// Test call with positional argument
 	ctx := context.Background()
@@ -173,7 +173,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 
 func TestCapCallerBinaryResponse(t *testing.T) {
 	// Setup binary cap
-	capUrn, err := NewCapUrnFromString("cap:op=generate;out=capns:ms:binary.v1")
+	capUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Generate Capability", "generate-command")
@@ -186,7 +186,7 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=generate;out=capns:ms:binary.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=generate;out=std:binary.v1", mockHost, capDef)
 
 	// Test call
 	ctx := context.Background()

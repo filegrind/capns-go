@@ -1,7 +1,7 @@
 // Package capns provides MediaSpec parsing and spec ID resolution
 //
 // Spec IDs reference media type definitions in the media_specs table.
-// Format: `capns:ms:<type>.v1` for built-ins, or custom spec IDs.
+// Format: `std:<type>.v1` for built-ins, or custom spec IDs.
 //
 // Canonical media spec format: `<mime-type>; profile=<url>`
 // Examples:
@@ -20,17 +20,17 @@ import (
 
 // Built-in spec ID constants
 const (
-	SpecIDStr      = "capns:ms:str.v1"
-	SpecIDInt      = "capns:ms:int.v1"
-	SpecIDNum      = "capns:ms:num.v1"
-	SpecIDBool     = "capns:ms:bool.v1"
-	SpecIDObj      = "capns:ms:obj.v1"
-	SpecIDStrArray = "capns:ms:str-array.v1"
-	SpecIDIntArray = "capns:ms:int-array.v1"
-	SpecIDNumArray = "capns:ms:num-array.v1"
-	SpecIDBoolArray = "capns:ms:bool-array.v1"
-	SpecIDObjArray = "capns:ms:obj-array.v1"
-	SpecIDBinary   = "capns:ms:binary.v1"
+	SpecIDStr      = "std:str.v1"
+	SpecIDInt      = "std:int.v1"
+	SpecIDNum      = "std:num.v1"
+	SpecIDBool     = "std:bool.v1"
+	SpecIDObj      = "std:obj.v1"
+	SpecIDStrArray = "std:str-array.v1"
+	SpecIDIntArray = "std:int-array.v1"
+	SpecIDNumArray = "std:num-array.v1"
+	SpecIDBoolArray = "std:bool-array.v1"
+	SpecIDObjArray = "std:obj-array.v1"
+	SpecIDBinary   = "std:binary.v1"
 )
 
 // Profile URL constants

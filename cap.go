@@ -18,7 +18,7 @@ type ArgumentValidation struct {
 // CapArgument represents a single argument definition for a cap
 type CapArgument struct {
 	Name           string              `json:"name"`
-	MediaSpec      string              `json:"media_spec"` // Spec ID, e.g., "capns:ms:str.v1"
+	MediaSpec      string              `json:"media_spec"` // Spec ID, e.g., "std:str.v1"
 	ArgDescription string              `json:"arg_description"`
 	CliFlag        string              `json:"cli_flag"`
 	Position       *int                `json:"position,omitempty"`
@@ -85,7 +85,7 @@ type CapArguments struct {
 
 // CapOutput represents the output definition for a cap
 type CapOutput struct {
-	MediaSpec         string              `json:"media_spec"` // Spec ID, e.g., "capns:ms:obj.v1"
+	MediaSpec         string              `json:"media_spec"` // Spec ID, e.g., "std:obj.v1"
 	OutputDescription string              `json:"output_description"`
 	Validation        *ArgumentValidation `json:"validation,omitempty"`
 	Metadata          interface{}         `json:"metadata,omitempty"`

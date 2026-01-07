@@ -119,7 +119,7 @@ func TestCapAcceptsStdin(t *testing.T) {
 }
 
 func TestCapWithMediaSpecs(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=query;target=structured;in=capns:ms:str.v1;out=my:result.v1")
+	id, err := NewCapUrnFromString("cap:op=query;target=structured;in=std:str.v1;out=my:result.v1")
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Query Structured Data", "query-cmd")
@@ -157,7 +157,7 @@ func TestCapWithMediaSpecs(t *testing.T) {
 }
 
 func TestCapJSONRoundTrip(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=test;out=capns:ms:obj.v1")
+	id, err := NewCapUrnFromString("cap:op=test;out=std:obj.v1")
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Test Cap", "test-cmd")

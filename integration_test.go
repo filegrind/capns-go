@@ -79,7 +79,7 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 // TestIntegrationCallerAndResponseSystem verifies the caller and response system
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	// Setup test cap definition with spec IDs
-	urn, err := NewCapUrnFromString("cap:op=extract;target=metadata;out=capns:ms:obj.v1")
+	urn, err := NewCapUrnFromString("cap:op=extract;target=metadata;out=std:obj.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
@@ -97,7 +97,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	}
 
 	// Create caller
-	caller := NewCapCaller("cap:op=extract;target=metadata;out=capns:ms:obj.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=extract;target=metadata;out=std:obj.v1", mockHost, capDef)
 
 	// Test call with valid arguments
 	ctx := context.Background()
@@ -129,7 +129,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 // TestIntegrationBinaryCapHandling verifies binary cap handling
 func TestIntegrationBinaryCapHandling(t *testing.T) {
 	// Setup binary cap
-	urn, err := NewCapUrnFromString("cap:op=generate;target=thumbnail;out=capns:ms:binary.v1")
+	urn, err := NewCapUrnFromString("cap:op=generate;target=thumbnail;out=std:binary.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
@@ -143,7 +143,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=generate;target=thumbnail;out=capns:ms:binary.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=generate;target=thumbnail;out=std:binary.v1", mockHost, capDef)
 
 	// Test binary response
 	ctx := context.Background()
@@ -165,7 +165,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 // TestIntegrationTextCapHandling verifies text cap handling
 func TestIntegrationTextCapHandling(t *testing.T) {
 	// Setup text cap
-	urn, err := NewCapUrnFromString("cap:op=format;target=text;out=capns:ms:str.v1")
+	urn, err := NewCapUrnFromString("cap:op=format;target=text;out=std:str.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Text Formatter", "format-text")
@@ -182,7 +182,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=format;target=text;out=capns:ms:str.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:op=format;target=text;out=std:str.v1", mockHost, capDef)
 
 	// Test text response
 	ctx := context.Background()
@@ -255,7 +255,7 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a cap with arguments
-	urn, err := NewCapUrnFromString("cap:op=process;target=data;out=capns:ms:obj.v1")
+	urn, err := NewCapUrnFromString("cap:op=process;target=data;out=std:obj.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Processor", "process-data")
