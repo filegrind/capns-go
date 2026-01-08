@@ -17,7 +17,7 @@ func TestRegistryGetCap(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test with a fake URN that won't exist
-	testUrn := "cap:action=test;target=fake"
+	testUrn := "cap:op=test;target=fake"
 	
 	_, err = registry.GetCap(testUrn)
 	// Should get an error since the cap doesn't exist
@@ -30,7 +30,7 @@ func TestRegistryValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a test cap
-	capUrn, err := NewCapUrnFromString("cap:action=test;target=fake")
+	capUrn, err := NewCapUrnFromString("cap:op=test;target=fake")
 	require.NoError(t, err)
 	cap := NewCap(capUrn, "Test Command", "test-cmd")
 
@@ -53,6 +53,6 @@ func TestCapExists(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test with a URN that doesn't exist
-	exists := registry.CapExists("cap:action=nonexistent;target=fake")
+	exists := registry.CapExists("cap:op=nonexistent;target=fake")
 	assert.False(t, exists)
 }

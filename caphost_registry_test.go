@@ -27,7 +27,7 @@ func TestRegisterAndFindCapHost(t *testing.T) {
 	
 	host := &MockCapHostForRegistry{name: "test-host"}
 	
-	capUrn, err := NewCapUrnFromString("cap:action=test;type=basic")
+	capUrn, err := NewCapUrnFromString("cap:op=test;type=basic")
 	if err != nil {
 		t.Fatalf("Failed to create CapUrn: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestRegisterAndFindCapHost(t *testing.T) {
 	}
 	
 	// Test exact match
-	hosts, err := registry.FindCapHosts("cap:action=test;type=basic")
+	hosts, err := registry.FindCapHosts("cap:op=test;type=basic")
 	if err != nil {
 		t.Fatalf("Failed to find cap hosts: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRegisterAndFindCapHost(t *testing.T) {
 	}
 	
 	// Test subset match (request has more specific requirements)
-	hosts, err = registry.FindCapHosts("cap:action=test;type=basic;model=gpt-4")
+	hosts, err = registry.FindCapHosts("cap:op=test;type=basic;model=gpt-4")
 	if err != nil {
 		t.Fatalf("Failed to find cap hosts for subset match: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestRegisterAndFindCapHost(t *testing.T) {
 	}
 	
 	// Test no match
-	_, err = registry.FindCapHosts("cap:action=different")
+	_, err = registry.FindCapHosts("cap:op=different")
 	if err == nil {
 		t.Error("Expected error for non-matching capability, got nil")
 	}
@@ -76,7 +76,7 @@ func TestBestCapHostSelection(t *testing.T) {
 	
 	// Register general host
 	generalHost := &MockCapHostForRegistry{name: "general"}
-	generalCapUrn, _ := NewCapUrnFromString("cap:action=generate")
+	generalCapUrn, _ := NewCapUrnFromString("cap:op=generate")
 	generalCap := &Cap{
 		Urn:            generalCapUrn,
 		CapDescription: stringPtr("General generation"),
@@ -88,7 +88,7 @@ func TestBestCapHostSelection(t *testing.T) {
 	
 	// Register specific host
 	specificHost := &MockCapHostForRegistry{name: "specific"}
-	specificCapUrn, _ := NewCapUrnFromString("cap:action=generate;type=text;model=gpt-4")
+	specificCapUrn, _ := NewCapUrnFromString("cap:op=generate;type=text;model=gpt-4")
 	specificCap := &Cap{
 		Urn:            specificCapUrn,
 		CapDescription: stringPtr("Specific text generation"),
@@ -102,7 +102,7 @@ func TestBestCapHostSelection(t *testing.T) {
 	registry.RegisterCapHost("specific", specificHost, []*Cap{specificCap})
 	
 	// Request should match the more specific host
-	bestHost, bestCap, err := registry.FindBestCapHost("cap:action=generate;type=text;model=gpt-4;temperature=0.7")
+	bestHost, bestCap, err := registry.FindBestCapHost("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
 	if err != nil {
 		t.Fatalf("Failed to find best cap host: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestBestCapHostSelection(t *testing.T) {
 	}
 	
 	// Both hosts should match
-	allHosts, err := registry.FindCapHosts("cap:action=generate;type=text;model=gpt-4;temperature=0.7")
+	allHosts, err := registry.FindCapHosts("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
 	if err != nil {
 		t.Fatalf("Failed to find all matching hosts: %v", err)
 	}
@@ -145,13 +145,13 @@ func TestCanHandle(t *testing.T) {
 	registry := NewCapHostRegistry()
 	
 	// Empty registry
-	if registry.CanHandle("cap:action=test") {
+	if registry.CanHandle("cap:op=test") {
 		t.Error("Empty registry should not handle any capability")
 	}
 	
 	// After registration
 	host := &MockCapHostForRegistry{name: "test"}
-	capUrn, _ := NewCapUrnFromString("cap:action=test")
+	capUrn, _ := NewCapUrnFromString("cap:op=test")
 	cap := &Cap{
 		Urn:            capUrn,
 		CapDescription: stringPtr("Test"),
@@ -163,13 +163,13 @@ func TestCanHandle(t *testing.T) {
 	
 	registry.RegisterCapHost("test", host, []*Cap{cap})
 	
-	if !registry.CanHandle("cap:action=test") {
+	if !registry.CanHandle("cap:op=test") {
 		t.Error("Registry should handle registered capability")
 	}
-	if !registry.CanHandle("cap:action=test;extra=param") {
+	if !registry.CanHandle("cap:op=test;extra=param") {
 		t.Error("Registry should handle capability with extra parameters")
 	}
-	if registry.CanHandle("cap:action=different") {
+	if registry.CanHandle("cap:op=different") {
 		t.Error("Registry should not handle unregistered capability")
 	}
 }

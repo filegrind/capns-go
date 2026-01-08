@@ -9,7 +9,7 @@ import (
 )
 
 func TestCapManifestCreation(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
+	id, err := NewCapUrnFromString("cap:op=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
@@ -29,7 +29,7 @@ func TestCapManifestCreation(t *testing.T) {
 }
 
 func TestCapManifestWithAuthor(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
+	id, err := NewCapUrnFromString("cap:op=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
@@ -46,7 +46,7 @@ func TestCapManifestWithAuthor(t *testing.T) {
 }
 
 func TestCapManifestJSONSerialization(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
+	id, err := NewCapUrnFromString("cap:op=extract;target=metadata;")
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
@@ -103,11 +103,11 @@ func TestCapManifestRequiredFields(t *testing.T) {
 }
 
 func TestCapManifestWithMultipleCaps(t *testing.T) {
-	id1, err := NewCapUrnFromString("cap:action=extract;target=metadata;")
+	id1, err := NewCapUrnFromString("cap:op=extract;target=metadata;")
 	require.NoError(t, err)
 	cap1 := NewCap(id1, "Metadata Extractor", "extract-metadata")
 	
-	id2, err := NewCapUrnFromString("cap:action=extract;target=outline;")
+	id2, err := NewCapUrnFromString("cap:op=extract;target=outline;")
 	require.NoError(t, err)
 	metadata := map[string]string{"supports_outline": "true"}
 	cap2 := NewCapWithMetadata(id2, "Outline Extractor", "extract-outline", metadata)
@@ -120,8 +120,8 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 	)
 	
 	assert.Len(t, manifest.Caps, 2)
-	assert.Equal(t, "cap:action=extract;target=metadata", manifest.Caps[0].UrnString())
-	assert.Equal(t, "cap:action=extract;target=outline", manifest.Caps[1].UrnString())
+	assert.Equal(t, "cap:op=extract;target=metadata", manifest.Caps[0].UrnString())
+	assert.Equal(t, "cap:op=extract;target=outline", manifest.Caps[1].UrnString())
 	assert.True(t, manifest.Caps[1].HasMetadata("supports_outline"))
 }
 
@@ -146,7 +146,7 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 }
 
 func TestCapManifestOptionalAuthorField(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:action=validate;type=file")
+	id, err := NewCapUrnFromString("cap:op=validate;type=file")
 	require.NoError(t, err)
 	cap := NewCap(id, "File Validator", "validate")
 	
@@ -193,7 +193,7 @@ func (tc *testComponent) Caps() []Cap {
 
 func TestComponentMetadataInterface(t *testing.T) {
 	
-	id, err := NewCapUrnFromString("cap:action=test;type=component")
+	id, err := NewCapUrnFromString("cap:op=test;type=component")
 	require.NoError(t, err)
 	cap := NewCap(id, "Test Component", "test")
 	
@@ -207,12 +207,12 @@ func TestComponentMetadataInterface(t *testing.T) {
 	
 	caps := component.Caps()
 	assert.Len(t, caps, 1)
-	assert.Equal(t, "cap:action=test;type=component", caps[0].UrnString())
+	assert.Equal(t, "cap:op=test;type=component", caps[0].UrnString())
 }
 
 func TestCapManifestValidation(t *testing.T) {
 	// Test that manifest with valid caps works
-	id, err := NewCapUrnFromString("cap:action=extract;target=metadata;") 
+	id, err := NewCapUrnFromString("cap:op=extract;target=metadata;") 
 	require.NoError(t, err)
 	
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
@@ -241,7 +241,7 @@ func TestCapManifestValidation(t *testing.T) {
 
 func TestCapManifestCompatibility(t *testing.T) {
 	// Test that manifest format is compatible between different types
-	id, err := NewCapUrnFromString("cap:action=process")
+	id, err := NewCapUrnFromString("cap:op=process")
 	require.NoError(t, err)
 	cap := NewCap(id, "Data Processor", "process")
 	

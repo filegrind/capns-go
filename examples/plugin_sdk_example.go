@@ -11,7 +11,7 @@ func main() {
 	fmt.Println("=== Plugin SDK Schema Integration Example ===")
 
 	// Create a capability using the plugin SDK
-	urn, _ := sdk.NewCapUrnFromString("cap:action=query;target=structured;")
+	urn, _ := sdk.NewCapUrnFromString("cap:op=query;target=structured;")
 	cap := sdk.NewCap(urn, "Plugin Query Command", "plugin-query-command")
 
 	// Define a comprehensive schema for document query parameters
