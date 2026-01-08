@@ -225,30 +225,31 @@ func (rw *ResponseWrapper) GetContentType() string {
 	return "unknown"
 }
 
-// MatchesOutputType checks if response matches expected output type
-func (rw *ResponseWrapper) MatchesOutputType(cap *Cap) bool {
+// MatchesOutputType checks if response matches expected output type.
+// Returns error if the output spec cannot be resolved - no fallbacks.
+func (rw *ResponseWrapper) MatchesOutputType(cap *Cap) (bool, error) {
 	output := cap.GetOutput()
 	if output == nil {
-		return false
+		return false, fmt.Errorf("cap '%s' has no output definition", cap.UrnString())
 	}
 
-	// Resolve the output spec ID to get the media type
+	// Resolve the output spec ID to get the media type - fail hard if resolution fails
 	resolved, err := output.Resolve(cap.GetMediaSpecs())
 	if err != nil {
-		return false
+		return false, fmt.Errorf("failed to resolve output spec ID '%s' for cap '%s': %w", output.MediaSpec, cap.UrnString(), err)
 	}
 
 	switch rw.contentType {
 	case ResponseContentTypeJSON:
 		// JSON can handle JSON media types
-		return resolved.IsJSON()
+		return resolved.IsJSON(), nil
 	case ResponseContentTypeText:
 		// Text can handle text media types
-		return resolved.IsText()
+		return resolved.IsText(), nil
 	case ResponseContentTypeBinary:
 		// Binary can handle binary media types
-		return resolved.IsBinary()
+		return resolved.IsBinary(), nil
 	}
 
-	return false
+	return false, nil
 }

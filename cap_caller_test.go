@@ -65,16 +65,19 @@ func TestCapCallerConvertToString(t *testing.T) {
 	assert.Equal(t, "", caller.convertToString(nil))
 }
 
-func TestCapCallerIsBinaryCap(t *testing.T) {
+func TestCapCallerResolveOutputSpec(t *testing.T) {
+	mockHost := &MockCapHost{}
+
 	// Test binary cap using the 'out' tag with spec ID
 	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(binaryCapUrn, "Test Capability", "test-command")
-	mockHost := &MockCapHost{}
 	caller := NewCapCaller("cap:op=generate;out=std:binary.v1", mockHost, capDef)
 
-	assert.True(t, caller.isBinaryCap())
+	resolved, err := caller.resolveOutputSpec()
+	require.NoError(t, err)
+	assert.True(t, resolved.IsBinary())
 
 	// Test non-binary cap (text output)
 	textCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:str.v1")
@@ -83,37 +86,43 @@ func TestCapCallerIsBinaryCap(t *testing.T) {
 	capDef2 := NewCap(textCapUrn, "Test Capability", "test-command")
 	caller2 := NewCapCaller("cap:op=generate;out=std:str.v1", mockHost, capDef2)
 
-	assert.False(t, caller2.isBinaryCap())
-}
+	resolved2, err := caller2.resolveOutputSpec()
+	require.NoError(t, err)
+	assert.False(t, resolved2.IsBinary())
+	assert.True(t, resolved2.IsText())
 
-func TestCapCallerIsJsonCap(t *testing.T) {
 	// Test JSON cap with object output
 	jsonCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:obj.v1")
 	require.NoError(t, err)
 
-	capDef := NewCap(jsonCapUrn, "Test Capability", "test-command")
-	mockHost := &MockCapHost{}
-	caller := NewCapCaller("cap:op=generate;out=std:obj.v1", mockHost, capDef)
+	capDef3 := NewCap(jsonCapUrn, "Test Capability", "test-command")
+	caller3 := NewCapCaller("cap:op=generate;out=std:obj.v1", mockHost, capDef3)
 
-	assert.True(t, caller.isJsonCap())
-
-	// Test binary cap (not JSON)
-	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
+	resolved3, err := caller3.resolveOutputSpec()
 	require.NoError(t, err)
+	assert.True(t, resolved3.IsJSON())
 
-	capDef2 := NewCap(binaryCapUrn, "Test Capability", "test-command")
-	caller2 := NewCapCaller("cap:op=generate;out=std:binary.v1", mockHost, capDef2)
-
-	assert.False(t, caller2.isJsonCap())
-
-	// Test cap without output tag (not JSON)
+	// Test cap without output tag - MUST FAIL
 	noOutCapUrn, err := NewCapUrnFromString("cap:op=generate")
 	require.NoError(t, err)
 
-	capDef3 := NewCap(noOutCapUrn, "Test Capability", "test-command")
-	caller3 := NewCapCaller("cap:op=generate", mockHost, capDef3)
+	capDef4 := NewCap(noOutCapUrn, "Test Capability", "test-command")
+	caller4 := NewCapCaller("cap:op=generate", mockHost, capDef4)
 
-	assert.False(t, caller3.isJsonCap())
+	_, err = caller4.resolveOutputSpec()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required 'out' tag")
+
+	// Test cap with unresolvable spec ID - MUST FAIL
+	badSpecCapUrn, err := NewCapUrnFromString("cap:op=generate;out=unknown:spec.v1")
+	require.NoError(t, err)
+
+	capDef5 := NewCap(badSpecCapUrn, "Test Capability", "test-command")
+	caller5 := NewCapCaller("cap:op=generate;out=unknown:spec.v1", mockHost, capDef5)
+
+	_, err = caller5.resolveOutputSpec()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to resolve output spec ID")
 }
 
 func TestCapCallerCall(t *testing.T) {

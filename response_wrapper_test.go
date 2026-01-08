@@ -159,21 +159,54 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 
 	// Test text response with string output type
 	textResponse := NewResponseWrapperFromText([]byte("test"))
-	assert.True(t, textResponse.MatchesOutputType(stringCap))
-	assert.False(t, textResponse.MatchesOutputType(binaryCap))
-	assert.False(t, textResponse.MatchesOutputType(jsonCap))
+	matchStr, err := textResponse.MatchesOutputType(stringCap)
+	assert.NoError(t, err)
+	assert.True(t, matchStr)
+	matchBin, err := textResponse.MatchesOutputType(binaryCap)
+	assert.NoError(t, err)
+	assert.False(t, matchBin)
+	matchJson, err := textResponse.MatchesOutputType(jsonCap)
+	assert.NoError(t, err)
+	assert.False(t, matchJson)
 
 	// Test binary response with binary output type
 	binaryResponse := NewResponseWrapperFromBinary([]byte{1, 2, 3})
-	assert.False(t, binaryResponse.MatchesOutputType(stringCap))
-	assert.True(t, binaryResponse.MatchesOutputType(binaryCap))
-	assert.False(t, binaryResponse.MatchesOutputType(jsonCap))
+	matchStr, err = binaryResponse.MatchesOutputType(stringCap)
+	assert.NoError(t, err)
+	assert.False(t, matchStr)
+	matchBin, err = binaryResponse.MatchesOutputType(binaryCap)
+	assert.NoError(t, err)
+	assert.True(t, matchBin)
+	matchJson, err = binaryResponse.MatchesOutputType(jsonCap)
+	assert.NoError(t, err)
+	assert.False(t, matchJson)
 
 	// Test JSON response (should match JSON types)
 	jsonResponse := NewResponseWrapperFromJSON([]byte(`{"test": "value"}`))
-	assert.False(t, jsonResponse.MatchesOutputType(stringCap))
-	assert.False(t, jsonResponse.MatchesOutputType(binaryCap))
-	assert.True(t, jsonResponse.MatchesOutputType(jsonCap))
+	matchStr, err = jsonResponse.MatchesOutputType(stringCap)
+	assert.NoError(t, err)
+	assert.False(t, matchStr)
+	matchBin, err = jsonResponse.MatchesOutputType(binaryCap)
+	assert.NoError(t, err)
+	assert.False(t, matchBin)
+	matchJson, err = jsonResponse.MatchesOutputType(jsonCap)
+	assert.NoError(t, err)
+	assert.True(t, matchJson)
+
+	// Test cap with no output definition - MUST FAIL
+	noOutputCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	noOutputCap := NewCap(noOutputCapUrn, "No Output Test", "test")
+	_, err = textResponse.MatchesOutputType(noOutputCap)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no output definition")
+
+	// Test cap with unresolvable spec ID - MUST FAIL
+	badSpecCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	badSpecCap := NewCap(badSpecCapUrn, "Bad Spec Test", "test")
+	badSpecCap.SetOutput(NewCapOutput("unknown:spec.v1", "Unknown output"))
+	_, err = textResponse.MatchesOutputType(badSpecCap)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to resolve output spec ID")
 }
 
 func TestResponseWrapperValidateAgainstCap(t *testing.T) {

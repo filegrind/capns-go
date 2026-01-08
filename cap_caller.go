@@ -84,12 +84,26 @@ func (cc *CapCaller) Call(
 		return nil, fmt.Errorf("cap execution failed: %w", err)
 	}
 
-	// Determine response type based on what was returned
+	// Resolve output spec to determine response type - fail hard if resolution fails
+	outputSpec, err := cc.resolveOutputSpec()
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine response type based on what was returned and resolved output spec
 	var response *ResponseWrapper
 	if len(result.BinaryOutput) > 0 {
+		if !outputSpec.IsBinary() {
+			return nil, fmt.Errorf("cap %s returned binary data but output spec '%s' (media type: %s) is not binary",
+				cc.cap, outputSpec.SpecID, outputSpec.MediaType)
+		}
 		response = NewResponseWrapperFromBinary(result.BinaryOutput)
 	} else if result.TextOutput != "" {
-		if cc.isJsonCap() {
+		if outputSpec.IsBinary() {
+			return nil, fmt.Errorf("cap %s returned text data but output spec '%s' expects binary",
+				cc.cap, outputSpec.SpecID)
+		}
+		if outputSpec.IsJSON() {
 			response = NewResponseWrapperFromJSON([]byte(result.TextOutput))
 		} else {
 			response = NewResponseWrapperFromText([]byte(result.TextOutput))
@@ -139,48 +153,29 @@ func (cc *CapCaller) capToCommand(cap string) string {
 	return strings.ReplaceAll(cap, "_", "-")
 }
 
-// isBinaryCap checks if this cap produces binary output based on media_spec
-func (cc *CapCaller) isBinaryCap() bool {
+// resolveOutputSpec resolves the output spec ID from the cap URN's 'out' tag.
+// This method fails hard if:
+// - The cap URN is invalid
+// - The 'out' tag is missing (caps must declare their output type)
+// - The spec ID cannot be resolved (not in media_specs and not a built-in)
+func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
 	capUrn, err := NewCapUrnFromString(cc.cap)
 	if err != nil {
-		return false
+		return nil, fmt.Errorf("invalid cap URN '%s': %w", cc.cap, err)
 	}
 
 	// Get the 'out' tag which contains the spec ID
 	specID, exists := capUrn.GetTag("out")
 	if !exists {
-		return false
+		return nil, fmt.Errorf("cap URN '%s' is missing required 'out' tag - caps must declare their output type", cc.cap)
 	}
 
 	// Resolve the spec ID using the cap definition's media_specs
 	resolved, err := ResolveSpecID(specID, cc.capDefinition.GetMediaSpecs())
 	if err != nil {
-		return false
+		return nil, fmt.Errorf("failed to resolve output spec ID '%s' for cap '%s': %w - check that media_specs contains this spec ID or it is a built-in", specID, cc.cap, err)
 	}
-	return resolved.IsBinary()
-}
-
-// isJsonCap checks if this cap should produce JSON output based on media_spec
-func (cc *CapCaller) isJsonCap() bool {
-	capUrn, err := NewCapUrnFromString(cc.cap)
-	if err != nil {
-		return false
-	}
-
-	// Get the 'out' tag which contains the spec ID
-	specID, exists := capUrn.GetTag("out")
-	if !exists {
-		// Default to text/plain (not JSON) if no out tag is specified
-		return false
-	}
-
-	// Resolve the spec ID using the cap definition's media_specs
-	resolved, err := ResolveSpecID(specID, cc.capDefinition.GetMediaSpecs())
-	if err != nil {
-		// Default to text/plain (not JSON) if spec ID cannot be resolved
-		return false
-	}
-	return resolved.IsJSON()
+	return resolved, nil
 }
 
 // validateInputs validates input arguments against cap definition
@@ -206,22 +201,15 @@ func (cc *CapCaller) validateInputs(positionalArgs, namedArgs []interface{}) err
 
 // validateOutput validates output against cap definition
 func (cc *CapCaller) validateOutput(response *ResponseWrapper) error {
+	// Resolve output spec - fail hard if resolution fails
+	outputSpec, err := cc.resolveOutputSpec()
+	if err != nil {
+		return err
+	}
+
 	// For binary outputs, check type compatibility
 	if response.IsBinary() {
-		// For binary outputs, validate that the cap expects binary output
-		if output := cc.capDefinition.GetOutput(); output != nil {
-			resolved, err := output.Resolve(cc.capDefinition.GetMediaSpecs())
-			if err != nil {
-				return fmt.Errorf("failed to resolve output spec ID '%s': %w", output.MediaSpec, err)
-			}
-			if !resolved.IsBinary() {
-				return fmt.Errorf(
-					"cap %s expects %s output but received binary data",
-					cc.cap,
-					resolved.MediaType,
-				)
-			}
-		}
+		// Binary validation already done in Call() before creating the response
 		return nil
 	}
 
@@ -232,7 +220,7 @@ func (cc *CapCaller) validateOutput(response *ResponseWrapper) error {
 	}
 
 	var outputValue interface{}
-	if cc.isJsonCap() {
+	if outputSpec.IsJSON() {
 		if err := json.Unmarshal([]byte(text), &outputValue); err != nil {
 			return fmt.Errorf("output is not valid JSON for cap %s: %w", cc.cap, err)
 		}
