@@ -1,5 +1,5 @@
 // Package capns provides the fundamental cap URN system used across
-// all FGRND plugins and providers. It defines the formal structure for cap
+// all FGND plugins and providers. It defines the formal structure for cap
 // identifiers with flat tag-based naming, wildcard support, and specificity comparison.
 package capns
 

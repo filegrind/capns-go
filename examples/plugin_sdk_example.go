@@ -4,7 +4,7 @@ package main
 import (
 	"fmt"
 
-	sdk "github.com/jowharshamshiri/fgrnd-plugin-sdk-go"
+	sdk "github.com/jowharshamshiri/fgnd-plugin-sdk-go"
 )
 
 func main() {
