@@ -3,6 +3,7 @@ package capns
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 )
 
 // ArgumentValidation represents validation rules for cap arguments
@@ -151,6 +152,23 @@ func (co *CapOutput) GetSchema(mediaSpecs map[string]MediaSpecDef) (interface{},
 	return resolved.Schema, nil
 }
 
+// RegisteredBy represents registration attribution - who registered a capability and when
+type RegisteredBy struct {
+	// Username of the user who registered this capability
+	Username string `json:"username"`
+
+	// RegisteredAt is the ISO 8601 timestamp of when the capability was registered
+	RegisteredAt string `json:"registered_at"`
+}
+
+// NewRegisteredBy creates a new registration attribution
+func NewRegisteredBy(username string, registeredAt string) RegisteredBy {
+	return RegisteredBy{
+		Username:     username,
+		RegisteredAt: registeredAt,
+	}
+}
+
 // Cap represents a formal cap definition
 //
 // This defines the structure for formal cap definitions that include
@@ -188,6 +206,9 @@ type Cap struct {
 
 	// MetadataJSON contains arbitrary metadata as JSON object
 	MetadataJSON interface{} `json:"metadata_json,omitempty"`
+
+	// RegisteredBy contains registration attribution - who registered this capability and when
+	RegisteredBy *RegisteredBy `json:"registered_by,omitempty"`
 }
 
 // NewCapArgument creates a new cap argument with a spec ID
@@ -540,6 +561,21 @@ func (c *Cap) ClearMetadataJSON() {
 	c.MetadataJSON = nil
 }
 
+// GetRegisteredBy gets the registration attribution
+func (c *Cap) GetRegisteredBy() *RegisteredBy {
+	return c.RegisteredBy
+}
+
+// SetRegisteredBy sets the registration attribution
+func (c *Cap) SetRegisteredBy(registeredBy *RegisteredBy) {
+	c.RegisteredBy = registeredBy
+}
+
+// ClearRegisteredBy clears the registration attribution
+func (c *Cap) ClearRegisteredBy() {
+	c.RegisteredBy = nil
+}
+
 // GetMetadata gets the metadata JSON for CapArgument
 func (ca *CapArgument) GetMetadata() interface{} {
 	return ca.Metadata
@@ -576,6 +612,7 @@ func (c *Cap) UrnString() string {
 }
 
 // Equals checks if this cap is equal to another
+// Compares all fields to match Rust reference implementation
 func (c *Cap) Equals(other *Cap) bool {
 	if other == nil {
 		return false
@@ -609,6 +646,36 @@ func (c *Cap) Equals(other *Cap) bool {
 		if otherValue, exists := other.Metadata[key]; !exists || value != otherValue {
 			return false
 		}
+	}
+
+	// Compare MediaSpecs
+	if !reflect.DeepEqual(c.MediaSpecs, other.MediaSpecs) {
+		return false
+	}
+
+	// Compare Arguments
+	if !reflect.DeepEqual(c.Arguments, other.Arguments) {
+		return false
+	}
+
+	// Compare Output
+	if !reflect.DeepEqual(c.Output, other.Output) {
+		return false
+	}
+
+	// Compare AcceptsStdin
+	if c.AcceptsStdin != other.AcceptsStdin {
+		return false
+	}
+
+	// Compare MetadataJSON
+	if !reflect.DeepEqual(c.MetadataJSON, other.MetadataJSON) {
+		return false
+	}
+
+	// Compare RegisteredBy
+	if !reflect.DeepEqual(c.RegisteredBy, other.RegisteredBy) {
+		return false
 	}
 
 	return true
