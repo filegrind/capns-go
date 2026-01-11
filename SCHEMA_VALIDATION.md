@@ -204,7 +204,7 @@ validator := sdk.NewSchemaValidator()
 err := validator.ValidateArgument(arg, jsonValue) // Returns detailed schema errors
 
 // Integration with caller system
-caller := registry.Can("cap:action=query;target=structured;")
+caller := registry.Can("cap:op=query;target=structured;")
 response, err := caller.Call(ctx, args, namedArgs, nil) // Validates inputs and outputs
 ```
 
