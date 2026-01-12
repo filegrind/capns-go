@@ -721,3 +721,135 @@ func TestEmptyValueError(t *testing.T) {
 	assert.Nil(t, cap2)
 	assert.Error(t, err)
 }
+
+// ============================================================================
+// MATCHING SEMANTICS SPECIFICATION TESTS
+// These 9 tests verify the exact matching semantics from RULES.md Sections 12-17
+// All implementations (Rust, Go, JS, ObjC) must pass these identically
+// ============================================================================
+
+func TestMatchingSemantics_Test1_ExactMatch(t *testing.T) {
+	// Test 1: Exact match
+	// Cap:     cap:op=generate;ext=pdf
+	// Request: cap:op=generate;ext=pdf
+	// Result:  MATCH
+	cap, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 1: Exact match should succeed")
+}
+
+func TestMatchingSemantics_Test2_CapMissingTag(t *testing.T) {
+	// Test 2: Cap missing tag (implicit wildcard)
+	// Cap:     cap:op=generate
+	// Request: cap:op=generate;ext=pdf
+	// Result:  MATCH (cap can handle any ext)
+	cap, err := NewCapUrnFromString("cap:op=generate")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 2: Cap missing tag should match (implicit wildcard)")
+}
+
+func TestMatchingSemantics_Test3_CapHasExtraTag(t *testing.T) {
+	// Test 3: Cap has extra tag
+	// Cap:     cap:op=generate;ext=pdf;version=2
+	// Request: cap:op=generate;ext=pdf
+	// Result:  MATCH (request doesn't constrain version)
+	cap, err := NewCapUrnFromString("cap:op=generate;ext=pdf;version=2")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 3: Cap with extra tag should match")
+}
+
+func TestMatchingSemantics_Test4_RequestHasWildcard(t *testing.T) {
+	// Test 4: Request has wildcard
+	// Cap:     cap:op=generate;ext=pdf
+	// Request: cap:op=generate;ext=*
+	// Result:  MATCH (request accepts any ext)
+	cap, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate;ext=*")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 4: Request wildcard should match")
+}
+
+func TestMatchingSemantics_Test5_CapHasWildcard(t *testing.T) {
+	// Test 5: Cap has wildcard
+	// Cap:     cap:op=generate;ext=*
+	// Request: cap:op=generate;ext=pdf
+	// Result:  MATCH (cap handles any ext)
+	cap, err := NewCapUrnFromString("cap:op=generate;ext=*")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 5: Cap wildcard should match")
+}
+
+func TestMatchingSemantics_Test6_ValueMismatch(t *testing.T) {
+	// Test 6: Value mismatch
+	// Cap:     cap:op=generate;ext=pdf
+	// Request: cap:op=generate;ext=docx
+	// Result:  NO MATCH
+	cap, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate;ext=docx")
+	require.NoError(t, err)
+
+	assert.False(t, cap.Matches(request), "Test 6: Value mismatch should not match")
+}
+
+func TestMatchingSemantics_Test7_FallbackPattern(t *testing.T) {
+	// Test 7: Fallback pattern
+	// Cap:     cap:op=generate_thumbnail;out=std:binary.v1
+	// Request: cap:op=generate_thumbnail;out=std:binary.v1;ext=wav
+	// Result:  MATCH (cap has implicit ext=*)
+	cap, err := NewCapUrnFromString("cap:op=generate_thumbnail;out=std:binary.v1")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate_thumbnail;out=std:binary.v1;ext=wav")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 7: Fallback pattern should match (cap missing ext = implicit wildcard)")
+}
+
+func TestMatchingSemantics_Test8_EmptyCapMatchesAnything(t *testing.T) {
+	// Test 8: Empty cap matches anything
+	// Cap:     cap:
+	// Request: cap:op=generate;ext=pdf
+	// Result:  MATCH
+	cap, err := NewCapUrnFromString("cap:")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:op=generate;ext=pdf")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 8: Empty cap should match anything")
+}
+
+func TestMatchingSemantics_Test9_CrossDimensionIndependence(t *testing.T) {
+	// Test 9: Cross-dimension independence
+	// Cap:     cap:op=generate
+	// Request: cap:ext=pdf
+	// Result:  MATCH (both have implicit wildcards for missing tags)
+	cap, err := NewCapUrnFromString("cap:op=generate")
+	require.NoError(t, err)
+
+	request, err := NewCapUrnFromString("cap:ext=pdf")
+	require.NoError(t, err)
+
+	assert.True(t, cap.Matches(request), "Test 9: Cross-dimension independence should match")
+}
