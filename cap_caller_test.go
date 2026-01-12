@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockCapHost implements CapHost for testing
-type MockCapHost struct {
+// MockCapSet implements CapSet for testing
+type MockCapSet struct {
 	expectedCapUrn         string
 	expectedPositionalArgs []string
 	expectedNamedArgs      map[string]string
@@ -18,7 +18,7 @@ type MockCapHost struct {
 	returnError            error
 }
 
-func (m *MockCapHost) ExecuteCap(
+func (m *MockCapSet) ExecuteCap(
 	ctx context.Context,
 	capUrn string,
 	positionalArgs []string,
@@ -39,14 +39,14 @@ func TestCapCallerCreation(t *testing.T) {
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
-	mockHost := &MockCapHost{}
+	mockHost := &MockCapSet{}
 
 	caller := NewCapCaller("cap:op=test", mockHost, capDef)
 
 	assert.NotNil(t, caller)
 	assert.Equal(t, "cap:op=test", caller.cap)
 	assert.Equal(t, capDef, caller.capDefinition)
-	assert.Equal(t, mockHost, caller.capHost)
+	assert.Equal(t, mockHost, caller.capSet)
 }
 
 func TestCapCallerConvertToString(t *testing.T) {
@@ -54,7 +54,7 @@ func TestCapCallerConvertToString(t *testing.T) {
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
-	mockHost := &MockCapHost{}
+	mockHost := &MockCapSet{}
 	caller := NewCapCaller("cap:op=test", mockHost, capDef)
 
 	// Test different type conversions
@@ -66,7 +66,7 @@ func TestCapCallerConvertToString(t *testing.T) {
 }
 
 func TestCapCallerResolveOutputSpec(t *testing.T) {
-	mockHost := &MockCapHost{}
+	mockHost := &MockCapSet{}
 
 	// Test binary cap using the 'out' tag with spec ID
 	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
@@ -133,7 +133,7 @@ func TestCapCallerCall(t *testing.T) {
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
 	capDef.SetOutput(NewCapOutput(SpecIDStr, "Test output"))
 
-	mockHost := &MockCapHost{
+	mockHost := &MockCapSet{
 		expectedCapUrn: "cap:op=test;out=std:str.v1",
 		returnResult: &HostResult{
 			TextOutput: "test result",
@@ -163,7 +163,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 	capDef.AddRequiredArgument(NewCapArgument("input", SpecIDStr, "Input file", "--input"))
 	capDef.SetOutput(NewCapOutput(SpecIDObj, "Process output"))
 
-	mockHost := &MockCapHost{
+	mockHost := &MockCapSet{
 		returnResult: &HostResult{
 			TextOutput: `{"status": "ok"}`,
 		},
@@ -189,7 +189,7 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 	capDef.SetOutput(NewCapOutput(SpecIDBinary, "Binary output"))
 
 	pngHeader := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
-	mockHost := &MockCapHost{
+	mockHost := &MockCapSet{
 		returnResult: &HostResult{
 			BinaryOutput: pngHeader,
 		},

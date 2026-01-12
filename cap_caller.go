@@ -11,12 +11,12 @@ import (
 // CapCaller executes caps via host service with strict validation
 type CapCaller struct {
 	cap           string
-	capHost       CapHost
+	capSet       CapSet
 	capDefinition *Cap
 }
 
-// CapHost defines the interface for cap host communication
-type CapHost interface {
+// CapSet defines the interface for cap host communication
+type CapSet interface {
 	ExecuteCap(
 		ctx context.Context,
 		capUrn string,
@@ -33,10 +33,10 @@ type HostResult struct {
 }
 
 // NewCapCaller creates a new cap caller with validation
-func NewCapCaller(cap string, capHost CapHost, capDefinition *Cap) *CapCaller {
+func NewCapCaller(cap string, capSet CapSet, capDefinition *Cap) *CapCaller {
 	return &CapCaller{
 		cap:           cap,
-		capHost:       capHost,
+		capSet:       capSet,
 		capDefinition: capDefinition,
 	}
 }
@@ -73,7 +73,7 @@ func (cc *CapCaller) Call(
 	}
 
 	// Execute via cap host method with stdin support
-	result, err := cc.capHost.ExecuteCap(
+	result, err := cc.capSet.ExecuteCap(
 		ctx,
 		cc.cap,
 		stringPositionalArgs,

@@ -90,7 +90,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	capDef.AddRequiredArgument(arg)
 
 	// Mock host that returns JSON
-	mockHost := &MockCapHost{
+	mockHost := &MockCapSet{
 		returnResult: &HostResult{
 			TextOutput: `{"title": "Test Document", "pages": 10}`,
 		},
@@ -137,7 +137,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 
 	// Mock host that returns binary data
 	pngHeader := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
-	mockHost := &MockCapHost{
+	mockHost := &MockCapSet{
 		returnResult: &HostResult{
 			BinaryOutput: pngHeader,
 		},
@@ -176,7 +176,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 	capDef.AddRequiredArgument(arg)
 
 	// Mock host that returns text
-	mockHost := &MockCapHost{
+	mockHost := &MockCapSet{
 		returnResult: &HostResult{
 			TextOutput: "Formatted output text",
 		},
@@ -228,7 +228,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 	capDef.SetOutput(NewCapOutput("my:result.v1", "Query result"))
 
 	// Mock host
-	mockHost := &MockCapHost{
+	mockHost := &MockCapSet{
 		returnResult: &HostResult{
 			TextOutput: `{"items": ["a", "b", "c"], "count": 3}`,
 		},

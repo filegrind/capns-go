@@ -1,66 +1,66 @@
-// Package capns provides CapHost registry for unified capability host discovery
+// Package capns provides CapSet registry for unified capability host discovery
 package capns
 
 import (
 	"fmt"
 )
 
-// CapHostRegistryError represents errors that can occur during capability host operations
-type CapHostRegistryError struct {
+// CapMatrixError represents errors that can occur during capability host operations
+type CapMatrixError struct {
 	Type    string
 	Message string
 }
 
-func (e *CapHostRegistryError) Error() string {
+func (e *CapMatrixError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Type, e.Message)
 }
 
 // NewNoHostsFoundError creates a new error for when no hosts are found
-func NewNoHostsFoundError(capability string) *CapHostRegistryError {
-	return &CapHostRegistryError{
+func NewNoHostsFoundError(capability string) *CapMatrixError {
+	return &CapMatrixError{
 		Type:    "NoHostsFound",
 		Message: fmt.Sprintf("No capability hosts found for capability: %s", capability),
 	}
 }
 
 // NewInvalidUrnError creates a new error for invalid URNs
-func NewInvalidUrnError(urn, reason string) *CapHostRegistryError {
-	return &CapHostRegistryError{
+func NewInvalidUrnError(urn, reason string) *CapMatrixError {
+	return &CapMatrixError{
 		Type:    "InvalidUrn",
 		Message: fmt.Sprintf("Invalid capability URN: %s: %s", urn, reason),
 	}
 }
 
 // NewRegistryError creates a new general registry error
-func NewRegistryError(message string) *CapHostRegistryError {
-	return &CapHostRegistryError{
+func NewRegistryError(message string) *CapMatrixError {
+	return &CapMatrixError{
 		Type:    "RegistryError",
 		Message: message,
 	}
 }
 
-// capHostEntry represents a registered capability host
-type capHostEntry struct {
+// capSetEntry represents a registered capability host
+type capSetEntry struct {
 	name         string
-	host         CapHost
+	host         CapSet
 	capabilities []*Cap
 }
 
-// CapHostRegistry provides unified registry for capability hosts (providers and plugins)
-type CapHostRegistry struct {
-	hosts map[string]*capHostEntry
+// CapMatrix provides unified registry for capability hosts (providers and plugins)
+type CapMatrix struct {
+	hosts map[string]*capSetEntry
 }
 
-// NewCapHostRegistry creates a new empty capability host registry
-func NewCapHostRegistry() *CapHostRegistry {
-	return &CapHostRegistry{
-		hosts: make(map[string]*capHostEntry),
+// NewCapMatrix creates a new empty capability host registry
+func NewCapMatrix() *CapMatrix {
+	return &CapMatrix{
+		hosts: make(map[string]*capSetEntry),
 	}
 }
 
-// RegisterCapHost registers a capability host with its supported capabilities
-func (r *CapHostRegistry) RegisterCapHost(name string, host CapHost, capabilities []*Cap) error {
-	entry := &capHostEntry{
+// RegisterCapSet registers a capability host with its supported capabilities
+func (r *CapMatrix) RegisterCapSet(name string, host CapSet, capabilities []*Cap) error {
+	entry := &capSetEntry{
 		name:         name,
 		host:         host,
 		capabilities: capabilities,
@@ -70,15 +70,15 @@ func (r *CapHostRegistry) RegisterCapHost(name string, host CapHost, capabilitie
 	return nil
 }
 
-// FindCapHosts finds capability hosts that can handle the requested capability
+// FindCapSets finds capability hosts that can handle the requested capability
 // Uses subset matching: host capabilities must be a subset of or match the request
-func (r *CapHostRegistry) FindCapHosts(requestUrn string) ([]CapHost, error) {
+func (r *CapMatrix) FindCapSets(requestUrn string) ([]CapSet, error) {
 	request, err := NewCapUrnFromString(requestUrn)
 	if err != nil {
 		return nil, NewInvalidUrnError(requestUrn, err.Error())
 	}
 	
-	var matchingHosts []CapHost
+	var matchingHosts []CapSet
 	
 	for _, entry := range r.hosts {
 		for _, cap := range entry.capabilities {
@@ -103,14 +103,14 @@ func (r *CapHostRegistry) FindCapHosts(requestUrn string) ([]CapHost, error) {
 	return matchingHosts, nil
 }
 
-// FindBestCapHost finds the best capability host and cap definition for the request using specificity ranking
-func (r *CapHostRegistry) FindBestCapHost(requestUrn string) (CapHost, *Cap, error) {
+// FindBestCapSet finds the best capability host and cap definition for the request using specificity ranking
+func (r *CapMatrix) FindBestCapSet(requestUrn string) (CapSet, *Cap, error) {
 	request, err := NewCapUrnFromString(requestUrn)
 	if err != nil {
 		return nil, nil, NewInvalidUrnError(requestUrn, err.Error())
 	}
 	
-	var bestHost CapHost
+	var bestHost CapSet
 	var bestCap *Cap
 	var bestSpecificity int = -1
 	
@@ -143,7 +143,7 @@ func (r *CapHostRegistry) FindBestCapHost(requestUrn string) (CapHost, *Cap, err
 }
 
 // GetHostNames returns all registered capability host names
-func (r *CapHostRegistry) GetHostNames() []string {
+func (r *CapMatrix) GetHostNames() []string {
 	names := make([]string, 0, len(r.hosts))
 	for name := range r.hosts {
 		names = append(names, name)
@@ -152,7 +152,7 @@ func (r *CapHostRegistry) GetHostNames() []string {
 }
 
 // GetAllCapabilities returns all capabilities from all registered hosts
-func (r *CapHostRegistry) GetAllCapabilities() []*Cap {
+func (r *CapMatrix) GetAllCapabilities() []*Cap {
 	var capabilities []*Cap
 	for _, entry := range r.hosts {
 		capabilities = append(capabilities, entry.capabilities...)
@@ -161,13 +161,13 @@ func (r *CapHostRegistry) GetAllCapabilities() []*Cap {
 }
 
 // CanHandle checks if any host can handle the specified capability
-func (r *CapHostRegistry) CanHandle(requestUrn string) bool {
-	_, err := r.FindCapHosts(requestUrn)
+func (r *CapMatrix) CanHandle(requestUrn string) bool {
+	_, err := r.FindCapSets(requestUrn)
 	return err == nil
 }
 
-// UnregisterCapHost unregisters a capability host
-func (r *CapHostRegistry) UnregisterCapHost(name string) bool {
+// UnregisterCapSet unregisters a capability host
+func (r *CapMatrix) UnregisterCapSet(name string) bool {
 	if _, exists := r.hosts[name]; exists {
 		delete(r.hosts, name)
 		return true
@@ -176,6 +176,6 @@ func (r *CapHostRegistry) UnregisterCapHost(name string) bool {
 }
 
 // Clear removes all registered hosts
-func (r *CapHostRegistry) Clear() {
-	r.hosts = make(map[string]*capHostEntry)
+func (r *CapMatrix) Clear() {
+	r.hosts = make(map[string]*capSetEntry)
 }

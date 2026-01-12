@@ -5,12 +5,12 @@ import (
 	"testing"
 )
 
-// MockCapHostForRegistry for testing (avoid conflict with existing MockCapHost)
-type MockCapHostForRegistry struct {
+// MockCapSetForRegistry for testing (avoid conflict with existing MockCapSet)
+type MockCapSetForRegistry struct {
 	name string
 }
 
-func (m *MockCapHostForRegistry) ExecuteCap(
+func (m *MockCapSetForRegistry) ExecuteCap(
 	ctx context.Context,
 	capUrn string,
 	positionalArgs []string,
@@ -22,10 +22,10 @@ func (m *MockCapHostForRegistry) ExecuteCap(
 	}, nil
 }
 
-func TestRegisterAndFindCapHost(t *testing.T) {
-	registry := NewCapHostRegistry()
+func TestRegisterAndFindCapSet(t *testing.T) {
+	registry := NewCapMatrix()
 	
-	host := &MockCapHostForRegistry{name: "test-host"}
+	host := &MockCapSetForRegistry{name: "test-host"}
 	
 	capUrn, err := NewCapUrnFromString("cap:op=test;type=basic")
 	if err != nil {
@@ -41,13 +41,13 @@ func TestRegisterAndFindCapHost(t *testing.T) {
 		Output:         nil,
 	}
 	
-	err = registry.RegisterCapHost("test-host", host, []*Cap{cap})
+	err = registry.RegisterCapSet("test-host", host, []*Cap{cap})
 	if err != nil {
 		t.Fatalf("Failed to register cap host: %v", err)
 	}
 	
 	// Test exact match
-	hosts, err := registry.FindCapHosts("cap:op=test;type=basic")
+	hosts, err := registry.FindCapSets("cap:op=test;type=basic")
 	if err != nil {
 		t.Fatalf("Failed to find cap hosts: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRegisterAndFindCapHost(t *testing.T) {
 	}
 	
 	// Test subset match (request has more specific requirements)
-	hosts, err = registry.FindCapHosts("cap:op=test;type=basic;model=gpt-4")
+	hosts, err = registry.FindCapSets("cap:op=test;type=basic;model=gpt-4")
 	if err != nil {
 		t.Fatalf("Failed to find cap hosts for subset match: %v", err)
 	}
@@ -65,17 +65,17 @@ func TestRegisterAndFindCapHost(t *testing.T) {
 	}
 	
 	// Test no match
-	_, err = registry.FindCapHosts("cap:op=different")
+	_, err = registry.FindCapSets("cap:op=different")
 	if err == nil {
 		t.Error("Expected error for non-matching capability, got nil")
 	}
 }
 
-func TestBestCapHostSelection(t *testing.T) {
-	registry := NewCapHostRegistry()
+func TestBestCapSetSelection(t *testing.T) {
+	registry := NewCapMatrix()
 	
 	// Register general host
-	generalHost := &MockCapHostForRegistry{name: "general"}
+	generalHost := &MockCapSetForRegistry{name: "general"}
 	generalCapUrn, _ := NewCapUrnFromString("cap:op=generate")
 	generalCap := &Cap{
 		Urn:            generalCapUrn,
@@ -87,7 +87,7 @@ func TestBestCapHostSelection(t *testing.T) {
 	}
 	
 	// Register specific host
-	specificHost := &MockCapHostForRegistry{name: "specific"}
+	specificHost := &MockCapSetForRegistry{name: "specific"}
 	specificCapUrn, _ := NewCapUrnFromString("cap:op=generate;type=text;model=gpt-4")
 	specificCap := &Cap{
 		Urn:            specificCapUrn,
@@ -98,11 +98,11 @@ func TestBestCapHostSelection(t *testing.T) {
 		Output:         nil,
 	}
 	
-	registry.RegisterCapHost("general", generalHost, []*Cap{generalCap})
-	registry.RegisterCapHost("specific", specificHost, []*Cap{specificCap})
+	registry.RegisterCapSet("general", generalHost, []*Cap{generalCap})
+	registry.RegisterCapSet("specific", specificHost, []*Cap{specificCap})
 	
 	// Request should match the more specific host
-	bestHost, bestCap, err := registry.FindBestCapHost("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
+	bestHost, bestCap, err := registry.FindBestCapSet("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
 	if err != nil {
 		t.Fatalf("Failed to find best cap host: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestBestCapHostSelection(t *testing.T) {
 	}
 	
 	// Both hosts should match
-	allHosts, err := registry.FindCapHosts("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
+	allHosts, err := registry.FindCapSets("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
 	if err != nil {
 		t.Fatalf("Failed to find all matching hosts: %v", err)
 	}
@@ -126,23 +126,23 @@ func TestBestCapHostSelection(t *testing.T) {
 }
 
 func TestInvalidUrnHandling(t *testing.T) {
-	registry := NewCapHostRegistry()
+	registry := NewCapMatrix()
 	
-	_, err := registry.FindCapHosts("invalid-urn")
+	_, err := registry.FindCapSets("invalid-urn")
 	if err == nil {
 		t.Error("Expected error for invalid URN, got nil")
 	}
 	
-	capHostErr, ok := err.(*CapHostRegistryError)
+	capSetErr, ok := err.(*CapMatrixError)
 	if !ok {
-		t.Errorf("Expected CapHostRegistryError, got %T", err)
-	} else if capHostErr.Type != "InvalidUrn" {
-		t.Errorf("Expected InvalidUrn error type, got %s", capHostErr.Type)
+		t.Errorf("Expected CapMatrixError, got %T", err)
+	} else if capSetErr.Type != "InvalidUrn" {
+		t.Errorf("Expected InvalidUrn error type, got %s", capSetErr.Type)
 	}
 }
 
 func TestCanHandle(t *testing.T) {
-	registry := NewCapHostRegistry()
+	registry := NewCapMatrix()
 	
 	// Empty registry
 	if registry.CanHandle("cap:op=test") {
@@ -150,7 +150,7 @@ func TestCanHandle(t *testing.T) {
 	}
 	
 	// After registration
-	host := &MockCapHostForRegistry{name: "test"}
+	host := &MockCapSetForRegistry{name: "test"}
 	capUrn, _ := NewCapUrnFromString("cap:op=test")
 	cap := &Cap{
 		Urn:            capUrn,
@@ -161,7 +161,7 @@ func TestCanHandle(t *testing.T) {
 		Output:         nil,
 	}
 	
-	registry.RegisterCapHost("test", host, []*Cap{cap})
+	registry.RegisterCapSet("test", host, []*Cap{cap})
 	
 	if !registry.CanHandle("cap:op=test") {
 		t.Error("Registry should handle registered capability")
