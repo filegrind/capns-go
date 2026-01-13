@@ -34,28 +34,28 @@ func (m *MockCapSet) ExecuteCap(
 }
 
 func TestCapCallerCreation(t *testing.T) {
-	// Setup test data
-	capUrn, err := NewCapUrnFromString("cap:op=test")
+	// Setup test data - now with required in/out
+	capUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:str.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
 	mockHost := &MockCapSet{}
 
-	caller := NewCapCaller("cap:op=test", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=test;out=std:str.v1", mockHost, capDef)
 
 	assert.NotNil(t, caller)
-	assert.Equal(t, "cap:op=test", caller.cap)
+	assert.Equal(t, "cap:in=std:void.v1;op=test;out=std:str.v1", caller.cap)
 	assert.Equal(t, capDef, caller.capDefinition)
 	assert.Equal(t, mockHost, caller.capSet)
 }
 
 func TestCapCallerConvertToString(t *testing.T) {
-	capUrn, err := NewCapUrnFromString("cap:op=test")
+	capUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:str.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
 	mockHost := &MockCapSet{}
-	caller := NewCapCaller("cap:op=test", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=test;out=std:str.v1", mockHost, capDef)
 
 	// Test different type conversions
 	assert.Equal(t, "hello", caller.convertToString("hello"))
@@ -69,22 +69,22 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	mockHost := &MockCapSet{}
 
 	// Test binary cap using the 'out' tag with spec ID
-	binaryCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
+	binaryCapUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=generate;out=std:binary.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(binaryCapUrn, "Test Capability", "test-command")
-	caller := NewCapCaller("cap:op=generate;out=std:binary.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=generate;out=std:binary.v1", mockHost, capDef)
 
 	resolved, err := caller.resolveOutputSpec()
 	require.NoError(t, err)
 	assert.True(t, resolved.IsBinary())
 
 	// Test non-binary cap (text output)
-	textCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:str.v1")
+	textCapUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=generate;out=std:str.v1")
 	require.NoError(t, err)
 
 	capDef2 := NewCap(textCapUrn, "Test Capability", "test-command")
-	caller2 := NewCapCaller("cap:op=generate;out=std:str.v1", mockHost, capDef2)
+	caller2 := NewCapCaller("cap:in=std:void.v1;op=generate;out=std:str.v1", mockHost, capDef2)
 
 	resolved2, err := caller2.resolveOutputSpec()
 	require.NoError(t, err)
@@ -92,33 +92,22 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	assert.True(t, resolved2.IsText())
 
 	// Test JSON cap with object output
-	jsonCapUrn, err := NewCapUrnFromString("cap:op=generate;out=std:obj.v1")
+	jsonCapUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=generate;out=std:obj.v1")
 	require.NoError(t, err)
 
 	capDef3 := NewCap(jsonCapUrn, "Test Capability", "test-command")
-	caller3 := NewCapCaller("cap:op=generate;out=std:obj.v1", mockHost, capDef3)
+	caller3 := NewCapCaller("cap:in=std:void.v1;op=generate;out=std:obj.v1", mockHost, capDef3)
 
 	resolved3, err := caller3.resolveOutputSpec()
 	require.NoError(t, err)
 	assert.True(t, resolved3.IsJSON())
 
-	// Test cap without output tag - MUST FAIL
-	noOutCapUrn, err := NewCapUrnFromString("cap:op=generate")
-	require.NoError(t, err)
-
-	capDef4 := NewCap(noOutCapUrn, "Test Capability", "test-command")
-	caller4 := NewCapCaller("cap:op=generate", mockHost, capDef4)
-
-	_, err = caller4.resolveOutputSpec()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required 'out' tag")
-
 	// Test cap with unresolvable spec ID - MUST FAIL
-	badSpecCapUrn, err := NewCapUrnFromString("cap:op=generate;out=unknown:spec.v1")
+	badSpecCapUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=generate;out=unknown:spec.v1")
 	require.NoError(t, err)
 
 	capDef5 := NewCap(badSpecCapUrn, "Test Capability", "test-command")
-	caller5 := NewCapCaller("cap:op=generate;out=unknown:spec.v1", mockHost, capDef5)
+	caller5 := NewCapCaller("cap:in=std:void.v1;op=generate;out=unknown:spec.v1", mockHost, capDef5)
 
 	_, err = caller5.resolveOutputSpec()
 	require.Error(t, err)
@@ -127,20 +116,20 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 
 func TestCapCallerCall(t *testing.T) {
 	// Setup test data
-	capUrn, err := NewCapUrnFromString("cap:op=test;out=std:str.v1")
+	capUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:str.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
 	capDef.SetOutput(NewCapOutput(SpecIDStr, "Test output"))
 
 	mockHost := &MockCapSet{
-		expectedCapUrn: "cap:op=test;out=std:str.v1",
+		expectedCapUrn: "cap:in=std:void.v1;op=test;out=std:str.v1",
 		returnResult: &HostResult{
 			TextOutput: "test result",
 		},
 	}
 
-	caller := NewCapCaller("cap:op=test;out=std:str.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=test;out=std:str.v1", mockHost, capDef)
 
 	// Test call with no arguments
 	ctx := context.Background()
@@ -156,7 +145,7 @@ func TestCapCallerCall(t *testing.T) {
 
 func TestCapCallerWithArguments(t *testing.T) {
 	// Setup test data with arguments
-	capUrn, err := NewCapUrnFromString("cap:op=process;out=std:obj.v1")
+	capUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=process;out=std:obj.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
@@ -169,7 +158,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=process;out=std:obj.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=process;out=std:obj.v1", mockHost, capDef)
 
 	// Test call with positional argument
 	ctx := context.Background()
@@ -182,7 +171,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 
 func TestCapCallerBinaryResponse(t *testing.T) {
 	// Setup binary cap
-	capUrn, err := NewCapUrnFromString("cap:op=generate;out=std:binary.v1")
+	capUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=generate;out=std:binary.v1")
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Generate Capability", "generate-command")
@@ -195,7 +184,7 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=generate;out=std:binary.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=generate;out=std:binary.v1", mockHost, capDef)
 
 	// Test call
 	ctx := context.Background()

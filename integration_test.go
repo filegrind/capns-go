@@ -8,16 +8,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test helper for integration tests
+func intTestUrn(tags string) string {
+	if tags == "" {
+		return "cap:in=std:void.v1;out=std:obj.v1"
+	}
+	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+}
+
 // TestIntegrationVersionlessCapCreation verifies caps can be created without version fields
 func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	// Test case 1: Create cap without version parameter
-	urn, err := NewCapUrnFromString("cap:op=transform;format=json;type=data_processing")
+	urn, err := NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Data Transformer", "transform-command")
 
-	// Verify the cap doesn't have version field
-	assert.Equal(t, "cap:format=json;op=transform;type=data_processing", cap.UrnString())
+	// Verify the cap has direction specs in canonical form
+	assert.Contains(t, cap.UrnString(), "in=std:void.v1")
+	assert.Contains(t, cap.UrnString(), "out=std:obj.v1")
 	assert.Equal(t, "transform-command", cap.Command)
 
 	// Test case 2: Create cap with description but no version
@@ -29,7 +38,7 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	assert.True(t, cap.Equals(cap))
 
 	// Different caps should not be equal
-	urn2, _ := NewCapUrnFromString("cap:op=generate;format=pdf")
+	urn2, _ := NewCapUrnFromString(intTestUrn("op=generate;format=pdf"))
 	cap3 := NewCap(urn2, "PDF Generator", "generate-command")
 	assert.False(t, cap.Equals(cap3))
 }
@@ -37,10 +46,10 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 // TestIntegrationCaseInsensitiveUrns verifies URNs are case-insensitive
 func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 	// Test case 1: Different case inputs should produce same URN
-	urn1, err := NewCapUrnFromString("cap:OP=Transform;FORMAT=JSON;Type=Data_Processing")
+	urn1, err := NewCapUrnFromString(intTestUrn("OP=Transform;FORMAT=JSON;Type=Data_Processing"))
 	require.NoError(t, err)
 
-	urn2, err := NewCapUrnFromString("cap:op=transform;format=json;type=data_processing")
+	urn2, err := NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	// URNs should be equal
@@ -66,6 +75,8 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 
 	// Test case 4: Builder preserves value case
 	urn3, err := NewCapUrnBuilder().
+		InSpec("std:void.v1").
+		OutSpec("std:obj.v1").
 		Tag("OP", "Transform"). // value case preserved
 		Tag("Format", "JSON").  // value case preserved
 		Build()
@@ -79,7 +90,7 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 // TestIntegrationCallerAndResponseSystem verifies the caller and response system
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	// Setup test cap definition with spec IDs
-	urn, err := NewCapUrnFromString("cap:op=extract;target=metadata;out=std:obj.v1")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=extract;out=std:obj.v1;target=metadata")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
@@ -97,7 +108,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	}
 
 	// Create caller
-	caller := NewCapCaller("cap:op=extract;target=metadata;out=std:obj.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=extract;out=std:obj.v1;target=metadata", mockHost, capDef)
 
 	// Test call with valid arguments
 	ctx := context.Background()
@@ -129,7 +140,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 // TestIntegrationBinaryCapHandling verifies binary cap handling
 func TestIntegrationBinaryCapHandling(t *testing.T) {
 	// Setup binary cap
-	urn, err := NewCapUrnFromString("cap:op=generate;target=thumbnail;out=std:binary.v1")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=generate;out=std:binary.v1;target=thumbnail")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
@@ -143,7 +154,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=generate;target=thumbnail;out=std:binary.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=generate;out=std:binary.v1;target=thumbnail", mockHost, capDef)
 
 	// Test binary response
 	ctx := context.Background()
@@ -165,7 +176,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 // TestIntegrationTextCapHandling verifies text cap handling
 func TestIntegrationTextCapHandling(t *testing.T) {
 	// Setup text cap
-	urn, err := NewCapUrnFromString("cap:op=format;target=text;out=std:str.v1")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=format;out=std:str.v1;target=text")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Text Formatter", "format-text")
@@ -182,7 +193,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=format;target=text;out=std:str.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=format;out=std:str.v1;target=text", mockHost, capDef)
 
 	// Test text response
 	ctx := context.Background()
@@ -203,7 +214,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 // TestIntegrationCapWithMediaSpecs verifies caps with custom media specs
 func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 	// Setup cap with custom media spec
-	urn, err := NewCapUrnFromString("cap:op=query;target=data;out=my:result.v1")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=query;out=my:result.v1;target=data")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Query", "query-data")
@@ -234,7 +245,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:op=query;target=data;out=my:result.v1", mockHost, capDef)
+	caller := NewCapCaller("cap:in=std:void.v1;op=query;out=my:result.v1;target=data", mockHost, capDef)
 
 	// Test call
 	ctx := context.Background()
@@ -255,7 +266,7 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a cap with arguments
-	urn, err := NewCapUrnFromString("cap:op=process;target=data;out=std:obj.v1")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=process;out=std:obj.v1;target=data")
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Processor", "process-data")

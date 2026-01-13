@@ -31,6 +31,7 @@ const (
 	SpecIDBoolArray = "std:bool-array.v1"
 	SpecIDObjArray = "std:obj-array.v1"
 	SpecIDBinary   = "std:binary.v1"
+	SpecIDVoid     = "std:void.v1"
 )
 
 // Profile URL constants
@@ -46,6 +47,7 @@ const (
 	ProfileNumArray  = "https://capns.org/schema/num-array"
 	ProfileBoolArray = "https://capns.org/schema/bool-array"
 	ProfileObjArray  = "https://capns.org/schema/obj-array"
+	ProfileVoid      = "https://capns.org/schema/void"
 )
 
 // MediaSpecDefObject represents the rich object form of a media spec definition
@@ -279,6 +281,8 @@ func resolveBuiltin(specID string) *ResolvedMediaSpec {
 		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/json", ProfileURI: ProfileObjArray}
 	case SpecIDBinary:
 		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/octet-stream", ProfileURI: ""}
+	case SpecIDVoid:
+		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/x-void", ProfileURI: ProfileVoid}
 	default:
 		return nil
 	}

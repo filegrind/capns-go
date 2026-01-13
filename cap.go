@@ -683,9 +683,17 @@ func (c *Cap) Equals(other *Cap) bool {
 
 // MarshalJSON implements custom JSON marshaling
 func (c *Cap) MarshalJSON() ([]byte, error) {
+	// Build complete tags map including in and out
+	allTags := make(map[string]string)
+	allTags["in"] = c.Urn.inSpec
+	allTags["out"] = c.Urn.outSpec
+	for k, v := range c.Urn.tags {
+		allTags[k] = v
+	}
+
 	capData := map[string]interface{}{
 		"urn": map[string]interface{}{
-			"tags": c.Urn.tags,
+			"tags": allTags,
 		},
 		"title":   c.Title,
 		"command": c.Command,
@@ -759,7 +767,11 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 				tags[k] = s
 			}
 		}
-		urn = NewCapUrnFromTags(tags)
+		var err error
+		urn, err = NewCapUrnFromTags(tags)
+		if err != nil {
+			return fmt.Errorf("failed to create URN from tags: %v", err)
+		}
 	default:
 		return fmt.Errorf("URN field must be string or object")
 	}

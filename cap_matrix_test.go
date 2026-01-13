@@ -22,16 +22,24 @@ func (m *MockCapSetForRegistry) ExecuteCap(
 	}, nil
 }
 
+// Test helper for matrix tests
+func matrixTestUrn(tags string) string {
+	if tags == "" {
+		return "cap:in=std:void.v1;out=std:obj.v1"
+	}
+	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+}
+
 func TestRegisterAndFindCapSet(t *testing.T) {
 	registry := NewCapMatrix()
-	
+
 	host := &MockCapSetForRegistry{name: "test-host"}
-	
-	capUrn, err := NewCapUrnFromString("cap:op=test;type=basic")
+
+	capUrn, err := NewCapUrnFromString(matrixTestUrn("op=test;type=basic"))
 	if err != nil {
 		t.Fatalf("Failed to create CapUrn: %v", err)
 	}
-	
+
 	cap := &Cap{
 		Urn:            capUrn,
 		CapDescription: stringPtr("Test capability"),
@@ -40,32 +48,32 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
 		Output:         nil,
 	}
-	
+
 	err = registry.RegisterCapSet("test-host", host, []*Cap{cap})
 	if err != nil {
 		t.Fatalf("Failed to register cap host: %v", err)
 	}
-	
+
 	// Test exact match
-	hosts, err := registry.FindCapSets("cap:op=test;type=basic")
+	sets, err := registry.FindCapSets(matrixTestUrn("op=test;type=basic"))
 	if err != nil {
-		t.Fatalf("Failed to find cap hosts: %v", err)
+		t.Fatalf("Failed to find cap sets: %v", err)
 	}
-	if len(hosts) != 1 {
-		t.Errorf("Expected 1 host, got %d", len(hosts))
+	if len(sets) != 1 {
+		t.Errorf("Expected 1 host, got %d", len(sets))
 	}
-	
+
 	// Test subset match (request has more specific requirements)
-	hosts, err = registry.FindCapSets("cap:op=test;type=basic;model=gpt-4")
+	sets, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;type=basic"))
 	if err != nil {
-		t.Fatalf("Failed to find cap hosts for subset match: %v", err)
+		t.Fatalf("Failed to find cap sets for subset match: %v", err)
 	}
-	if len(hosts) != 1 {
-		t.Errorf("Expected 1 host for subset match, got %d", len(hosts))
+	if len(sets) != 1 {
+		t.Errorf("Expected 1 host for subset match, got %d", len(sets))
 	}
-	
-	// Test no match
-	_, err = registry.FindCapSets("cap:op=different")
+
+	// Test no match (different direction specs)
+	_, err = registry.FindCapSets("cap:in=std:binary.v1;op=different;out=std:obj.v1")
 	if err == nil {
 		t.Error("Expected error for non-matching capability, got nil")
 	}
@@ -73,10 +81,10 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 
 func TestBestCapSetSelection(t *testing.T) {
 	registry := NewCapMatrix()
-	
+
 	// Register general host
 	generalHost := &MockCapSetForRegistry{name: "general"}
-	generalCapUrn, _ := NewCapUrnFromString("cap:op=generate")
+	generalCapUrn, _ := NewCapUrnFromString(matrixTestUrn("op=generate"))
 	generalCap := &Cap{
 		Urn:            generalCapUrn,
 		CapDescription: stringPtr("General generation"),
@@ -85,10 +93,10 @@ func TestBestCapSetSelection(t *testing.T) {
 		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
 		Output:         nil,
 	}
-	
+
 	// Register specific host
 	specificHost := &MockCapSetForRegistry{name: "specific"}
-	specificCapUrn, _ := NewCapUrnFromString("cap:op=generate;type=text;model=gpt-4")
+	specificCapUrn, _ := NewCapUrnFromString(matrixTestUrn("model=gpt-4;op=generate;type=text"))
 	specificCap := &Cap{
 		Urn:            specificCapUrn,
 		CapDescription: stringPtr("Specific text generation"),
@@ -97,16 +105,16 @@ func TestBestCapSetSelection(t *testing.T) {
 		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
 		Output:         nil,
 	}
-	
+
 	registry.RegisterCapSet("general", generalHost, []*Cap{generalCap})
 	registry.RegisterCapSet("specific", specificHost, []*Cap{specificCap})
-	
+
 	// Request should match the more specific host
-	bestHost, bestCap, err := registry.FindBestCapSet("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
+	bestHost, bestCap, err := registry.FindBestCapSet(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;type=text"))
 	if err != nil {
 		t.Fatalf("Failed to find best cap host: %v", err)
 	}
-	
+
 	// Should get the specific host (though we can't directly compare interfaces)
 	if bestHost == nil {
 		t.Error("Expected a host, got nil")
@@ -114,25 +122,25 @@ func TestBestCapSetSelection(t *testing.T) {
 	if bestCap == nil {
 		t.Error("Expected a cap definition, got nil")
 	}
-	
-	// Both hosts should match
-	allHosts, err := registry.FindCapSets("cap:op=generate;type=text;model=gpt-4;temperature=0.7")
+
+	// Both sets should match
+	allHosts, err := registry.FindCapSets(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;type=text"))
 	if err != nil {
-		t.Fatalf("Failed to find all matching hosts: %v", err)
+		t.Fatalf("Failed to find all matching sets: %v", err)
 	}
 	if len(allHosts) != 2 {
-		t.Errorf("Expected 2 hosts, got %d", len(allHosts))
+		t.Errorf("Expected 2 sets, got %d", len(allHosts))
 	}
 }
 
 func TestInvalidUrnHandling(t *testing.T) {
 	registry := NewCapMatrix()
-	
+
 	_, err := registry.FindCapSets("invalid-urn")
 	if err == nil {
 		t.Error("Expected error for invalid URN, got nil")
 	}
-	
+
 	capSetErr, ok := err.(*CapMatrixError)
 	if !ok {
 		t.Errorf("Expected CapMatrixError, got %T", err)
@@ -143,15 +151,15 @@ func TestInvalidUrnHandling(t *testing.T) {
 
 func TestCanHandle(t *testing.T) {
 	registry := NewCapMatrix()
-	
+
 	// Empty registry
-	if registry.CanHandle("cap:op=test") {
+	if registry.CanHandle(matrixTestUrn("op=test")) {
 		t.Error("Empty registry should not handle any capability")
 	}
-	
+
 	// After registration
 	host := &MockCapSetForRegistry{name: "test"}
-	capUrn, _ := NewCapUrnFromString("cap:op=test")
+	capUrn, _ := NewCapUrnFromString(matrixTestUrn("op=test"))
 	cap := &Cap{
 		Urn:            capUrn,
 		CapDescription: stringPtr("Test"),
@@ -160,16 +168,16 @@ func TestCanHandle(t *testing.T) {
 		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
 		Output:         nil,
 	}
-	
+
 	registry.RegisterCapSet("test", host, []*Cap{cap})
-	
-	if !registry.CanHandle("cap:op=test") {
+
+	if !registry.CanHandle(matrixTestUrn("op=test")) {
 		t.Error("Registry should handle registered capability")
 	}
-	if !registry.CanHandle("cap:op=test;extra=param") {
+	if !registry.CanHandle(matrixTestUrn("extra=param;op=test")) {
 		t.Error("Registry should handle capability with extra parameters")
 	}
-	if registry.CanHandle("cap:op=different") {
+	if registry.CanHandle(matrixTestUrn("op=different")) {
 		t.Error("Registry should not handle unregistered capability")
 	}
 }

@@ -13,13 +13,21 @@ import (
 	"unicode"
 )
 
-// CapUrn represents a cap URN using flat, ordered tags
+// CapUrn represents a cap URN using flat, ordered tags with required direction specifiers
+//
+// Direction (in→out) is integral to a cap's identity. The `inSpec` and `outSpec`
+// fields specify the input and output media spec IDs respectively.
 //
 // Examples:
-// - cap:op=generate;ext=pdf;out=std:binary.v1;target=thumbnail
-// - cap:op=extract;target=metadata
-// - cap:key="Value With Spaces"
+// - cap:in=std:binary.v1;op=generate;out=std:binary.v1;target=thumbnail
+// - cap:in=std:void.v1;op=dimensions;out=std:int.v1
+// - cap:in=std:str.v1;out=std:obj.v1;key="Value With Spaces"
 type CapUrn struct {
+	// inSpec is the input media spec ID - required (use std:void.v1 for caps with no input)
+	inSpec string
+	// outSpec is the output media spec ID - required
+	outSpec string
+	// tags are additional tags that define this cap (not including in/out)
 	tags map[string]string
 }
 
@@ -44,6 +52,8 @@ const (
 	ErrorNumericKey            = 7
 	ErrorUnterminatedQuote     = 8
 	ErrorInvalidEscapeSequence = 9
+	ErrorMissingInSpec         = 10
+	ErrorMissingOutSpec        = 11
 )
 
 // Parser states for state machine
@@ -96,8 +106,9 @@ func quoteValue(value string) string {
 }
 
 // NewCapUrnFromString creates a cap URN from a string
-// Format: cap:key1=value1;key2=value2;... or cap:key1="value with spaces";key2=simple
+// Format: cap:in=spec;out=spec;key1=value1;... or cap:in=spec;key="value";out=spec
 // The "cap:" prefix is mandatory
+// The 'in' and 'out' tags are REQUIRED (direction is part of cap identity)
 // Trailing semicolons are optional and ignored
 // Tags are automatically sorted alphabetically for canonical form
 //
@@ -124,9 +135,12 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 	tagsPart := s[4:]
 	tags := make(map[string]string)
 
-	// Handle empty cap URN (cap: with no tags or just semicolon)
+	// Handle empty cap URN (cap: with no tags) - this is now an error since in/out are required
 	if tagsPart == "" || tagsPart == ";" {
-		return &CapUrn{tags: tags}, nil
+		return nil, &CapUrnError{
+			Code:    ErrorMissingInSpec,
+			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use std:void.v1 for no input)",
+		}
 	}
 
 	state := stateExpectingKey
@@ -307,69 +321,195 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 		}
 	}
 
-	return &CapUrn{tags: tags}, nil
+	// Extract required in and out specs
+	inSpec, hasIn := tags["in"]
+	if !hasIn {
+		return nil, &CapUrnError{
+			Code:    ErrorMissingInSpec,
+			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use std:void.v1 for no input)",
+		}
+	}
+	delete(tags, "in")
+
+	outSpec, hasOut := tags["out"]
+	if !hasOut {
+		return nil, &CapUrnError{
+			Code:    ErrorMissingOutSpec,
+			Message: "cap URN is missing required 'out' tag - caps must declare their output type",
+		}
+	}
+	delete(tags, "out")
+
+	return &CapUrn{inSpec: inSpec, outSpec: outSpec, tags: tags}, nil
 }
 
-// NewCapUrnFromTags creates a cap URN from tags
+// NewCapUrnFromTags creates a cap URN from tags that must contain 'in' and 'out'
 // Keys are normalized to lowercase; values are preserved as-is
-func NewCapUrnFromTags(tags map[string]string) *CapUrn {
+// Returns error if 'in' or 'out' tags are missing
+func NewCapUrnFromTags(tags map[string]string) (*CapUrn, error) {
+	// Normalize keys to lowercase
 	result := make(map[string]string)
 	for k, v := range tags {
 		result[strings.ToLower(k)] = v
 	}
-	return &CapUrn{tags: result}
+
+	// Extract required in and out specs
+	inSpec, hasIn := result["in"]
+	if !hasIn {
+		return nil, &CapUrnError{
+			Code:    ErrorMissingInSpec,
+			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use std:void.v1 for no input)",
+		}
+	}
+	delete(result, "in")
+
+	outSpec, hasOut := result["out"]
+	if !hasOut {
+		return nil, &CapUrnError{
+			Code:    ErrorMissingOutSpec,
+			Message: "cap URN is missing required 'out' tag - caps must declare their output type",
+		}
+	}
+	delete(result, "out")
+
+	return &CapUrn{inSpec: inSpec, outSpec: outSpec, tags: result}, nil
+}
+
+// NewCapUrn creates a cap URN from direction specs and additional tags
+// Keys are normalized to lowercase; values are preserved as-is
+// inSpec and outSpec are required direction specifiers
+func NewCapUrn(inSpec, outSpec string, tags map[string]string) *CapUrn {
+	normalizedTags := make(map[string]string)
+	for k, v := range tags {
+		keyLower := strings.ToLower(k)
+		// Ensure in and out are not in tags
+		if keyLower != "in" && keyLower != "out" {
+			normalizedTags[keyLower] = v
+		}
+	}
+	return &CapUrn{inSpec: inSpec, outSpec: outSpec, tags: normalizedTags}
+}
+
+// InSpec returns the input spec ID
+func (c *CapUrn) InSpec() string {
+	return c.inSpec
+}
+
+// OutSpec returns the output spec ID
+func (c *CapUrn) OutSpec() string {
+	return c.outSpec
 }
 
 // GetTag returns the value of a specific tag
 // Key is normalized to lowercase for lookup
+// For 'in' and 'out', returns the direction spec fields
 func (c *CapUrn) GetTag(key string) (string, bool) {
-	value, exists := c.tags[strings.ToLower(key)]
-	return value, exists
+	keyLower := strings.ToLower(key)
+	switch keyLower {
+	case "in":
+		return c.inSpec, true
+	case "out":
+		return c.outSpec, true
+	default:
+		value, exists := c.tags[keyLower]
+		return value, exists
+	}
 }
 
 // HasTag checks if this cap has a specific tag with a specific value
 // Key is normalized to lowercase; value comparison is case-sensitive
+// For 'in' and 'out', checks the direction spec fields
 func (c *CapUrn) HasTag(key, value string) bool {
-	tagValue, exists := c.tags[strings.ToLower(key)]
-	return exists && tagValue == value
+	keyLower := strings.ToLower(key)
+	switch keyLower {
+	case "in":
+		return c.inSpec == value
+	case "out":
+		return c.outSpec == value
+	default:
+		tagValue, exists := c.tags[keyLower]
+		return exists && tagValue == value
+	}
 }
 
 // WithTag returns a new cap URN with an added or updated tag
 // Key is normalized to lowercase; value is preserved as-is
+// Note: Cannot modify 'in' or 'out' tags - use WithInSpec/WithOutSpec
 func (c *CapUrn) WithTag(key, value string) *CapUrn {
+	keyLower := strings.ToLower(key)
+	// Silently ignore attempts to set in/out via WithTag
+	// Use WithInSpec/WithOutSpec instead
+	if keyLower == "in" || keyLower == "out" {
+		return c
+	}
 	newTags := make(map[string]string)
 	for k, v := range c.tags {
 		newTags[k] = v
 	}
-	newTags[strings.ToLower(key)] = value
-	return &CapUrn{tags: newTags}
+	newTags[keyLower] = value
+	return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
+}
+
+// WithInSpec returns a new cap URN with a different input spec
+func (c *CapUrn) WithInSpec(inSpec string) *CapUrn {
+	newTags := make(map[string]string)
+	for k, v := range c.tags {
+		newTags[k] = v
+	}
+	return &CapUrn{inSpec: inSpec, outSpec: c.outSpec, tags: newTags}
+}
+
+// WithOutSpec returns a new cap URN with a different output spec
+func (c *CapUrn) WithOutSpec(outSpec string) *CapUrn {
+	newTags := make(map[string]string)
+	for k, v := range c.tags {
+		newTags[k] = v
+	}
+	return &CapUrn{inSpec: c.inSpec, outSpec: outSpec, tags: newTags}
 }
 
 // WithoutTag returns a new cap URN with a tag removed
 // Key is normalized to lowercase for case-insensitive removal
+// Note: Cannot remove 'in' or 'out' tags - they are required
 func (c *CapUrn) WithoutTag(key string) *CapUrn {
+	keyLower := strings.ToLower(key)
+	// Silently ignore attempts to remove in/out
+	if keyLower == "in" || keyLower == "out" {
+		return c
+	}
 	newTags := make(map[string]string)
-	key = strings.ToLower(key)
 	for k, v := range c.tags {
-		if k != key {
+		if k != keyLower {
 			newTags[k] = v
 		}
 	}
-	return &CapUrn{tags: newTags}
+	return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
 }
 
 // Matches checks if this cap matches another based on tag compatibility
 //
-// A cap matches a request if:
+// Direction (in/out) is ALWAYS part of matching - they must match exactly or with wildcards.
+// For other tags:
 // - For each tag in the request: cap has same value, wildcard (*), or missing tag
 // - For each tag in the cap: if request is missing that tag, that's fine (cap is more specific)
-// Missing tags are treated as wildcards (less specific, can handle any value).
+// Missing tags (except in/out) are treated as wildcards (less specific, can handle any value).
 func (c *CapUrn) Matches(request *CapUrn) bool {
 	if request == nil {
 		return true
 	}
 
-	// Check all tags that the request specifies
+	// Direction specs must match (wildcards allowed)
+	// Check inSpec
+	if c.inSpec != "*" && request.inSpec != "*" && c.inSpec != request.inSpec {
+		return false
+	}
+
+	// Check outSpec
+	if c.outSpec != "*" && request.outSpec != "*" && c.outSpec != request.outSpec {
+		return false
+	}
+
+	// Check all other tags that the request specifies
 	for requestKey, requestValue := range request.tags {
 		capValue, exists := c.tags[requestKey]
 		if !exists {
@@ -405,9 +545,17 @@ func (c *CapUrn) CanHandle(request *CapUrn) bool {
 
 // Specificity returns the specificity score for cap matching
 // More specific caps have higher scores and are preferred
+// Includes direction specs (in/out) in the count
 func (c *CapUrn) Specificity() int {
-	// Count non-wildcard tags
+	// Count non-wildcard direction specs
 	count := 0
+	if c.inSpec != "*" {
+		count++
+	}
+	if c.outSpec != "*" {
+		count++
+	}
+	// Count non-wildcard tags
 	for _, value := range c.tags {
 		if value != "*" {
 			count++
@@ -434,9 +582,20 @@ func (c *CapUrn) IsMoreSpecificThan(other *CapUrn) bool {
 //
 // Two caps are compatible if they can potentially match
 // the same types of requests (considering wildcards and missing tags as wildcards)
+// Direction specs must be compatible (same value or one is wildcard)
 func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
 	if other == nil {
 		return true
+	}
+
+	// Check inSpec compatibility
+	if c.inSpec != "*" && other.inSpec != "*" && c.inSpec != other.inSpec {
+		return false
+	}
+
+	// Check outSpec compatibility
+	if c.outSpec != "*" && other.outSpec != "*" && c.outSpec != other.outSpec {
+		return false
 	}
 
 	// Get all unique tag keys from both caps
@@ -465,25 +624,46 @@ func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
 }
 
 // WithWildcardTag returns a new cap with a specific tag set to wildcard
+// For 'in' or 'out', sets the corresponding direction spec to wildcard
 func (c *CapUrn) WithWildcardTag(key string) *CapUrn {
-	if _, exists := c.tags[key]; exists {
-		return c.WithTag(key, "*")
+	keyLower := strings.ToLower(key)
+	switch keyLower {
+	case "in":
+		return c.WithInSpec("*")
+	case "out":
+		return c.WithOutSpec("*")
+	default:
+		if _, exists := c.tags[keyLower]; exists {
+			newTags := make(map[string]string)
+			for k, v := range c.tags {
+				newTags[k] = v
+			}
+			newTags[keyLower] = "*"
+			return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
+		}
+		return c
 	}
-	return c
 }
 
 // Subset returns a new cap with only specified tags
+// Note: 'in' and 'out' are always included as they are required
 func (c *CapUrn) Subset(keys []string) *CapUrn {
 	newTags := make(map[string]string)
 	for _, key := range keys {
-		if value, exists := c.tags[key]; exists {
-			newTags[key] = value
+		keyLower := strings.ToLower(key)
+		// Skip in/out as they're handled separately
+		if keyLower == "in" || keyLower == "out" {
+			continue
+		}
+		if value, exists := c.tags[keyLower]; exists {
+			newTags[keyLower] = value
 		}
 	}
-	return &CapUrn{tags: newTags}
+	return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
 }
 
 // Merge returns a new cap merged with another (other takes precedence for conflicts)
+// Direction specs from other override this one's
 func (c *CapUrn) Merge(other *CapUrn) *CapUrn {
 	newTags := make(map[string]string)
 	for k, v := range c.tags {
@@ -492,39 +672,47 @@ func (c *CapUrn) Merge(other *CapUrn) *CapUrn {
 	for k, v := range other.tags {
 		newTags[k] = v
 	}
-	return &CapUrn{tags: newTags}
+	return &CapUrn{inSpec: other.inSpec, outSpec: other.outSpec, tags: newTags}
 }
 
 // ToString returns the canonical string representation of this cap URN
 // Always includes "cap:" prefix
-// Tags are sorted alphabetically for consistent representation
+// All tags (including in/out) are sorted alphabetically
 // No trailing semicolon in canonical form
 // Values are quoted only when necessary (smart quoting)
 func (c *CapUrn) ToString() string {
-	if len(c.tags) == 0 {
-		return "cap:"
+	// Build a full sorted list of all tags including in/out
+	type tagPair struct {
+		key   string
+		value string
+	}
+	allTags := make([]tagPair, 0, len(c.tags)+2)
+
+	// Add inSpec and outSpec as tags
+	allTags = append(allTags, tagPair{"in", c.inSpec})
+	allTags = append(allTags, tagPair{"out", c.outSpec})
+
+	// Add all other tags
+	for k, v := range c.tags {
+		allTags = append(allTags, tagPair{k, v})
 	}
 
-	// Sort keys for canonical representation
-	keys := make([]string, 0, len(c.tags))
-	for key := range c.tags {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	// Sort alphabetically by key
+	sort.Slice(allTags, func(i, j int) bool {
+		return allTags[i].key < allTags[j].key
+	})
 
-	// Build tag string with smart quoting
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		value := c.tags[key]
-		if needsQuoting(value) {
-			parts = append(parts, fmt.Sprintf("%s=%s", key, quoteValue(value)))
+	// Build the string
+	parts := make([]string, 0, len(allTags))
+	for _, tag := range allTags {
+		if needsQuoting(tag.value) {
+			parts = append(parts, fmt.Sprintf("%s=%s", tag.key, quoteValue(tag.value)))
 		} else {
-			parts = append(parts, fmt.Sprintf("%s=%s", key, value))
+			parts = append(parts, fmt.Sprintf("%s=%s", tag.key, tag.value))
 		}
 	}
 
-	tagsStr := strings.Join(parts, ";")
-	return fmt.Sprintf("cap:%s", tagsStr)
+	return fmt.Sprintf("cap:%s", strings.Join(parts, ";"))
 }
 
 // String implements the Stringer interface
@@ -535,6 +723,11 @@ func (c *CapUrn) String() string {
 // Equals checks if this cap URN is equal to another
 func (c *CapUrn) Equals(other *CapUrn) bool {
 	if other == nil {
+		return false
+	}
+
+	// Check direction specs
+	if c.inSpec != other.inSpec || c.outSpec != other.outSpec {
 		return false
 	}
 
@@ -578,6 +771,8 @@ func (c *CapUrn) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	c.inSpec = capUrn.inSpec
+	c.outSpec = capUrn.outSpec
 	c.tags = capUrn.tags
 	return nil
 }
@@ -634,8 +829,11 @@ func (m *CapMatcher) AreCompatible(caps1, caps2 []*CapUrn) bool {
 }
 
 // CapUrnBuilder provides a fluent builder interface for creating cap URNs
+// Direction specs (in/out) are required and must be set before building
 type CapUrnBuilder struct {
-	tags map[string]string
+	inSpec  *string
+	outSpec *string
+	tags    map[string]string
 }
 
 // NewCapUrnBuilder creates a new builder
@@ -645,21 +843,45 @@ func NewCapUrnBuilder() *CapUrnBuilder {
 	}
 }
 
+// InSpec sets the input spec ID (required)
+func (b *CapUrnBuilder) InSpec(spec string) *CapUrnBuilder {
+	b.inSpec = &spec
+	return b
+}
+
+// OutSpec sets the output spec ID (required)
+func (b *CapUrnBuilder) OutSpec(spec string) *CapUrnBuilder {
+	b.outSpec = &spec
+	return b
+}
+
 // Tag adds or updates a tag
 // Key is normalized to lowercase; value is preserved as-is
+// Note: 'in' and 'out' are ignored here - use InSpec() and OutSpec()
 func (b *CapUrnBuilder) Tag(key, value string) *CapUrnBuilder {
-	b.tags[strings.ToLower(key)] = value
+	keyLower := strings.ToLower(key)
+	if keyLower == "in" || keyLower == "out" {
+		return b
+	}
+	b.tags[keyLower] = value
 	return b
 }
 
 // Build creates the final CapUrn
 func (b *CapUrnBuilder) Build() (*CapUrn, error) {
-	if len(b.tags) == 0 {
+	if b.inSpec == nil {
 		return nil, &CapUrnError{
-			Code:    ErrorInvalidFormat,
-			Message: "cap URN cannot be empty",
+			Code:    ErrorMissingInSpec,
+			Message: "cap URN is missing required 'in' spec - caps must declare their input type (use std:void.v1 for no input)",
 		}
 	}
 
-	return &CapUrn{tags: b.tags}, nil
+	if b.outSpec == nil {
+		return nil, &CapUrnError{
+			Code:    ErrorMissingOutSpec,
+			Message: "cap URN is missing required 'out' spec - caps must declare their output type",
+		}
+	}
+
+	return &CapUrn{inSpec: *b.inSpec, outSpec: *b.outSpec, tags: b.tags}, nil
 }

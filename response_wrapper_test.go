@@ -8,6 +8,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test helper for response wrapper tests
+func respTestUrn(tags string) string {
+	if tags == "" {
+		return "cap:in=std:void.v1;out=std:obj.v1"
+	}
+	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+}
+
 func TestResponseWrapperFromJSON(t *testing.T) {
 	testData := map[string]interface{}{
 		"name":  "test",
@@ -144,16 +152,19 @@ func TestResponseWrapperGetContentType(t *testing.T) {
 }
 
 func TestResponseWrapperMatchesOutputType(t *testing.T) {
-	// Setup cap definitions with spec IDs
-	stringCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	// Setup cap definitions with spec IDs - all need in/out
+	stringCapUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:str.v1")
+	require.NoError(t, err)
 	stringCap := NewCap(stringCapUrn, "String Test", "test")
 	stringCap.SetOutput(NewCapOutput(SpecIDStr, "String output"))
 
-	binaryCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	binaryCapUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:binary.v1")
+	require.NoError(t, err)
 	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
 	binaryCap.SetOutput(NewCapOutput(SpecIDBinary, "Binary output"))
 
-	jsonCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	jsonCapUrn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:obj.v1")
+	require.NoError(t, err)
 	jsonCap := NewCap(jsonCapUrn, "JSON Test", "test")
 	jsonCap.SetOutput(NewCapOutput(SpecIDObj, "JSON output"))
 
@@ -194,14 +205,16 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	assert.True(t, matchJson)
 
 	// Test cap with no output definition - MUST FAIL
-	noOutputCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	noOutputCapUrn, err := NewCapUrnFromString(respTestUrn("op=test"))
+	require.NoError(t, err)
 	noOutputCap := NewCap(noOutputCapUrn, "No Output Test", "test")
 	_, err = textResponse.MatchesOutputType(noOutputCap)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no output definition")
 
 	// Test cap with unresolvable spec ID - MUST FAIL
-	badSpecCapUrn, _ := NewCapUrnFromString("cap:op=test")
+	badSpecCapUrn, err := NewCapUrnFromString(respTestUrn("op=test"))
+	require.NoError(t, err)
 	badSpecCap := NewCap(badSpecCapUrn, "Bad Spec Test", "test")
 	badSpecCap.SetOutput(NewCapOutput("unknown:spec.v1", "Unknown output"))
 	_, err = textResponse.MatchesOutputType(badSpecCap)
@@ -211,7 +224,8 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 
 func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 	// Setup cap with output schema
-	capUrn, _ := NewCapUrnFromString("cap:op=test")
+	capUrn, err := NewCapUrnFromString(respTestUrn("op=test"))
+	require.NoError(t, err)
 	cap := NewCap(capUrn, "Test Cap", "test")
 
 	// Add custom spec with schema
@@ -231,7 +245,7 @@ func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 
 	// Valid JSON response
 	validResponse := NewResponseWrapperFromJSON([]byte(`{"status": "ok"}`))
-	err := validResponse.ValidateAgainstCap(cap)
+	err = validResponse.ValidateAgainstCap(cap)
 	assert.NoError(t, err)
 
 	// Invalid JSON response (missing required field)

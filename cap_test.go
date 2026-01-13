@@ -8,13 +8,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Test helper to create URNs with required in/out specs
+func capTestUrn(tags string) string {
+	if tags == "" {
+		return "cap:in=std:void.v1;out=std:obj.v1"
+	}
+	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+}
+
 func TestCapCreation(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=transform;format=json;type=data_processing")
+	id, err := NewCapUrnFromString(capTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Transform JSON Data", "test-command")
 
-	assert.Equal(t, "cap:format=json;op=transform;type=data_processing", cap.UrnString())
+	// Canonical form includes in/out in alphabetical order
+	assert.Equal(t, "cap:format=json;in=std:void.v1;op=transform;out=std:obj.v1;type=data_processing", cap.UrnString())
 	assert.Equal(t, "Transform JSON Data", cap.Title)
 	assert.Equal(t, "test-command", cap.Command)
 	assert.Nil(t, cap.CapDescription)
@@ -23,7 +32,7 @@ func TestCapCreation(t *testing.T) {
 }
 
 func TestCapWithMetadata(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=arithmetic;subtype=math;type=compute")
+	id, err := NewCapUrnFromString(capTestUrn("op=arithmetic;subtype=math;type=compute"))
 	require.NoError(t, err)
 
 	metadata := map[string]string{
@@ -45,19 +54,19 @@ func TestCapWithMetadata(t *testing.T) {
 }
 
 func TestCapMatching(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=transform;format=json;type=data_processing")
+	id, err := NewCapUrnFromString(capTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Transform JSON Data", "test-command")
 
-	assert.True(t, cap.MatchesRequest("cap:op=transform;format=json;type=data_processing"))
-	assert.True(t, cap.MatchesRequest("cap:op=transform;format=*;type=data_processing")) // Request wants any format, cap handles json specifically
-	assert.True(t, cap.MatchesRequest("cap:type=data_processing"))
-	assert.False(t, cap.MatchesRequest("cap:type=compute"))
+	assert.True(t, cap.MatchesRequest(capTestUrn("op=transform;format=json;type=data_processing")))
+	assert.True(t, cap.MatchesRequest(capTestUrn("op=transform;format=*;type=data_processing"))) // Request wants any format
+	assert.True(t, cap.MatchesRequest(capTestUrn("type=data_processing")))
+	assert.False(t, cap.MatchesRequest(capTestUrn("type=compute")))
 }
 
 func TestCapRequestHandling(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=extract;target=metadata;")
+	id, err := NewCapUrnFromString(capTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap1 := NewCap(id, "Extract Metadata", "extract-cmd")
@@ -65,7 +74,7 @@ func TestCapRequestHandling(t *testing.T) {
 
 	assert.True(t, cap1.CanHandleRequest(cap2.Urn))
 
-	otherId, err := NewCapUrnFromString("cap:op=generate;type=image")
+	otherId, err := NewCapUrnFromString(capTestUrn("op=generate;type=image"))
 	require.NoError(t, err)
 	cap3 := NewCap(otherId, "Generate Image", "generate-cmd")
 
@@ -73,7 +82,7 @@ func TestCapRequestHandling(t *testing.T) {
 }
 
 func TestCapEquality(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=transform;format=json;type=data_processing")
+	id, err := NewCapUrnFromString(capTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	cap1 := NewCap(id, "Transform JSON Data", "test-command")
@@ -83,7 +92,7 @@ func TestCapEquality(t *testing.T) {
 }
 
 func TestCapDescription(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=parse;format=json;type=data")
+	id, err := NewCapUrnFromString(capTestUrn("op=parse;format=json;type=data"))
 	require.NoError(t, err)
 
 	cap1 := NewCapWithDescription(id, "Parse JSON Data", "parse-cmd", "Parse JSON data")
@@ -95,7 +104,7 @@ func TestCapDescription(t *testing.T) {
 }
 
 func TestCapAcceptsStdin(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=generate;target=embeddings")
+	id, err := NewCapUrnFromString(capTestUrn("op=generate;target=embeddings"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Generate Embeddings", "generate")
@@ -119,7 +128,8 @@ func TestCapAcceptsStdin(t *testing.T) {
 }
 
 func TestCapWithMediaSpecs(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=query;target=structured;in=std:str.v1;out=my:result.v1")
+	// Use proper in/out in the URN
+	id, err := NewCapUrnFromString("cap:in=std:str.v1;op=query;out=my:result.v1;target=structured")
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Query Structured Data", "query-cmd")
@@ -157,7 +167,7 @@ func TestCapWithMediaSpecs(t *testing.T) {
 }
 
 func TestCapJSONRoundTrip(t *testing.T) {
-	id, err := NewCapUrnFromString("cap:op=test;out=std:obj.v1")
+	id, err := NewCapUrnFromString(capTestUrn("op=test"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Test Cap", "test-cmd")

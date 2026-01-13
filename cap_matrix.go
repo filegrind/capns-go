@@ -15,11 +15,11 @@ func (e *CapMatrixError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Type, e.Message)
 }
 
-// NewNoHostsFoundError creates a new error for when no hosts are found
-func NewNoHostsFoundError(capability string) *CapMatrixError {
+// NewNoSetsFoundError creates a new error for when no sets are found
+func NewNoSetsFoundError(capability string) *CapMatrixError {
 	return &CapMatrixError{
-		Type:    "NoHostsFound",
-		Message: fmt.Sprintf("No capability hosts found for capability: %s", capability),
+		Type:    "NoSetsFound",
+		Message: fmt.Sprintf("No cap sets found for capability: %s", capability),
 	}
 }
 
@@ -46,15 +46,15 @@ type capSetEntry struct {
 	capabilities []*Cap
 }
 
-// CapMatrix provides unified registry for capability hosts (providers and plugins)
+// CapMatrix provides unified registry for cap sets (providers and plugins)
 type CapMatrix struct {
-	hosts map[string]*capSetEntry
+	sets map[string]*capSetEntry
 }
 
 // NewCapMatrix creates a new empty capability host registry
 func NewCapMatrix() *CapMatrix {
 	return &CapMatrix{
-		hosts: make(map[string]*capSetEntry),
+		sets: make(map[string]*capSetEntry),
 	}
 }
 
@@ -66,11 +66,11 @@ func (r *CapMatrix) RegisterCapSet(name string, host CapSet, capabilities []*Cap
 		capabilities: capabilities,
 	}
 	
-	r.hosts[name] = entry
+	r.sets[name] = entry
 	return nil
 }
 
-// FindCapSets finds capability hosts that can handle the requested capability
+// FindCapSets finds cap sets that can handle the requested capability
 // Uses subset matching: host capabilities must be a subset of or match the request
 func (r *CapMatrix) FindCapSets(requestUrn string) ([]CapSet, error) {
 	request, err := NewCapUrnFromString(requestUrn)
@@ -80,7 +80,7 @@ func (r *CapMatrix) FindCapSets(requestUrn string) ([]CapSet, error) {
 	
 	var matchingHosts []CapSet
 	
-	for _, entry := range r.hosts {
+	for _, entry := range r.sets {
 		for _, cap := range entry.capabilities {
 			capUrn, err := NewCapUrnFromString(cap.Urn.String())
 			if err != nil {
@@ -97,7 +97,7 @@ func (r *CapMatrix) FindCapSets(requestUrn string) ([]CapSet, error) {
 	}
 	
 	if len(matchingHosts) == 0 {
-		return nil, NewNoHostsFoundError(requestUrn)
+		return nil, NewNoSetsFoundError(requestUrn)
 	}
 	
 	return matchingHosts, nil
@@ -114,7 +114,7 @@ func (r *CapMatrix) FindBestCapSet(requestUrn string) (CapSet, *Cap, error) {
 	var bestCap *Cap
 	var bestSpecificity int = -1
 	
-	for _, entry := range r.hosts {
+	for _, entry := range r.sets {
 		for _, cap := range entry.capabilities {
 			capUrn, err := NewCapUrnFromString(cap.Urn.String())
 			if err != nil {
@@ -136,7 +136,7 @@ func (r *CapMatrix) FindBestCapSet(requestUrn string) (CapSet, *Cap, error) {
 	}
 	
 	if bestHost == nil {
-		return nil, nil, NewNoHostsFoundError(requestUrn)
+		return nil, nil, NewNoSetsFoundError(requestUrn)
 	}
 	
 	return bestHost, bestCap, nil
@@ -144,17 +144,17 @@ func (r *CapMatrix) FindBestCapSet(requestUrn string) (CapSet, *Cap, error) {
 
 // GetHostNames returns all registered capability host names
 func (r *CapMatrix) GetHostNames() []string {
-	names := make([]string, 0, len(r.hosts))
-	for name := range r.hosts {
+	names := make([]string, 0, len(r.sets))
+	for name := range r.sets {
 		names = append(names, name)
 	}
 	return names
 }
 
-// GetAllCapabilities returns all capabilities from all registered hosts
+// GetAllCapabilities returns all capabilities from all registered sets
 func (r *CapMatrix) GetAllCapabilities() []*Cap {
 	var capabilities []*Cap
-	for _, entry := range r.hosts {
+	for _, entry := range r.sets {
 		capabilities = append(capabilities, entry.capabilities...)
 	}
 	return capabilities
@@ -168,14 +168,14 @@ func (r *CapMatrix) CanHandle(requestUrn string) bool {
 
 // UnregisterCapSet unregisters a capability host
 func (r *CapMatrix) UnregisterCapSet(name string) bool {
-	if _, exists := r.hosts[name]; exists {
-		delete(r.hosts, name)
+	if _, exists := r.sets[name]; exists {
+		delete(r.sets, name)
 		return true
 	}
 	return false
 }
 
-// Clear removes all registered hosts
+// Clear removes all registered sets
 func (r *CapMatrix) Clear() {
-	r.hosts = make(map[string]*capSetEntry)
+	r.sets = make(map[string]*capSetEntry)
 }

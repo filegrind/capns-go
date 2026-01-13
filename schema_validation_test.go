@@ -9,7 +9,7 @@ import (
 
 // Helper to create a cap with media specs for testing
 func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
-	urn, err := NewCapUrnFromString("cap:op=test;")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:obj.v1")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Test Cap", "test-command")
@@ -168,7 +168,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString("cap:op=query;target=structured;")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=query;out=std:obj.v1;target=structured")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Query Processor", "test-command")
@@ -267,7 +267,7 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewInputValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString("cap:op=test;")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:obj.v1")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Config Validator", "test-command")
@@ -316,7 +316,7 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewOutputValidator()
 
 	// Create a capability with schema-enabled output
-	urn, err := NewCapUrnFromString("cap:op=test;")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:obj.v1")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Output Validator", "test-command")
@@ -371,7 +371,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a capability with full schema validation
-	urn, err := NewCapUrnFromString("cap:op=query;target=structured;")
+	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=query;out=std:obj.v1;target=structured")
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Structured Query", "query-command")
