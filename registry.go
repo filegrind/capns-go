@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -303,8 +304,17 @@ func (r *CapRegistry) saveToCache(cap *Cap) error {
 }
 
 func (r *CapRegistry) fetchFromRegistry(urn string) (*Cap, error) {
-	url := fmt.Sprintf("%s/%s", RegistryBaseURL, urn)
-	resp, err := r.client.Get(url)
+	// Normalize the cap URN using the proper parser
+	normalizedUrn := urn
+	if parsed, err := NewCapUrnFromString(urn); err == nil {
+		normalizedUrn = parsed.String()
+	}
+
+	// URL-encode only the tags part (after "cap:") while keeping "cap:" literal
+	tagsPart := strings.TrimPrefix(normalizedUrn, "cap:")
+	encodedTags := url.PathEscape(tagsPart)
+	registryURL := fmt.Sprintf("%s/cap:%s", RegistryBaseURL, encodedTags)
+	resp, err := r.client.Get(registryURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from registry: %w", err)
 	}
