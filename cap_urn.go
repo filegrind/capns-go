@@ -64,33 +64,7 @@ func isValidMediaUrnOrWildcard(value string) bool {
 	return value == "*" || strings.HasPrefix(value, "media:")
 }
 
-// needsQuoting checks if a value needs quoting for serialization
-func needsQuoting(value string) bool {
-	for _, c := range value {
-		if c == ';' || c == '=' || c == '"' || c == '\\' || c == ' ' {
-			return true
-		}
-		// Check for uppercase letter
-		if c >= 'A' && c <= 'Z' {
-			return true
-		}
-	}
-	return false
-}
-
-// quoteValue quotes a value for serialization
-func quoteValue(value string) string {
-	var result strings.Builder
-	result.WriteRune('"')
-	for _, c := range value {
-		if c == '"' || c == '\\' {
-			result.WriteRune('\\')
-		}
-		result.WriteRune(c)
-	}
-	result.WriteRune('"')
-	return result.String()
-}
+// Note: needsQuoting and quoteValue are delegated to TaggedUrn
 
 // capUrnErrorFromTaggedUrn converts TaggedUrn errors to CapUrn errors
 func capUrnErrorFromTaggedUrn(err error) *CapUrnError {
@@ -559,43 +533,19 @@ func (c *CapUrn) Merge(other *CapUrn) *CapUrn {
 }
 
 // ToString returns the canonical string representation of this cap URN
-// Always includes "cap:" prefix
-// All tags (including in/out) are sorted alphabetically
-// No trailing semicolon in canonical form
-// Values are quoted only when necessary (smart quoting)
+// Uses TaggedUrn for serialization to ensure consistency across implementations
 func (c *CapUrn) ToString() string {
-	// Build a full sorted list of all tags including in/out
-	type tagPair struct {
-		key   string
-		value string
-	}
-	allTags := make([]tagPair, 0, len(c.tags)+2)
-
-	// Add inSpec and outSpec as tags
-	allTags = append(allTags, tagPair{"in", c.inSpec})
-	allTags = append(allTags, tagPair{"out", c.outSpec})
-
-	// Add all other tags
+	// Build complete tags map including in and out
+	allTags := make(map[string]string, len(c.tags)+2)
+	allTags["in"] = c.inSpec
+	allTags["out"] = c.outSpec
 	for k, v := range c.tags {
-		allTags = append(allTags, tagPair{k, v})
+		allTags[k] = v
 	}
 
-	// Sort alphabetically by key
-	sort.Slice(allTags, func(i, j int) bool {
-		return allTags[i].key < allTags[j].key
-	})
-
-	// Build the string
-	parts := make([]string, 0, len(allTags))
-	for _, tag := range allTags {
-		if needsQuoting(tag.value) {
-			parts = append(parts, fmt.Sprintf("%s=%s", tag.key, quoteValue(tag.value)))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s=%s", tag.key, tag.value))
-		}
-	}
-
-	return fmt.Sprintf("cap:%s", strings.Join(parts, ";"))
+	// Use TaggedUrn for serialization
+	taggedUrn := taggedurn.NewTaggedUrnFromTags("cap", allTags)
+	return taggedUrn.ToString()
 }
 
 // String implements the Stringer interface
