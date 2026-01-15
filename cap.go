@@ -19,7 +19,7 @@ type ArgumentValidation struct {
 // CapArgument represents a single argument definition for a cap
 type CapArgument struct {
 	Name           string              `json:"name"`
-	MediaSpec      string              `json:"media_spec"` // Spec ID, e.g., "std:str.v1"
+	MediaUrn       string              `json:"media_urn"` // Media URN, e.g., "media:type=string;v=1"
 	ArgDescription string              `json:"arg_description"`
 	CliFlag        string              `json:"cli_flag"`
 	Position       *int                `json:"position,omitempty"`
@@ -28,57 +28,57 @@ type CapArgument struct {
 	Metadata       interface{}         `json:"metadata,omitempty"`
 }
 
-// Resolve resolves the argument's media spec to a ResolvedMediaSpec
+// Resolve resolves the argument's media URN to a ResolvedMediaSpec
 func (ca *CapArgument) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
-	return ResolveSpecID(ca.MediaSpec, mediaSpecs)
+	return ResolveMediaUrn(ca.MediaUrn, mediaSpecs)
 }
 
 // IsBinary checks if this argument expects binary data.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (ca *CapArgument) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := ca.Resolve(mediaSpecs)
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve argument '%s' media_spec '%s': %w", ca.Name, ca.MediaSpec, err)
+		return false, fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
 	}
 	return resolved.IsBinary(), nil
 }
 
 // IsJSON checks if this argument expects JSON data.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (ca *CapArgument) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := ca.Resolve(mediaSpecs)
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve argument '%s' media_spec '%s': %w", ca.Name, ca.MediaSpec, err)
+		return false, fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
 	}
 	return resolved.IsJSON(), nil
 }
 
 // GetMediaType returns the resolved media type for this argument.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (ca *CapArgument) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error) {
 	resolved, err := ca.Resolve(mediaSpecs)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve argument '%s' media_spec '%s': %w", ca.Name, ca.MediaSpec, err)
+		return "", fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
 	}
 	return resolved.MediaType, nil
 }
 
 // GetProfileURI returns the resolved profile URI for this argument.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (ca *CapArgument) GetProfileURI(mediaSpecs map[string]MediaSpecDef) (string, error) {
 	resolved, err := ca.Resolve(mediaSpecs)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve argument '%s' media_spec '%s': %w", ca.Name, ca.MediaSpec, err)
+		return "", fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
 	}
 	return resolved.ProfileURI, nil
 }
 
 // GetSchema returns the resolved schema for this argument.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (ca *CapArgument) GetSchema(mediaSpecs map[string]MediaSpecDef) (interface{}, error) {
 	resolved, err := ca.Resolve(mediaSpecs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve argument '%s' media_spec '%s': %w", ca.Name, ca.MediaSpec, err)
+		return nil, fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
 	}
 	return resolved.Schema, nil
 }
@@ -91,63 +91,63 @@ type CapArguments struct {
 
 // CapOutput represents the output definition for a cap
 type CapOutput struct {
-	MediaSpec         string              `json:"media_spec"` // Spec ID, e.g., "std:obj.v1"
+	MediaUrn          string              `json:"media_urn"` // Media URN, e.g., "media:type=object;v=1"
 	OutputDescription string              `json:"output_description"`
 	Validation        *ArgumentValidation `json:"validation,omitempty"`
 	Metadata          interface{}         `json:"metadata,omitempty"`
 }
 
-// Resolve resolves the output's media spec to a ResolvedMediaSpec
+// Resolve resolves the output's media URN to a ResolvedMediaSpec
 func (co *CapOutput) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
-	return ResolveSpecID(co.MediaSpec, mediaSpecs)
+	return ResolveMediaUrn(co.MediaUrn, mediaSpecs)
 }
 
 // IsBinary checks if this output produces binary data.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve output media_spec '%s': %w", co.MediaSpec, err)
+		return false, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
 	return resolved.IsBinary(), nil
 }
 
 // IsJSON checks if this output produces JSON data.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve output media_spec '%s': %w", co.MediaSpec, err)
+		return false, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
 	return resolved.IsJSON(), nil
 }
 
 // GetMediaType returns the resolved media type for this output.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve output media_spec '%s': %w", co.MediaSpec, err)
+		return "", fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
 	return resolved.MediaType, nil
 }
 
 // GetProfileURI returns the resolved profile URI for this output.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) GetProfileURI(mediaSpecs map[string]MediaSpecDef) (string, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve output media_spec '%s': %w", co.MediaSpec, err)
+		return "", fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
 	return resolved.ProfileURI, nil
 }
 
 // GetSchema returns the resolved schema for this output.
-// Returns error if the spec ID cannot be resolved - no fallbacks.
+// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) GetSchema(mediaSpecs map[string]MediaSpecDef) (interface{}, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve output media_spec '%s': %w", co.MediaSpec, err)
+		return nil, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
 	return resolved.Schema, nil
 }
@@ -211,21 +211,21 @@ type Cap struct {
 	RegisteredBy *RegisteredBy `json:"registered_by,omitempty"`
 }
 
-// NewCapArgument creates a new cap argument with a spec ID
-func NewCapArgument(name string, mediaSpec string, description string, cliFlag string) CapArgument {
+// NewCapArgument creates a new cap argument with a media URN
+func NewCapArgument(name string, mediaUrn string, description string, cliFlag string) CapArgument {
 	return CapArgument{
 		Name:           name,
-		MediaSpec:      mediaSpec,
+		MediaUrn:       mediaUrn,
 		ArgDescription: description,
 		CliFlag:        cliFlag,
 	}
 }
 
 // NewCapArgumentWithPosition creates an argument with position
-func NewCapArgumentWithPosition(name string, mediaSpec string, description string, cliFlag string, position int) CapArgument {
+func NewCapArgumentWithPosition(name string, mediaUrn string, description string, cliFlag string, position int) CapArgument {
 	return CapArgument{
 		Name:           name,
-		MediaSpec:      mediaSpec,
+		MediaUrn:       mediaUrn,
 		ArgDescription: description,
 		CliFlag:        cliFlag,
 		Position:       &position,
@@ -262,10 +262,10 @@ func NewArgumentValidationAllowedValues(values []string) *ArgumentValidation {
 	}
 }
 
-// NewCapOutput creates a new output definition with a spec ID
-func NewCapOutput(mediaSpec string, description string) *CapOutput {
+// NewCapOutput creates a new output definition with a media URN
+func NewCapOutput(mediaUrn string, description string) *CapOutput {
 	return &CapOutput{
-		MediaSpec:         mediaSpec,
+		MediaUrn:          mediaUrn,
 		OutputDescription: description,
 	}
 }
@@ -425,9 +425,9 @@ func (c *Cap) AddMediaSpec(specID string, def MediaSpecDef) {
 	c.MediaSpecs[specID] = def
 }
 
-// ResolveSpecID resolves a spec ID using this cap's media_specs table
-func (c *Cap) ResolveSpecID(specID string) (*ResolvedMediaSpec, error) {
-	return ResolveSpecID(specID, c.GetMediaSpecs())
+// ResolveMediaUrn resolves a media URN using this cap's media_specs table
+func (c *Cap) ResolveMediaUrn(mediaUrn string) (*ResolvedMediaSpec, error) {
+	return ResolveMediaUrn(mediaUrn, c.GetMediaSpecs())
 }
 
 // MatchesRequest checks if this cap matches a request string

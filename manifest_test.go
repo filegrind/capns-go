@@ -11,9 +11,9 @@ import (
 // Test helper for manifest tests
 func manifestTestUrn(tags string) string {
 	if tags == "" {
-		return "cap:in=std:void.v1;out=std:obj.v1"
+		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
 	}
-	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
 }
 
 func TestCapManifestCreation(t *testing.T) {

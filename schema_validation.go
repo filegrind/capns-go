@@ -125,13 +125,13 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 		}
 
 		if found {
-			// Resolve the spec ID to get the schema
+			// Resolve the media URN to get the schema
 			resolved, err := argDef.Resolve(mediaSpecs)
 			if err != nil {
 				return &SchemaValidationError{
-					Type:     "UnresolvableSpecID",
+					Type:     "UnresolvableMediaUrn",
 					Argument: argDef.Name,
-					Details:  fmt.Sprintf("Could not resolve spec ID '%s'", argDef.MediaSpec),
+					Details:  fmt.Sprintf("Could not resolve media URN '%s'", argDef.MediaUrn),
 				}
 			}
 
@@ -166,13 +166,13 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 		}
 
 		if found {
-			// Resolve the spec ID to get the schema
+			// Resolve the media URN to get the schema
 			resolved, err := argDef.Resolve(mediaSpecs)
 			if err != nil {
 				return &SchemaValidationError{
-					Type:     "UnresolvableSpecID",
+					Type:     "UnresolvableMediaUrn",
 					Argument: argDef.Name,
-					Details:  fmt.Sprintf("Could not resolve spec ID '%s'", argDef.MediaSpec),
+					Details:  fmt.Sprintf("Could not resolve media URN '%s'", argDef.MediaUrn),
 				}
 			}
 

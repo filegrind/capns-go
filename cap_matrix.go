@@ -421,8 +421,8 @@ func (cs *CompositeCapSet) Graph() *CapGraph {
 // CapGraphEdge represents a conversion from one MediaSpec to another.
 // Each edge corresponds to a capability that can transform data.
 type CapGraphEdge struct {
-	FromSpec     string // The input MediaSpec ID (e.g., "std:binary.v1")
-	ToSpec       string // The output MediaSpec ID (e.g., "std:str.v1")
+	FromSpec     string // The input MediaSpec ID (e.g., "media:type=binary;v=1")
+	ToSpec       string // The output MediaSpec ID (e.g., "media:type=string;v=1")
 	Cap          *Cap   // The capability that performs this conversion
 	RegistryName string // The registry that provided this capability
 	Specificity  int    // Specificity score for ranking multiple paths

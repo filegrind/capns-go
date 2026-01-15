@@ -11,9 +11,9 @@ import (
 // Test helper to create URNs with required in/out specs
 func capTestUrn(tags string) string {
 	if tags == "" {
-		return "cap:in=std:void.v1;out=std:obj.v1"
+		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
 	}
-	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
 }
 
 func TestCapCreation(t *testing.T) {
@@ -23,7 +23,7 @@ func TestCapCreation(t *testing.T) {
 	cap := NewCap(id, "Transform JSON Data", "test-command")
 
 	// Canonical form includes in/out in alphabetical order
-	assert.Equal(t, "cap:format=json;in=std:void.v1;op=transform;out=std:obj.v1;type=data_processing", cap.UrnString())
+	assert.Equal(t, `cap:format=json;in="media:type=void;v=1";op=transform;out="media:type=object;v=1";type=data_processing`, cap.UrnString())
 	assert.Equal(t, "Transform JSON Data", cap.Title)
 	assert.Equal(t, "test-command", cap.Command)
 	assert.Nil(t, cap.CapDescription)
@@ -128,14 +128,14 @@ func TestCapAcceptsStdin(t *testing.T) {
 }
 
 func TestCapWithMediaSpecs(t *testing.T) {
-	// Use proper in/out in the URN
-	id, err := NewCapUrnFromString("cap:in=std:str.v1;op=query;out=my:result.v1;target=structured")
+	// Use proper in/out in the URN - custom media URN in out
+	id, err := NewCapUrnFromString(`cap:in="media:type=string;v=1";op=query;out="media:type=result;v=1";target=structured`)
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Query Structured Data", "query-cmd")
 
-	// Add a custom media spec
-	cap.AddMediaSpec("my:result.v1", NewMediaSpecDefObjectWithSchema(
+	// Add a custom media spec for the result type
+	cap.AddMediaSpec("media:type=result;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{
@@ -146,11 +146,11 @@ func TestCapWithMediaSpecs(t *testing.T) {
 		},
 	))
 
-	// Add an argument using the built-in spec ID
-	cap.AddRequiredArgument(NewCapArgument("query", SpecIDStr, "The query string", "--query"))
+	// Add an argument using the built-in media URN
+	cap.AddRequiredArgument(NewCapArgument("query", MediaString, "The query string", "--query"))
 
 	// Add output
-	cap.SetOutput(NewCapOutput("my:result.v1", "Query result"))
+	cap.SetOutput(NewCapOutput("media:type=result;v=1", "Query result"))
 
 	// Resolve the argument spec
 	arg := cap.Arguments.Required[0]
@@ -171,8 +171,8 @@ func TestCapJSONRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Test Cap", "test-cmd")
-	cap.AddRequiredArgument(NewCapArgument("input", SpecIDStr, "Input text", "--input"))
-	cap.SetOutput(NewCapOutput(SpecIDObj, "Output object"))
+	cap.AddRequiredArgument(NewCapArgument("input", MediaString, "Input text", "--input"))
+	cap.SetOutput(NewCapOutput(MediaObject, "Output object"))
 
 	// Serialize to JSON
 	jsonData, err := json.Marshal(cap)
@@ -187,6 +187,6 @@ func TestCapJSONRoundTrip(t *testing.T) {
 	assert.Equal(t, cap.Title, deserialized.Title)
 	assert.Equal(t, cap.Command, deserialized.Command)
 	assert.Equal(t, len(cap.Arguments.Required), len(deserialized.Arguments.Required))
-	assert.Equal(t, cap.Arguments.Required[0].MediaSpec, deserialized.Arguments.Required[0].MediaSpec)
-	assert.Equal(t, cap.Output.MediaSpec, deserialized.Output.MediaSpec)
+	assert.Equal(t, cap.Arguments.Required[0].MediaUrn, deserialized.Arguments.Required[0].MediaUrn)
+	assert.Equal(t, cap.Output.MediaUrn, deserialized.Output.MediaUrn)
 }

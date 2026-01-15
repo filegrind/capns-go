@@ -153,23 +153,23 @@ func (cc *CapCaller) capToCommand(cap string) string {
 	return strings.ReplaceAll(cap, "_", "-")
 }
 
-// resolveOutputSpec resolves the output spec ID from the cap URN's out spec.
+// resolveOutputSpec resolves the output media URN from the cap URN's out spec.
 // This method fails hard if:
 // - The cap URN is invalid
-// - The spec ID cannot be resolved (not in media_specs and not a built-in)
+// - The media URN cannot be resolved (not in media_specs and not a built-in)
 func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
 	capUrn, err := NewCapUrnFromString(cc.cap)
 	if err != nil {
 		return nil, fmt.Errorf("invalid cap URN '%s': %w", cc.cap, err)
 	}
 
-	// Get the output spec ID - now always present since it's required in parsing
-	specID := capUrn.OutSpec()
+	// Get the output media URN - now always present since it's required in parsing
+	mediaUrn := capUrn.OutSpec()
 
-	// Resolve the spec ID using the cap definition's media_specs
-	resolved, err := ResolveSpecID(specID, cc.capDefinition.GetMediaSpecs())
+	// Resolve the media URN using the cap definition's media_specs
+	resolved, err := ResolveMediaUrn(mediaUrn, cc.capDefinition.GetMediaSpecs())
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve output spec ID '%s' for cap '%s': %w - check that media_specs contains this spec ID or it is a built-in", specID, cc.cap, err)
+		return nil, fmt.Errorf("failed to resolve output media URN '%s' for cap '%s': %w - check that media_specs contains this media URN or it is a built-in", mediaUrn, cc.cap, err)
 	}
 	return resolved, nil
 }

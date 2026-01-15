@@ -11,9 +11,9 @@ import (
 // Test helper for integration tests
 func intTestUrn(tags string) string {
 	if tags == "" {
-		return "cap:in=std:void.v1;out=std:obj.v1"
+		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
 	}
-	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
 }
 
 // TestIntegrationVersionlessCapCreation verifies caps can be created without version fields
@@ -25,8 +25,8 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	cap := NewCap(urn, "Data Transformer", "transform-command")
 
 	// Verify the cap has direction specs in canonical form
-	assert.Contains(t, cap.UrnString(), "in=std:void.v1")
-	assert.Contains(t, cap.UrnString(), "out=std:obj.v1")
+	assert.Contains(t, cap.UrnString(), `in="media:type=void;v=1"`)
+	assert.Contains(t, cap.UrnString(), `out="media:type=object;v=1"`)
 	assert.Equal(t, "transform-command", cap.Command)
 
 	// Test case 2: Create cap with description but no version
@@ -75,8 +75,8 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 
 	// Test case 4: Builder preserves value case
 	urn3, err := NewCapUrnBuilder().
-		InSpec("std:void.v1").
-		OutSpec("std:obj.v1").
+		InSpec(MediaVoid).
+		OutSpec(MediaObject).
 		Tag("OP", "Transform"). // value case preserved
 		Tag("Format", "JSON").  // value case preserved
 		Build()
@@ -89,15 +89,15 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 
 // TestIntegrationCallerAndResponseSystem verifies the caller and response system
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
-	// Setup test cap definition with spec IDs
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=extract;out=std:obj.v1;target=metadata")
+	// Setup test cap definition with media URNs
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=extract;out="media:type=object;v=1";target=metadata`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
-	capDef.SetOutput(NewCapOutput(SpecIDObj, "Extracted metadata"))
+	capDef.SetOutput(NewCapOutput(MediaObject, "Extracted metadata"))
 
 	// Add required argument
-	arg := NewCapArgument("input", SpecIDStr, "Input file path", "--input")
+	arg := NewCapArgument("input", MediaString, "Input file path", "--input")
 	capDef.AddRequiredArgument(arg)
 
 	// Mock host that returns JSON
@@ -108,7 +108,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	}
 
 	// Create caller
-	caller := NewCapCaller("cap:in=std:void.v1;op=extract;out=std:obj.v1;target=metadata", mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:type=void;v=1";op=extract;out="media:type=object;v=1";target=metadata`, mockHost, capDef)
 
 	// Test call with valid arguments
 	ctx := context.Background()
@@ -140,11 +140,11 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 // TestIntegrationBinaryCapHandling verifies binary cap handling
 func TestIntegrationBinaryCapHandling(t *testing.T) {
 	// Setup binary cap
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=generate;out=std:binary.v1;target=thumbnail")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=generate;out="media:type=binary;v=1";target=thumbnail`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
-	capDef.SetOutput(NewCapOutput(SpecIDBinary, "Generated thumbnail"))
+	capDef.SetOutput(NewCapOutput(MediaBinary, "Generated thumbnail"))
 
 	// Mock host that returns binary data
 	pngHeader := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
@@ -154,7 +154,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:in=std:void.v1;op=generate;out=std:binary.v1;target=thumbnail", mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:type=void;v=1";op=generate;out="media:type=binary;v=1";target=thumbnail`, mockHost, capDef)
 
 	// Test binary response
 	ctx := context.Background()
@@ -176,14 +176,14 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 // TestIntegrationTextCapHandling verifies text cap handling
 func TestIntegrationTextCapHandling(t *testing.T) {
 	// Setup text cap
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=format;out=std:str.v1;target=text")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=format;out="media:type=string;v=1";target=text`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Text Formatter", "format-text")
-	capDef.SetOutput(NewCapOutput(SpecIDStr, "Formatted text"))
+	capDef.SetOutput(NewCapOutput(MediaString, "Formatted text"))
 
 	// Add required argument
-	arg := NewCapArgument("input", SpecIDStr, "Input text", "--input")
+	arg := NewCapArgument("input", MediaString, "Input text", "--input")
 	capDef.AddRequiredArgument(arg)
 
 	// Mock host that returns text
@@ -193,7 +193,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:in=std:void.v1;op=format;out=std:str.v1;target=text", mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:type=void;v=1";op=format;out="media:type=string;v=1";target=text`, mockHost, capDef)
 
 	// Test text response
 	ctx := context.Background()
@@ -214,13 +214,13 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 // TestIntegrationCapWithMediaSpecs verifies caps with custom media specs
 func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 	// Setup cap with custom media spec
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=query;out=my:result.v1;target=data")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=query;out="media:type=result;v=1";target=data`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Query", "query-data")
 
 	// Add custom media spec with schema
-	capDef.AddMediaSpec("my:result.v1", NewMediaSpecDefObjectWithSchema(
+	capDef.AddMediaSpec("media:type=result;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{
@@ -236,7 +236,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 		},
 	))
 
-	capDef.SetOutput(NewCapOutput("my:result.v1", "Query result"))
+	capDef.SetOutput(NewCapOutput("media:type=result;v=1", "Query result"))
 
 	// Mock host
 	mockHost := &MockCapSet{
@@ -245,7 +245,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller("cap:in=std:void.v1;op=query;out=my:result.v1;target=data", mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:type=void;v=1";op=query;out="media:type=result;v=1";target=data`, mockHost, capDef)
 
 	// Test call
 	ctx := context.Background()
@@ -266,20 +266,20 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a cap with arguments
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=process;out=std:obj.v1;target=data")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=process;out="media:type=object;v=1";target=data`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Processor", "process-data")
 
 	// Add required string argument
-	capDef.AddRequiredArgument(NewCapArgument("input", SpecIDStr, "Input path", "--input"))
+	capDef.AddRequiredArgument(NewCapArgument("input", MediaString, "Input path", "--input"))
 
 	// Add optional integer argument
-	optArg := NewCapArgument("count", SpecIDInt, "Count limit", "--count")
+	optArg := NewCapArgument("count", MediaInteger, "Count limit", "--count")
 	capDef.AddOptionalArgument(optArg)
 
 	// Set output
-	capDef.SetOutput(NewCapOutput(SpecIDObj, "Processing result"))
+	capDef.SetOutput(NewCapOutput(MediaObject, "Processing result"))
 
 	// Register cap
 	coordinator.RegisterCap(capDef)
@@ -301,10 +301,10 @@ func TestIntegrationCapValidation(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestIntegrationSpecIDResolution verifies spec ID resolution
-func TestIntegrationSpecIDResolution(t *testing.T) {
-	// Test built-in spec ID resolution
-	resolved, err := ResolveSpecID(SpecIDStr, nil)
+// TestIntegrationMediaUrnResolution verifies media URN resolution
+func TestIntegrationMediaUrnResolution(t *testing.T) {
+	// Test built-in media URN resolution
+	resolved, err := ResolveMediaUrn(MediaString, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileStr, resolved.ProfileURI)
@@ -312,29 +312,29 @@ func TestIntegrationSpecIDResolution(t *testing.T) {
 	assert.False(t, resolved.IsJSON())
 	assert.True(t, resolved.IsText())
 
-	// Test object spec
-	resolved, err = ResolveSpecID(SpecIDObj, nil)
+	// Test object media URN
+	resolved, err = ResolveMediaUrn(MediaObject, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.True(t, resolved.IsJSON())
 
-	// Test binary spec
-	resolved, err = ResolveSpecID(SpecIDBinary, nil)
+	// Test binary media URN
+	resolved, err = ResolveMediaUrn(MediaBinary, nil)
 	require.NoError(t, err)
 	assert.True(t, resolved.IsBinary())
 
-	// Test custom spec resolution
+	// Test custom media URN resolution
 	customSpecs := map[string]MediaSpecDef{
-		"my:custom.v1": NewMediaSpecDefString("text/html; profile=https://example.com/schema/html"),
+		"media:type=custom;v=1": NewMediaSpecDefString("text/html; profile=https://example.com/schema/html"),
 	}
 
-	resolved, err = ResolveSpecID("my:custom.v1", customSpecs)
+	resolved, err = ResolveMediaUrn("media:type=custom;v=1", customSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "text/html", resolved.MediaType)
 	assert.Equal(t, "https://example.com/schema/html", resolved.ProfileURI)
 
-	// Test unknown spec ID fails
-	_, err = ResolveSpecID("unknown:spec.v1", nil)
+	// Test unknown media URN fails
+	_, err = ResolveMediaUrn("media:type=unknown;v=1", nil)
 	assert.Error(t, err)
 }
 

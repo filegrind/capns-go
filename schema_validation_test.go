@@ -9,13 +9,13 @@ import (
 
 // Helper to create a cap with media specs for testing
 func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:obj.v1")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=test;out="media:type=object;v=1"`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Test Cap", "test-command")
 
 	// Add a custom media spec with the provided schema
-	cap.AddMediaSpec("test:obj.v1", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:type=test-obj;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://test.example.com/schema",
 		argSchema,
@@ -43,7 +43,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 	}
 
 	// Create an argument
-	arg := NewCapArgument("user_data", "test:obj.v1", "User data", "--user")
+	arg := NewCapArgument("user_data", "media:type=test-obj;v=1", "User data", "--user")
 
 	// Test valid data
 	validData := map[string]interface{}{
@@ -74,7 +74,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 	}
 
 	// Create an argument
-	arg := NewCapArgument("user_data", "test:obj.v1", "User data", "--user")
+	arg := NewCapArgument("user_data", "media:type=test-obj;v=1", "User data", "--user")
 
 	// Test invalid data (missing required field)
 	invalidData := map[string]interface{}{
@@ -95,7 +95,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_NilSchema(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Create argument
-	arg := NewCapArgument("simple_string", SpecIDStr, "Simple string", "--string")
+	arg := NewCapArgument("simple_string", MediaString, "Simple string", "--string")
 
 	// Nil schema should not validate
 	err := validator.ValidateArgumentWithSchema(&arg, nil, "any string value")
@@ -121,7 +121,7 @@ func TestSchemaValidator_ValidateOutputWithSchema_Success(t *testing.T) {
 	}
 
 	// Create output
-	output := NewCapOutput("test:result.v1", "Query result")
+	output := NewCapOutput("media:type=test-result;v=1", "Query result")
 
 	// Test valid output data
 	validData := map[string]interface{}{
@@ -148,7 +148,7 @@ func TestSchemaValidator_ValidateOutputWithSchema_Failure(t *testing.T) {
 	}
 
 	// Create output
-	output := NewCapOutput("test:result.v1", "Query result")
+	output := NewCapOutput("media:type=test-result;v=1", "Query result")
 
 	// Test invalid output data (missing required field)
 	invalidData := map[string]interface{}{
@@ -168,7 +168,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=query;out=std:obj.v1;target=structured")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=query;out="media:type=object;v=1";target=structured`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Query Processor", "test-command")
@@ -183,14 +183,14 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 		"required": []interface{}{"name"},
 	}
 
-	cap.AddMediaSpec("my:user.v1", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:type=user;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/user",
 		userSchema,
 	))
 
 	// Add argument referencing the custom spec
-	userArg := NewCapArgument("user", "my:user.v1", "User data", "--user")
+	userArg := NewCapArgument("user", "media:type=user;v=1", "User data", "--user")
 	cap.AddRequiredArgument(userArg)
 
 	// Test valid arguments
@@ -237,7 +237,7 @@ func TestSchemaValidator_ArraySchemaValidation(t *testing.T) {
 	}
 
 	// Create an argument
-	arg := NewCapArgument("items", "my:items.v1", "List of items", "--items")
+	arg := NewCapArgument("items", "media:type=items;v=1", "List of items", "--items")
 
 	// Test valid array data
 	validData := []interface{}{
@@ -267,7 +267,7 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewInputValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:obj.v1")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=test;out="media:type=object;v=1"`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Config Validator", "test-command")
@@ -281,13 +281,13 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 		"required": []interface{}{"value"},
 	}
 
-	cap.AddMediaSpec("my:config.v1", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:type=config;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/config",
 		schema,
 	))
 
-	arg := NewCapArgument("config", "my:config.v1", "Configuration", "--config")
+	arg := NewCapArgument("config", "media:type=config;v=1", "Configuration", "--config")
 	cap.AddRequiredArgument(arg)
 
 	// Test valid input
@@ -316,7 +316,7 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewOutputValidator()
 
 	// Create a capability with schema-enabled output
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=test;out=std:obj.v1")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=test;out="media:type=object;v=1"`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Output Validator", "test-command")
@@ -334,13 +334,13 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 		"required": []interface{}{"status"},
 	}
 
-	cap.AddMediaSpec("my:result.v1", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:type=result;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/result",
 		schema,
 	))
 
-	output := NewCapOutput("my:result.v1", "Command result")
+	output := NewCapOutput("media:type=result;v=1", "Command result")
 	cap.SetOutput(output)
 
 	// Test valid output
@@ -371,7 +371,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a capability with full schema validation
-	urn, err := NewCapUrnFromString("cap:in=std:void.v1;op=query;out=std:obj.v1;target=structured")
+	urn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=query;out="media:type=object;v=1";target=structured`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Structured Query", "query-command")
@@ -386,13 +386,13 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		"required": []interface{}{"query"},
 	}
 
-	cap.AddMediaSpec("my:query-params.v1", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:type=query-params;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-params",
 		inputSchema,
 	))
 
-	queryArg := NewCapArgument("query_params", "my:query-params.v1", "Query parameters", "--query")
+	queryArg := NewCapArgument("query_params", "media:type=query-params;v=1", "Query parameters", "--query")
 	cap.AddRequiredArgument(queryArg)
 
 	// Add output with schema
@@ -414,13 +414,13 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		"required": []interface{}{"results", "total"},
 	}
 
-	cap.AddMediaSpec("my:query-results.v1", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:type=query-results;v=1", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-results",
 		outputSchema,
 	))
 
-	output := NewCapOutput("my:query-results.v1", "Query results")
+	output := NewCapOutput("media:type=query-results;v=1", "Query results")
 	cap.SetOutput(output)
 
 	// Register the capability
@@ -521,7 +521,7 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 		"required": []interface{}{"user"},
 	}
 
-	arg := NewCapArgument("user_data", "my:user-data.v1", "Complex user data", "--user-data")
+	arg := NewCapArgument("user_data", "media:type=user-data;v=1", "Complex user data", "--user-data")
 
 	// Test valid complex data
 	validData := map[string]interface{}{
@@ -554,33 +554,33 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestBuiltinSpecIDResolution(t *testing.T) {
-	// Test that built-in spec IDs can be resolved
-	resolved, err := ResolveSpecID(SpecIDStr, nil)
+func TestBuiltinMediaUrnResolution(t *testing.T) {
+	// Test that built-in media URNs can be resolved
+	resolved, err := ResolveMediaUrn(MediaString, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileStr, resolved.ProfileURI)
 
-	resolved, err = ResolveSpecID(SpecIDInt, nil)
+	resolved, err = ResolveMediaUrn(MediaInteger, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileInt, resolved.ProfileURI)
 
-	resolved, err = ResolveSpecID(SpecIDObj, nil)
+	resolved, err = ResolveMediaUrn(MediaObject, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.Equal(t, ProfileObj, resolved.ProfileURI)
 
-	resolved, err = ResolveSpecID(SpecIDBinary, nil)
+	resolved, err = ResolveMediaUrn(MediaBinary, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "application/octet-stream", resolved.MediaType)
 	assert.True(t, resolved.IsBinary())
 }
 
-func TestCustomSpecIDResolution(t *testing.T) {
+func TestCustomMediaUrnResolution(t *testing.T) {
 	mediaSpecs := map[string]MediaSpecDef{
-		"my:custom.v1": NewMediaSpecDefString("text/html; profile=https://example.com/schema/html"),
-		"my:complex.v1": NewMediaSpecDefObjectWithSchema(
+		"media:type=custom;v=1": NewMediaSpecDefString("text/html; profile=https://example.com/schema/html"),
+		"media:type=complex;v=1": NewMediaSpecDefObjectWithSchema(
 			"application/json",
 			"https://example.com/schema/complex",
 			map[string]interface{}{"type": "object"},
@@ -588,18 +588,18 @@ func TestCustomSpecIDResolution(t *testing.T) {
 	}
 
 	// String form resolution
-	resolved, err := ResolveSpecID("my:custom.v1", mediaSpecs)
+	resolved, err := ResolveMediaUrn("media:type=custom;v=1", mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "text/html", resolved.MediaType)
 	assert.Equal(t, "https://example.com/schema/html", resolved.ProfileURI)
 
 	// Object form resolution with schema
-	resolved, err = ResolveSpecID("my:complex.v1", mediaSpecs)
+	resolved, err = ResolveMediaUrn("media:type=complex;v=1", mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.NotNil(t, resolved.Schema)
 
-	// Unknown spec ID should fail
-	_, err = ResolveSpecID("unknown:spec.v1", mediaSpecs)
+	// Unknown media URN should fail
+	_, err = ResolveMediaUrn("media:type=unknown;v=1", mediaSpecs)
 	assert.Error(t, err)
 }

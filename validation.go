@@ -51,8 +51,8 @@ func NewUnknownArgumentError(capUrn, argumentName string) *ValidationError {
 	}
 }
 
-// NewInvalidArgumentTypeErrorFromSpecID creates an error for invalid argument types using spec IDs
-func NewInvalidArgumentTypeErrorFromSpecID(capUrn, argumentName, specID, expectedType, actualType string, actualValue interface{}) *ValidationError {
+// NewInvalidArgumentTypeErrorFromMediaUrn creates an error for invalid argument types using media URNs
+func NewInvalidArgumentTypeErrorFromMediaUrn(capUrn, argumentName, mediaUrn, expectedType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidArgumentType",
 		CapUrn:       capUrn,
@@ -60,17 +60,17 @@ func NewInvalidArgumentTypeErrorFromSpecID(capUrn, argumentName, specID, expecte
 		ExpectedType: expectedType,
 		ActualType:   actualType,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Cap '%s' argument '%s' (spec: %s) expects type '%s' but received '%s' with value: %v", capUrn, argumentName, specID, expectedType, actualType, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' (media URN: %s) expects type '%s' but received '%s' with value: %v", capUrn, argumentName, mediaUrn, expectedType, actualType, actualValue),
 	}
 }
 
-// NewUnresolvableSpecIDError creates an error for unresolvable spec IDs in validation
-func NewUnresolvableSpecIDErrorForValidation(capUrn, argumentName, specID string) *ValidationError {
+// NewUnresolvableMediaUrnErrorForValidation creates an error for unresolvable media URNs in validation
+func NewUnresolvableMediaUrnErrorForValidation(capUrn, argumentName, mediaUrn string) *ValidationError {
 	return &ValidationError{
-		Type:         "UnresolvableSpecID",
+		Type:         "UnresolvableMediaUrn",
 		CapUrn:       capUrn,
 		ArgumentName: argumentName,
-		Message:      fmt.Sprintf("Cap '%s' argument '%s' has unresolvable spec ID '%s' - not found in media_specs and not a built-in", capUrn, argumentName, specID),
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' has unresolvable media URN '%s' - not found in media_specs and not a built-in", capUrn, argumentName, mediaUrn),
 	}
 }
 
@@ -86,15 +86,15 @@ func NewArgumentValidationFailedError(capUrn, argumentName, rule string, actualV
 	}
 }
 
-// NewInvalidOutputTypeErrorFromSpecID creates an error for invalid output types using spec IDs
-func NewInvalidOutputTypeErrorFromSpecID(capUrn, specID, expectedType, actualType string, actualValue interface{}) *ValidationError {
+// NewInvalidOutputTypeErrorFromMediaUrn creates an error for invalid output types using media URNs
+func NewInvalidOutputTypeErrorFromMediaUrn(capUrn, mediaUrn, expectedType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
 		Type:         "InvalidOutputType",
 		CapUrn:       capUrn,
 		ExpectedType: expectedType,
 		ActualType:   actualType,
 		ActualValue:  actualValue,
-		Message:      fmt.Sprintf("Cap '%s' output (spec: %s) expects type '%s' but received '%s' with value: %v", capUrn, specID, expectedType, actualType, actualValue),
+		Message:      fmt.Sprintf("Cap '%s' output (media URN: %s) expects type '%s' but received '%s' with value: %v", capUrn, mediaUrn, expectedType, actualType, actualValue),
 	}
 }
 
@@ -243,10 +243,10 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 }
 
 func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, value interface{}) error {
-	// Resolve the spec ID to determine the expected type
+	// Resolve the media URN to determine the expected type
 	resolved, err := argDef.Resolve(cap.GetMediaSpecs())
 	if err != nil {
-		return NewUnresolvableSpecIDErrorForValidation(cap.UrnString(), argDef.Name, argDef.MediaSpec)
+		return NewUnresolvableMediaUrnErrorForValidation(cap.UrnString(), argDef.Name, argDef.MediaUrn)
 	}
 
 	// Type validation based on resolved media spec
@@ -294,8 +294,8 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, re
 	capUrn := cap.UrnString()
 	actualType := getValueTypeName(value)
 
-	// Determine expected type from spec ID
-	expectedType := getExpectedTypeFromSpecID(argDef.MediaSpec, resolved)
+	// Determine expected type from media URN
+	expectedType := getExpectedTypeFromMediaUrn(argDef.MediaUrn, resolved)
 
 	typeMatches := false
 	switch expectedType {
@@ -328,33 +328,35 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, re
 	}
 
 	if !typeMatches {
-		return NewInvalidArgumentTypeErrorFromSpecID(capUrn, argDef.Name, argDef.MediaSpec, expectedType, actualType, value)
+		return NewInvalidArgumentTypeErrorFromMediaUrn(capUrn, argDef.Name, argDef.MediaUrn, expectedType, actualType, value)
 	}
 
 	return nil
 }
 
-// getExpectedTypeFromSpecID determines the expected Go type from a spec ID
-func getExpectedTypeFromSpecID(specID string, resolved *ResolvedMediaSpec) string {
-	// First try built-in spec IDs
-	switch specID {
-	case SpecIDStr:
+// getExpectedTypeFromMediaUrn determines the expected Go type from a media URN
+func getExpectedTypeFromMediaUrn(mediaUrn string, resolved *ResolvedMediaSpec) string {
+	// First try built-in media URNs
+	switch mediaUrn {
+	case MediaString:
 		return "string"
-	case SpecIDInt:
+	case MediaInteger:
 		return "integer"
-	case SpecIDNum:
+	case MediaNumber:
 		return "number"
-	case SpecIDBool:
+	case MediaBoolean:
 		return "boolean"
-	case SpecIDObj:
+	case MediaObject:
 		return "object"
-	case SpecIDStrArray, SpecIDIntArray, SpecIDNumArray, SpecIDBoolArray, SpecIDObjArray:
+	case MediaStringArray, MediaIntegerArray, MediaNumberArray, MediaBooleanArray, MediaObjectArray:
 		return "array"
-	case SpecIDBinary:
+	case MediaBinary:
 		return "binary"
+	case MediaVoid:
+		return "void"
 	}
 
-	// For non-builtin specs, infer from media type
+	// For non-builtin media URNs, infer from media type
 	if resolved != nil {
 		if resolved.IsBinary() {
 			return "binary"
@@ -474,13 +476,13 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 		}
 	}
 
-	// Resolve the spec ID
+	// Resolve the media URN
 	resolved, err := outputDef.Resolve(cap.GetMediaSpecs())
 	if err != nil {
 		return &ValidationError{
-			Type:    "UnresolvableSpecID",
+			Type:    "UnresolvableMediaUrn",
 			CapUrn:  capUrn,
-			Message: fmt.Sprintf("Cap '%s' output has unresolvable spec ID '%s'", capUrn, outputDef.MediaSpec),
+			Message: fmt.Sprintf("Cap '%s' output has unresolvable media URN '%s'", capUrn, outputDef.MediaUrn),
 		}
 	}
 
@@ -529,8 +531,8 @@ func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, re
 	capUrn := cap.UrnString()
 	actualType := getValueTypeName(value)
 
-	// Determine expected type from spec ID
-	expectedType := getExpectedTypeFromSpecID(outputDef.MediaSpec, resolved)
+	// Determine expected type from media URN
+	expectedType := getExpectedTypeFromMediaUrn(outputDef.MediaUrn, resolved)
 
 	typeMatches := false
 	switch expectedType {
@@ -563,7 +565,7 @@ func (ov *OutputValidator) validateOutputType(cap *Cap, outputDef *CapOutput, re
 	}
 
 	if !typeMatches {
-		return NewInvalidOutputTypeErrorFromSpecID(capUrn, outputDef.MediaSpec, expectedType, actualType, value)
+		return NewInvalidOutputTypeErrorFromMediaUrn(capUrn, outputDef.MediaUrn, expectedType, actualType, value)
 	}
 
 	return nil
@@ -712,14 +714,14 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 		}
 	}
 
-	// Validate that all argument spec IDs can be resolved
+	// Validate that all argument media URNs can be resolved
 	for _, arg := range cap.Arguments.Required {
 		if _, err := arg.Resolve(cap.GetMediaSpecs()); err != nil {
 			return &ValidationError{
 				Type:         "InvalidCapSchema",
 				CapUrn:       capUrn,
 				ArgumentName: arg.Name,
-				Message:      fmt.Sprintf("Cap '%s' required argument '%s' has unresolvable spec ID '%s'", capUrn, arg.Name, arg.MediaSpec),
+				Message:      fmt.Sprintf("Cap '%s' required argument '%s' has unresolvable media URN '%s'", capUrn, arg.Name, arg.MediaUrn),
 			}
 		}
 	}
@@ -729,18 +731,18 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 				Type:         "InvalidCapSchema",
 				CapUrn:       capUrn,
 				ArgumentName: arg.Name,
-				Message:      fmt.Sprintf("Cap '%s' optional argument '%s' has unresolvable spec ID '%s'", capUrn, arg.Name, arg.MediaSpec),
+				Message:      fmt.Sprintf("Cap '%s' optional argument '%s' has unresolvable media URN '%s'", capUrn, arg.Name, arg.MediaUrn),
 			}
 		}
 	}
 
-	// Validate output spec ID if present
+	// Validate output media URN if present
 	if cap.Output != nil {
 		if _, err := cap.Output.Resolve(cap.GetMediaSpecs()); err != nil {
 			return &ValidationError{
 				Type:    "InvalidCapSchema",
 				CapUrn:  capUrn,
-				Message: fmt.Sprintf("Cap '%s' output has unresolvable spec ID '%s'", capUrn, cap.Output.MediaSpec),
+				Message: fmt.Sprintf("Cap '%s' output has unresolvable media URN '%s'", capUrn, cap.Output.MediaUrn),
 			}
 		}
 	}

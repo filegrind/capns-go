@@ -1,14 +1,13 @@
-// Package capns provides MediaSpec parsing and spec ID resolution
+// Package capns provides MediaSpec parsing and media URN resolution
 //
-// Spec IDs reference media type definitions in the media_specs table.
-// Format: `std:<type>.v1` for built-ins, or custom spec IDs.
+// Media URNs reference media type definitions in the media_specs table.
+// Format: `media:type=<type>;v=<version>` with optional profile tag.
 //
-// Canonical media spec format: `<mime-type>; profile=<url>`
 // Examples:
-// - `text/plain; profile=https://capns.org/schema/str`
-// - `application/json; profile=https://capns.org/schema/obj`
+// - `media:type=string;v=1`
+// - `media:type=object;v=1;profile="https://example.com/schema.json"`
 //
-// NO LEGACY SUPPORT: The `content-type:` prefix is NOT supported and will fail hard.
+// NO LEGACY SUPPORT: The old `std:xxx.v1` format is NOT supported and will fail hard.
 package capns
 
 import (
@@ -18,20 +17,20 @@ import (
 	"strings"
 )
 
-// Built-in spec ID constants
+// Built-in media URN constants
 const (
-	SpecIDStr      = "std:str.v1"
-	SpecIDInt      = "std:int.v1"
-	SpecIDNum      = "std:num.v1"
-	SpecIDBool     = "std:bool.v1"
-	SpecIDObj      = "std:obj.v1"
-	SpecIDStrArray = "std:str-array.v1"
-	SpecIDIntArray = "std:int-array.v1"
-	SpecIDNumArray = "std:num-array.v1"
-	SpecIDBoolArray = "std:bool-array.v1"
-	SpecIDObjArray = "std:obj-array.v1"
-	SpecIDBinary   = "std:binary.v1"
-	SpecIDVoid     = "std:void.v1"
+	MediaVoid        = "media:type=void;v=1"
+	MediaString      = "media:type=string;v=1"
+	MediaInteger     = "media:type=integer;v=1"
+	MediaNumber      = "media:type=number;v=1"
+	MediaBoolean     = "media:type=boolean;v=1"
+	MediaObject      = "media:type=object;v=1"
+	MediaBinary      = "media:type=binary;v=1"
+	MediaStringArray = "media:type=string-array;v=1"
+	MediaIntegerArray = "media:type=integer-array;v=1"
+	MediaNumberArray = "media:type=number-array;v=1"
+	MediaBooleanArray = "media:type=boolean-array;v=1"
+	MediaObjectArray = "media:type=object-array;v=1"
 )
 
 // Profile URL constants
@@ -195,37 +194,43 @@ func (e *MediaSpecError) Error() string {
 }
 
 var (
-	ErrUnresolvableSpecID = &MediaSpecError{"spec ID cannot be resolved"}
-	ErrLegacyFormat       = &MediaSpecError{"legacy 'content-type:' prefix is not supported - use canonical format"}
-	ErrEmptyMediaType     = &MediaSpecError{"media type cannot be empty"}
-	ErrUnterminatedQuote  = &MediaSpecError{"unterminated quote in profile value"}
+	ErrUnresolvableMediaUrn = &MediaSpecError{"media URN cannot be resolved"}
+	ErrLegacyFormat         = &MediaSpecError{"legacy 'std:xxx.v1' format is not supported - use media URN format"}
+	ErrEmptyMediaType       = &MediaSpecError{"media type cannot be empty"}
+	ErrUnterminatedQuote    = &MediaSpecError{"unterminated quote in profile value"}
+	ErrInvalidMediaUrn      = &MediaSpecError{"invalid media URN - must start with 'media:'"}
 )
 
-// NewUnresolvableSpecIDError creates an error for unresolvable spec IDs
-func NewUnresolvableSpecIDError(specID string) error {
+// NewUnresolvableMediaUrnError creates an error for unresolvable media URNs
+func NewUnresolvableMediaUrnError(mediaUrn string) error {
 	return &MediaSpecError{
-		Message: fmt.Sprintf("spec ID '%s' cannot be resolved - not found in media_specs and not a built-in", specID),
+		Message: fmt.Sprintf("media URN '%s' cannot be resolved - not found in media_specs and not a built-in", mediaUrn),
 	}
 }
 
-// ResolveSpecID resolves a spec ID to a ResolvedMediaSpec
+// ResolveMediaUrn resolves a media URN to a ResolvedMediaSpec
 // Resolution order:
 // 1. Look up in provided media_specs map
 // 2. Check if it's a built-in primitive
 // 3. FAIL HARD if not found - no fallbacks
-func ResolveSpecID(specID string, mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+func ResolveMediaUrn(mediaUrn string, mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+	// Validate it's a media URN
+	if !strings.HasPrefix(mediaUrn, "media:") {
+		return nil, ErrInvalidMediaUrn
+	}
+
 	// First, try to look up in the provided media_specs
-	if def, exists := mediaSpecs[specID]; exists {
-		return resolveMediaSpecDef(specID, &def)
+	if def, exists := mediaSpecs[mediaUrn]; exists {
+		return resolveMediaSpecDef(mediaUrn, &def)
 	}
 
 	// Second, check if it's a built-in primitive
-	if resolved := resolveBuiltin(specID); resolved != nil {
+	if resolved := resolveBuiltin(mediaUrn); resolved != nil {
 		return resolved, nil
 	}
 
 	// FAIL HARD - no fallbacks
-	return nil, NewUnresolvableSpecIDError(specID)
+	return nil, NewUnresolvableMediaUrnError(mediaUrn)
 }
 
 // resolveMediaSpecDef resolves a MediaSpecDef to a ResolvedMediaSpec
@@ -256,41 +261,41 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 	}, nil
 }
 
-// resolveBuiltin resolves built-in spec IDs
-func resolveBuiltin(specID string) *ResolvedMediaSpec {
-	switch specID {
-	case SpecIDStr:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "text/plain", ProfileURI: ProfileStr}
-	case SpecIDInt:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "text/plain", ProfileURI: ProfileInt}
-	case SpecIDNum:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "text/plain", ProfileURI: ProfileNum}
-	case SpecIDBool:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "text/plain", ProfileURI: ProfileBool}
-	case SpecIDObj:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/json", ProfileURI: ProfileObj}
-	case SpecIDStrArray:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/json", ProfileURI: ProfileStrArray}
-	case SpecIDIntArray:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/json", ProfileURI: ProfileIntArray}
-	case SpecIDNumArray:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/json", ProfileURI: ProfileNumArray}
-	case SpecIDBoolArray:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/json", ProfileURI: ProfileBoolArray}
-	case SpecIDObjArray:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/json", ProfileURI: ProfileObjArray}
-	case SpecIDBinary:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/octet-stream", ProfileURI: ""}
-	case SpecIDVoid:
-		return &ResolvedMediaSpec{SpecID: specID, MediaType: "application/x-void", ProfileURI: ProfileVoid}
+// resolveBuiltin resolves built-in media URNs
+func resolveBuiltin(mediaUrn string) *ResolvedMediaSpec {
+	switch mediaUrn {
+	case MediaString:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileStr}
+	case MediaInteger:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileInt}
+	case MediaNumber:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileNum}
+	case MediaBoolean:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileBool}
+	case MediaObject:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObj}
+	case MediaStringArray:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileStrArray}
+	case MediaIntegerArray:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileIntArray}
+	case MediaNumberArray:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileNumArray}
+	case MediaBooleanArray:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileBoolArray}
+	case MediaObjectArray:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObjArray}
+	case MediaBinary:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/octet-stream", ProfileURI: ""}
+	case MediaVoid:
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-void", ProfileURI: ProfileVoid}
 	default:
 		return nil
 	}
 }
 
-// IsBuiltinSpecID checks if a spec ID is a built-in
-func IsBuiltinSpecID(specID string) bool {
-	return resolveBuiltin(specID) != nil
+// IsBuiltinMediaUrn checks if a media URN is a built-in
+func IsBuiltinMediaUrn(mediaUrn string) bool {
+	return resolveBuiltin(mediaUrn) != nil
 }
 
 // ParsedMediaSpec represents a parsed media spec string (canonical form)
@@ -364,30 +369,32 @@ func parseProfile(params string) (string, error) {
 	return strings.TrimSpace(afterProfile), nil
 }
 
-// GetTypeFromSpecID returns the base type (str, int, num, bool, obj, binary, etc.) from a spec ID
+// GetTypeFromMediaUrn returns the base type (string, integer, number, boolean, object, binary, etc.) from a media URN
 // This is useful for validation to determine what Go type to expect
-func GetTypeFromSpecID(specID string) string {
-	resolved := resolveBuiltin(specID)
+func GetTypeFromMediaUrn(mediaUrn string) string {
+	resolved := resolveBuiltin(mediaUrn)
 	if resolved == nil {
-		// For non-builtin spec IDs, we need to resolve and check media type
+		// For non-builtin media URNs, we need to resolve and check media type
 		return "unknown"
 	}
 
-	switch specID {
-	case SpecIDStr:
+	switch mediaUrn {
+	case MediaString:
 		return "string"
-	case SpecIDInt:
+	case MediaInteger:
 		return "integer"
-	case SpecIDNum:
+	case MediaNumber:
 		return "number"
-	case SpecIDBool:
+	case MediaBoolean:
 		return "boolean"
-	case SpecIDObj:
+	case MediaObject:
 		return "object"
-	case SpecIDStrArray, SpecIDIntArray, SpecIDNumArray, SpecIDBoolArray, SpecIDObjArray:
+	case MediaStringArray, MediaIntegerArray, MediaNumberArray, MediaBooleanArray, MediaObjectArray:
 		return "array"
-	case SpecIDBinary:
+	case MediaBinary:
 		return "binary"
+	case MediaVoid:
+		return "void"
 	default:
 		return "unknown"
 	}
@@ -407,13 +414,14 @@ func GetTypeFromResolvedMediaSpec(resolved *ResolvedMediaSpec) string {
 	return "unknown"
 }
 
-// GetMediaSpecFromCapUrn extracts media_spec from a CapUrn using the 'out' tag
-// The 'out' tag now contains a spec ID, not a full media spec string
+// GetMediaSpecFromCapUrn extracts media spec from a CapUrn using the 'out' tag
+// The 'out' tag contains a media URN
 func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
-	if specID, exists := urn.GetTag("out"); exists {
-		return ResolveSpecID(specID, mediaSpecs)
+	outUrn := urn.OutSpec()
+	if outUrn == "" {
+		return nil, errors.New("no 'out' tag found in cap URN")
 	}
-	return nil, errors.New("no 'out' tag found in cap URN")
+	return ResolveMediaUrn(outUrn, mediaSpecs)
 }
 
 // Legacy compatibility shim - REMOVED

@@ -195,7 +195,7 @@ func (rw *ResponseWrapper) ValidateAgainstCap(cap *Cap) error {
 		if output := cap.GetOutput(); output != nil {
 			resolved, err := output.Resolve(cap.GetMediaSpecs())
 			if err != nil {
-				return fmt.Errorf("failed to resolve output spec ID '%s': %w", output.MediaSpec, err)
+				return fmt.Errorf("failed to resolve output media URN '%s': %w", output.MediaUrn, err)
 			}
 			if !resolved.IsBinary() {
 				return fmt.Errorf(
@@ -233,10 +233,10 @@ func (rw *ResponseWrapper) MatchesOutputType(cap *Cap) (bool, error) {
 		return false, fmt.Errorf("cap '%s' has no output definition", cap.UrnString())
 	}
 
-	// Resolve the output spec ID to get the media type - fail hard if resolution fails
+	// Resolve the output media URN to get the media type - fail hard if resolution fails
 	resolved, err := output.Resolve(cap.GetMediaSpecs())
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve output spec ID '%s' for cap '%s': %w", output.MediaSpec, cap.UrnString(), err)
+		return false, fmt.Errorf("failed to resolve output media URN '%s' for cap '%s': %w", output.MediaUrn, cap.UrnString(), err)
 	}
 
 	switch rw.contentType {

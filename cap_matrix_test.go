@@ -25,9 +25,9 @@ func (m *MockCapSetForRegistry) ExecuteCap(
 // Test helper for matrix tests
 func matrixTestUrn(tags string) string {
 	if tags == "" {
-		return "cap:in=std:void.v1;out=std:obj.v1"
+		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
 	}
-	return "cap:in=std:void.v1;out=std:obj.v1;" + tags
+	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
 }
 
 func TestRegisterAndFindCapSet(t *testing.T) {
@@ -73,7 +73,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 	}
 
 	// Test no match (different direction specs)
-	_, err = registry.FindCapSets("cap:in=std:binary.v1;op=different;out=std:obj.v1")
+	_, err = registry.FindCapSets(`cap:in="media:type=binary;v=1";op=different;out="media:type=object;v=1"`)
 	if err == nil {
 		t.Error("Expected error for non-matching capability, got nil")
 	}
@@ -215,7 +215,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	// Provider: less specific cap (no ext tag)
 	providerHost := &MockCapSetForRegistry{name: "provider"}
 	providerCap := makeCap(
-		"cap:in=std:binary.v1;op=generate_thumbnail;out=std:binary.v1",
+		`cap:in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
 		"Provider Thumbnail Generator (generic)",
 	)
 	providerRegistry.RegisterCapSet("provider", providerHost, []*Cap{providerCap})
@@ -223,7 +223,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	// Plugin: more specific cap (has ext=pdf)
 	pluginHost := &MockCapSetForRegistry{name: "plugin"}
 	pluginCap := makeCap(
-		"cap:ext=pdf;in=std:binary.v1;op=generate_thumbnail;out=std:binary.v1",
+		`cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
 		"Plugin PDF Thumbnail Generator (specific)",
 	)
 	pluginRegistry.RegisterCapSet("plugin", pluginHost, []*Cap{pluginCap})
@@ -234,7 +234,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	composite.AddRegistry("plugins", pluginRegistry)
 
 	// Request for PDF thumbnails - plugin's more specific cap should win
-	request := "cap:ext=pdf;in=std:binary.v1;op=generate_thumbnail;out=std:binary.v1"
+	request := `cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`
 	best, err := composite.FindBestCapSet(request)
 	if err != nil {
 		t.Fatalf("Failed to find best cap set: %v", err)
@@ -357,7 +357,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	// Provider with generic fallback (can handle any file type)
 	providerHost := &MockCapSetForRegistry{name: "provider_fallback"}
 	providerCap := makeCap(
-		"cap:in=std:binary.v1;op=generate_thumbnail;out=std:binary.v1",
+		`cap:in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
 		"Generic Thumbnail Provider",
 	)
 	providerRegistry.RegisterCapSet("provider_fallback", providerHost, []*Cap{providerCap})
@@ -365,7 +365,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	// Plugin with PDF-specific handler
 	pluginHost := &MockCapSetForRegistry{name: "pdf_plugin"}
 	pluginCap := makeCap(
-		"cap:ext=pdf;in=std:binary.v1;op=generate_thumbnail;out=std:binary.v1",
+		`cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
 		"PDF Thumbnail Plugin",
 	)
 	pluginRegistry.RegisterCapSet("pdf_plugin", pluginHost, []*Cap{pluginCap})
@@ -376,7 +376,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	composite.AddRegistry("plugins", pluginRegistry)
 
 	// Request for PDF thumbnail
-	request := "cap:ext=pdf;in=std:binary.v1;op=generate_thumbnail;out=std:binary.v1"
+	request := `cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`
 	best, err := composite.FindBestCapSet(request)
 	if err != nil {
 		t.Fatalf("Failed to find best cap set: %v", err)
@@ -394,7 +394,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	}
 
 	// Also test that for a different file type, provider wins
-	requestWav := "cap:ext=wav;in=std:binary.v1;op=generate_thumbnail;out=std:binary.v1"
+	requestWav := `cap:ext=wav;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`
 	bestWav, err := composite.FindBestCapSet(requestWav)
 	if err != nil {
 		t.Fatalf("Failed to find best cap set for wav: %v", err)
@@ -484,7 +484,8 @@ func TestCapCubeRegistryManagement(t *testing.T) {
 
 // Helper to create caps with specific in/out specs for graph testing
 func makeGraphCap(inSpec, outSpec, title string) *Cap {
-	urn := "cap:in=" + inSpec + ";op=convert;out=" + outSpec
+	// Media URNs need to be quoted in cap URN strings
+	urn := `cap:in="` + inSpec + `";op=convert;out="` + outSpec + `"`
 	capUrn, _ := NewCapUrnFromString(urn)
 	return &Cap{
 		Urn:            capUrn,
@@ -504,8 +505,8 @@ func TestCapGraphBasicConstruction(t *testing.T) {
 
 	// Add caps that form a graph:
 	// binary -> str -> obj
-	cap1 := makeGraphCap("std:binary.v1", "std:str.v1", "Binary to String")
-	cap2 := makeGraphCap("std:str.v1", "std:obj.v1", "String to Object")
+	cap1 := makeGraphCap(MediaBinary, MediaString, "Binary to String")
+	cap2 := makeGraphCap(MediaString, MediaObject, "String to Object")
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
@@ -542,8 +543,8 @@ func TestCapGraphOutgoingIncoming(t *testing.T) {
 	host := &MockCapSetForRegistry{name: "converter"}
 
 	// binary -> str, binary -> obj
-	cap1 := makeGraphCap("std:binary.v1", "std:str.v1", "Binary to String")
-	cap2 := makeGraphCap("std:binary.v1", "std:obj.v1", "Binary to Object")
+	cap1 := makeGraphCap(MediaBinary, MediaString, "Binary to String")
+	cap2 := makeGraphCap(MediaBinary, MediaObject, "Binary to Object")
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
@@ -553,19 +554,19 @@ func TestCapGraphOutgoingIncoming(t *testing.T) {
 	graph := composite.Graph()
 
 	// binary has 2 outgoing edges
-	outgoing := graph.GetOutgoing("std:binary.v1")
+	outgoing := graph.GetOutgoing(MediaBinary)
 	if len(outgoing) != 2 {
 		t.Errorf("Expected 2 outgoing edges from binary, got %d", len(outgoing))
 	}
 
 	// str has 1 incoming edge
-	incoming := graph.GetIncoming("std:str.v1")
+	incoming := graph.GetIncoming(MediaString)
 	if len(incoming) != 1 {
 		t.Errorf("Expected 1 incoming edge to str, got %d", len(incoming))
 	}
 
 	// obj has 1 incoming edge
-	incoming = graph.GetIncoming("std:obj.v1")
+	incoming = graph.GetIncoming(MediaObject)
 	if len(incoming) != 1 {
 		t.Errorf("Expected 1 incoming edge to obj, got %d", len(incoming))
 	}
@@ -577,8 +578,8 @@ func TestCapGraphCanConvert(t *testing.T) {
 	host := &MockCapSetForRegistry{name: "converter"}
 
 	// binary -> str -> obj
-	cap1 := makeGraphCap("std:binary.v1", "std:str.v1", "Binary to String")
-	cap2 := makeGraphCap("std:str.v1", "std:obj.v1", "String to Object")
+	cap1 := makeGraphCap(MediaBinary, MediaString, "Binary to String")
+	cap2 := makeGraphCap(MediaString, MediaObject, "String to Object")
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
@@ -588,28 +589,28 @@ func TestCapGraphCanConvert(t *testing.T) {
 	graph := composite.Graph()
 
 	// Direct conversions
-	if !graph.CanConvert("std:binary.v1", "std:str.v1") {
+	if !graph.CanConvert(MediaBinary, MediaString) {
 		t.Error("Should be able to convert binary to str")
 	}
-	if !graph.CanConvert("std:str.v1", "std:obj.v1") {
+	if !graph.CanConvert(MediaString, MediaObject) {
 		t.Error("Should be able to convert str to obj")
 	}
 
 	// Transitive conversion
-	if !graph.CanConvert("std:binary.v1", "std:obj.v1") {
+	if !graph.CanConvert(MediaBinary, MediaObject) {
 		t.Error("Should be able to convert binary to obj (transitively)")
 	}
 
 	// Same spec
-	if !graph.CanConvert("std:binary.v1", "std:binary.v1") {
+	if !graph.CanConvert(MediaBinary, MediaBinary) {
 		t.Error("Should be able to convert same spec to itself")
 	}
 
 	// Impossible conversions
-	if graph.CanConvert("std:obj.v1", "std:binary.v1") {
+	if graph.CanConvert(MediaObject, MediaBinary) {
 		t.Error("Should not be able to convert obj to binary (no reverse edge)")
 	}
-	if graph.CanConvert("std:nonexistent.v1", "std:str.v1") {
+	if graph.CanConvert("media:type=nonexistent;v=1", MediaString) {
 		t.Error("Should not be able to convert non-existent spec")
 	}
 }
@@ -620,8 +621,8 @@ func TestCapGraphFindPath(t *testing.T) {
 	host := &MockCapSetForRegistry{name: "converter"}
 
 	// binary -> str -> obj
-	cap1 := makeGraphCap("std:binary.v1", "std:str.v1", "Binary to String")
-	cap2 := makeGraphCap("std:str.v1", "std:obj.v1", "String to Object")
+	cap1 := makeGraphCap(MediaBinary, MediaString, "Binary to String")
+	cap2 := makeGraphCap(MediaString, MediaObject, "String to Object")
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
@@ -631,7 +632,7 @@ func TestCapGraphFindPath(t *testing.T) {
 	graph := composite.Graph()
 
 	// Direct path
-	path := graph.FindPath("std:binary.v1", "std:str.v1")
+	path := graph.FindPath(MediaBinary, MediaString)
 	if path == nil {
 		t.Fatal("Expected to find path from binary to str")
 	}
@@ -640,7 +641,7 @@ func TestCapGraphFindPath(t *testing.T) {
 	}
 
 	// Transitive path
-	path = graph.FindPath("std:binary.v1", "std:obj.v1")
+	path = graph.FindPath(MediaBinary, MediaObject)
 	if path == nil {
 		t.Fatal("Expected to find path from binary to obj")
 	}
@@ -655,13 +656,13 @@ func TestCapGraphFindPath(t *testing.T) {
 	}
 
 	// No path
-	path = graph.FindPath("std:obj.v1", "std:binary.v1")
+	path = graph.FindPath(MediaObject, MediaBinary)
 	if path != nil {
 		t.Error("Expected nil for impossible path")
 	}
 
 	// Same spec
-	path = graph.FindPath("std:binary.v1", "std:binary.v1")
+	path = graph.FindPath(MediaBinary, MediaBinary)
 	if path == nil {
 		t.Fatal("Expected empty path for same spec")
 	}
@@ -678,9 +679,9 @@ func TestCapGraphFindAllPaths(t *testing.T) {
 	// Create a graph with multiple paths:
 	// binary -> str -> obj
 	// binary -> obj (direct)
-	cap1 := makeGraphCap("std:binary.v1", "std:str.v1", "Binary to String")
-	cap2 := makeGraphCap("std:str.v1", "std:obj.v1", "String to Object")
-	cap3 := makeGraphCap("std:binary.v1", "std:obj.v1", "Binary to Object (direct)")
+	cap1 := makeGraphCap(MediaBinary, MediaString, "Binary to String")
+	cap2 := makeGraphCap(MediaString, MediaObject, "String to Object")
+	cap3 := makeGraphCap(MediaBinary, MediaObject, "Binary to Object (direct)")
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2, cap3})
 
@@ -690,7 +691,7 @@ func TestCapGraphFindAllPaths(t *testing.T) {
 	graph := composite.Graph()
 
 	// Find all paths from binary to obj
-	paths := graph.FindAllPaths("std:binary.v1", "std:obj.v1", 3)
+	paths := graph.FindAllPaths(MediaBinary, MediaObject, 3)
 
 	if len(paths) != 2 {
 		t.Errorf("Expected 2 paths, got %d", len(paths))
@@ -713,10 +714,10 @@ func TestCapGraphGetDirectEdges(t *testing.T) {
 	host2 := &MockCapSetForRegistry{name: "converter2"}
 
 	// Two converters: binary -> str with different specificities
-	cap1 := makeGraphCap("std:binary.v1", "std:str.v1", "Generic Binary to String")
+	cap1 := makeGraphCap(MediaBinary, MediaString, "Generic Binary to String")
 
 	// More specific converter (with extra tag for higher specificity)
-	capUrn2, _ := NewCapUrnFromString("cap:ext=pdf;in=std:binary.v1;op=convert;out=std:str.v1")
+	capUrn2, _ := NewCapUrnFromString(`cap:ext=pdf;in="` + MediaBinary + `";op=convert;out="` + MediaString + `"`)
 	cap2 := &Cap{
 		Urn:            capUrn2,
 		Title:          "PDF Binary to String",
@@ -737,7 +738,7 @@ func TestCapGraphGetDirectEdges(t *testing.T) {
 	graph := composite.Graph()
 
 	// Get direct edges (should be sorted by specificity)
-	edges := graph.GetDirectEdges("std:binary.v1", "std:str.v1")
+	edges := graph.GetDirectEdges(MediaBinary, MediaString)
 
 	if len(edges) != 2 {
 		t.Errorf("Expected 2 direct edges, got %d", len(edges))
@@ -759,9 +760,9 @@ func TestCapGraphStats(t *testing.T) {
 
 	// binary -> str -> obj
 	//         \-> json
-	cap1 := makeGraphCap("std:binary.v1", "std:str.v1", "Binary to String")
-	cap2 := makeGraphCap("std:str.v1", "std:obj.v1", "String to Object")
-	cap3 := makeGraphCap("std:binary.v1", "std:json.v1", "Binary to JSON")
+	cap1 := makeGraphCap(MediaBinary, MediaString, "Binary to String")
+	cap2 := makeGraphCap(MediaString, MediaObject, "String to Object")
+	cap3 := makeGraphCap(MediaBinary, "media:type=json;v=1", "Binary to JSON")
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2, cap3})
 
@@ -801,11 +802,11 @@ func TestCapGraphWithCapCube(t *testing.T) {
 	pluginHost := &MockCapSetForRegistry{name: "plugin"}
 
 	// Provider: binary -> str
-	providerCap := makeGraphCap("std:binary.v1", "std:str.v1", "Provider Binary to String")
+	providerCap := makeGraphCap(MediaBinary, MediaString, "Provider Binary to String")
 	providerRegistry.RegisterCapSet("provider", providerHost, []*Cap{providerCap})
 
 	// Plugin: str -> obj
-	pluginCap := makeGraphCap("std:str.v1", "std:obj.v1", "Plugin String to Object")
+	pluginCap := makeGraphCap(MediaString, MediaObject, "Plugin String to Object")
 	pluginRegistry.RegisterCapSet("plugin", pluginHost, []*Cap{pluginCap})
 
 	cube := NewCapCube()
@@ -815,11 +816,11 @@ func TestCapGraphWithCapCube(t *testing.T) {
 	graph := cube.Graph()
 
 	// Should be able to convert binary -> obj through both registries
-	if !graph.CanConvert("std:binary.v1", "std:obj.v1") {
+	if !graph.CanConvert(MediaBinary, MediaObject) {
 		t.Error("Should be able to convert binary to obj across registries")
 	}
 
-	path := graph.FindPath("std:binary.v1", "std:obj.v1")
+	path := graph.FindPath(MediaBinary, MediaObject)
 	if path == nil {
 		t.Fatal("Expected to find path")
 	}

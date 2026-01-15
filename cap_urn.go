@@ -1,31 +1,33 @@
 // Package capns provides the fundamental cap URN system used across
 // all FGND plugins and providers. It defines the formal structure for cap
 // identifiers with flat tag-based naming, wildcard support, and specificity comparison.
+//
+// Uses TaggedUrn for parsing to ensure consistency across implementations.
 package capns
 
 import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
-	"unicode"
+
+	"github.com/fgrnd/tagged-urn-go"
 )
 
 // CapUrn represents a cap URN using flat, ordered tags with required direction specifiers
 //
 // Direction (in→out) is integral to a cap's identity. The `inSpec` and `outSpec`
-// fields specify the input and output media spec IDs respectively.
+// fields specify the input and output media URNs respectively.
 //
 // Examples:
-// - cap:in=std:binary.v1;op=generate;out=std:binary.v1;target=thumbnail
-// - cap:in=std:void.v1;op=dimensions;out=std:int.v1
-// - cap:in=std:str.v1;out=std:obj.v1;key="Value With Spaces"
+// - cap:in="media:type=binary;v=1";op=generate;out="media:type=binary;v=1";target=thumbnail
+// - cap:in="media:type=void;v=1";op=dimensions;out="media:type=integer;v=1"
+// - cap:in="media:type=string;v=1";key="Value With Spaces";out="media:type=object;v=1"
 type CapUrn struct {
-	// inSpec is the input media spec ID - required (use std:void.v1 for caps with no input)
+	// inSpec is the input media URN - required (use media:type=void;v=1 for caps with no input)
 	inSpec string
-	// outSpec is the output media spec ID - required
+	// outSpec is the output media URN - required
 	outSpec string
 	// tags are additional tags that define this cap (not including in/out)
 	tags map[string]string
@@ -54,37 +56,22 @@ const (
 	ErrorInvalidEscapeSequence = 9
 	ErrorMissingInSpec         = 10
 	ErrorMissingOutSpec        = 11
+	ErrorInvalidMediaUrn       = 12
 )
 
-// Parser states for state machine
-type parseState int
-
-const (
-	stateExpectingKey parseState = iota
-	stateInKey
-	stateExpectingValue
-	stateInUnquotedValue
-	stateInQuotedValue
-	stateInQuotedValueEscape
-	stateExpectingSemiOrEnd
-)
-
-var numericPattern = regexp.MustCompile(`^[0-9]+$`)
-
-// isValidKeyChar checks if a character is valid for a key
-func isValidKeyChar(c rune) bool {
-	return unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_' || c == '-' || c == '/' || c == ':' || c == '.'
-}
-
-// isValidUnquotedValueChar checks if a character is valid for an unquoted value
-func isValidUnquotedValueChar(c rune) bool {
-	return unicode.IsLetter(c) || unicode.IsDigit(c) || c == '_' || c == '-' || c == '/' || c == ':' || c == '.' || c == '*'
+// isValidMediaUrnOrWildcard checks if a value is a valid media URN or wildcard
+func isValidMediaUrnOrWildcard(value string) bool {
+	return value == "*" || strings.HasPrefix(value, "media:")
 }
 
 // needsQuoting checks if a value needs quoting for serialization
 func needsQuoting(value string) bool {
 	for _, c := range value {
-		if c == ';' || c == '=' || c == '"' || c == '\\' || c == ' ' || unicode.IsUpper(c) {
+		if c == ';' || c == '=' || c == '"' || c == '\\' || c == ' ' {
+			return true
+		}
+		// Check for uppercase letter
+		if c >= 'A' && c <= 'Z' {
 			return true
 		}
 	}
@@ -105,10 +92,42 @@ func quoteValue(value string) string {
 	return result.String()
 }
 
+// capUrnErrorFromTaggedUrn converts TaggedUrn errors to CapUrn errors
+func capUrnErrorFromTaggedUrn(err error) *CapUrnError {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	msgLower := strings.ToLower(msg)
+
+	var code int
+	switch {
+	case strings.Contains(msgLower, "invalid character"):
+		code = ErrorInvalidCharacter
+	case strings.Contains(msgLower, "duplicate"):
+		code = ErrorDuplicateKey
+	case strings.Contains(msgLower, "unterminated") || strings.Contains(msgLower, "unclosed"):
+		code = ErrorUnterminatedQuote
+	case strings.Contains(msgLower, "expected") && strings.Contains(msgLower, "after quoted"):
+		code = ErrorUnterminatedQuote
+	case strings.Contains(msgLower, "numeric"):
+		code = ErrorNumericKey
+	case strings.Contains(msgLower, "escape"):
+		code = ErrorInvalidEscapeSequence
+	case strings.Contains(msgLower, "incomplete") || strings.Contains(msgLower, "missing value"):
+		code = ErrorInvalidTagFormat
+	default:
+		code = ErrorInvalidFormat
+	}
+
+	return &CapUrnError{Code: code, Message: msg}
+}
+
 // NewCapUrnFromString creates a cap URN from a string
-// Format: cap:in=spec;out=spec;key1=value1;... or cap:in=spec;key="value";out=spec
+// Format: cap:in="media:...";out="media:...";key1=value1;...
 // The "cap:" prefix is mandatory
 // The 'in' and 'out' tags are REQUIRED (direction is part of cap identity)
+// The in/out values must be valid media URNs (starting with "media:") or wildcards (*)
 // Trailing semicolons are optional and ignored
 // Tags are automatically sorted alphabetically for canonical form
 //
@@ -124,7 +143,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 		}
 	}
 
-	// Check for "cap:" prefix (case-insensitive)
+	// Check for "cap:" prefix early (case-insensitive)
 	if len(s) < 4 || !strings.EqualFold(s[:4], "cap:") {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingCapPrefix,
@@ -132,220 +151,68 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 		}
 	}
 
-	tagsPart := s[4:]
-	tags := make(map[string]string)
+	// Use TaggedUrn for parsing
+	taggedUrn, err := taggedurn.NewTaggedUrnFromString(s)
+	if err != nil {
+		return nil, capUrnErrorFromTaggedUrn(err)
+	}
 
-	// Handle empty cap URN (cap: with no tags) - this is now an error since in/out are required
-	if tagsPart == "" || tagsPart == ";" {
+	// Verify prefix is "cap"
+	if taggedUrn.GetPrefix() != "cap" {
+		return nil, &CapUrnError{
+			Code:    ErrorMissingCapPrefix,
+			Message: "cap URN must start with 'cap:'",
+		}
+	}
+
+	// Extract required 'in' tag
+	inSpec, hasIn := taggedUrn.GetTag("in")
+	if !hasIn || inSpec == "" {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use std:void.v1 for no input)",
+			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:type=void;v=1 for no input)",
 		}
 	}
 
-	state := stateExpectingKey
-	var currentKey strings.Builder
-	var currentValue strings.Builder
-	chars := []rune(tagsPart)
-	pos := 0
-
-	finishTag := func() error {
-		key := currentKey.String()
-		value := currentValue.String()
-
-		if key == "" {
-			return &CapUrnError{
-				Code:    ErrorEmptyTag,
-				Message: "empty key",
-			}
-		}
-		if value == "" {
-			return &CapUrnError{
-				Code:    ErrorEmptyTag,
-				Message: fmt.Sprintf("empty value for key '%s'", key),
-			}
-		}
-
-		// Check for duplicate keys
-		if _, exists := tags[key]; exists {
-			return &CapUrnError{
-				Code:    ErrorDuplicateKey,
-				Message: fmt.Sprintf("duplicate tag key: %s", key),
-			}
-		}
-
-		// Validate key cannot be purely numeric
-		if numericPattern.MatchString(key) {
-			return &CapUrnError{
-				Code:    ErrorNumericKey,
-				Message: fmt.Sprintf("tag key cannot be purely numeric: %s", key),
-			}
-		}
-
-		tags[key] = value
-		currentKey.Reset()
-		currentValue.Reset()
-		return nil
-	}
-
-	for pos < len(chars) {
-		c := chars[pos]
-
-		switch state {
-		case stateExpectingKey:
-			if c == ';' {
-				// Empty segment, skip
-				pos++
-				continue
-			} else if isValidKeyChar(c) {
-				currentKey.WriteRune(unicode.ToLower(c))
-				state = stateInKey
-			} else {
-				return nil, &CapUrnError{
-					Code:    ErrorInvalidCharacter,
-					Message: fmt.Sprintf("invalid character '%c' at position %d", c, pos),
-				}
-			}
-
-		case stateInKey:
-			if c == '=' {
-				if currentKey.Len() == 0 {
-					return nil, &CapUrnError{
-						Code:    ErrorEmptyTag,
-						Message: "empty key",
-					}
-				}
-				state = stateExpectingValue
-			} else if isValidKeyChar(c) {
-				currentKey.WriteRune(unicode.ToLower(c))
-			} else {
-				return nil, &CapUrnError{
-					Code:    ErrorInvalidCharacter,
-					Message: fmt.Sprintf("invalid character '%c' in key at position %d", c, pos),
-				}
-			}
-
-		case stateExpectingValue:
-			if c == '"' {
-				state = stateInQuotedValue
-			} else if c == ';' {
-				return nil, &CapUrnError{
-					Code:    ErrorEmptyTag,
-					Message: fmt.Sprintf("empty value for key '%s'", currentKey.String()),
-				}
-			} else if isValidUnquotedValueChar(c) {
-				currentValue.WriteRune(unicode.ToLower(c))
-				state = stateInUnquotedValue
-			} else {
-				return nil, &CapUrnError{
-					Code:    ErrorInvalidCharacter,
-					Message: fmt.Sprintf("invalid character '%c' in value at position %d", c, pos),
-				}
-			}
-
-		case stateInUnquotedValue:
-			if c == ';' {
-				if err := finishTag(); err != nil {
-					return nil, err
-				}
-				state = stateExpectingKey
-			} else if isValidUnquotedValueChar(c) {
-				currentValue.WriteRune(unicode.ToLower(c))
-			} else {
-				return nil, &CapUrnError{
-					Code:    ErrorInvalidCharacter,
-					Message: fmt.Sprintf("invalid character '%c' in unquoted value at position %d", c, pos),
-				}
-			}
-
-		case stateInQuotedValue:
-			if c == '"' {
-				state = stateExpectingSemiOrEnd
-			} else if c == '\\' {
-				state = stateInQuotedValueEscape
-			} else {
-				// Any character allowed in quoted value, preserve case
-				currentValue.WriteRune(c)
-			}
-
-		case stateInQuotedValueEscape:
-			if c == '"' || c == '\\' {
-				currentValue.WriteRune(c)
-				state = stateInQuotedValue
-			} else {
-				return nil, &CapUrnError{
-					Code:    ErrorInvalidEscapeSequence,
-					Message: fmt.Sprintf("invalid escape sequence at position %d (only \\\" and \\\\ allowed)", pos),
-				}
-			}
-
-		case stateExpectingSemiOrEnd:
-			if c == ';' {
-				if err := finishTag(); err != nil {
-					return nil, err
-				}
-				state = stateExpectingKey
-			} else {
-				return nil, &CapUrnError{
-					Code:    ErrorInvalidCharacter,
-					Message: fmt.Sprintf("expected ';' or end after quoted value, got '%c' at position %d", c, pos),
-				}
-			}
-		}
-
-		pos++
-	}
-
-	// Handle end of input
-	switch state {
-	case stateInUnquotedValue, stateExpectingSemiOrEnd:
-		if err := finishTag(); err != nil {
-			return nil, err
-		}
-	case stateExpectingKey:
-		// Valid - trailing semicolon or empty input after prefix
-	case stateInQuotedValue, stateInQuotedValueEscape:
+	// Validate in is a valid media URN or wildcard
+	if !isValidMediaUrnOrWildcard(inSpec) {
 		return nil, &CapUrnError{
-			Code:    ErrorUnterminatedQuote,
-			Message: fmt.Sprintf("unterminated quote at position %d", pos),
-		}
-	case stateInKey:
-		return nil, &CapUrnError{
-			Code:    ErrorInvalidTagFormat,
-			Message: fmt.Sprintf("incomplete tag '%s'", currentKey.String()),
-		}
-	case stateExpectingValue:
-		return nil, &CapUrnError{
-			Code:    ErrorEmptyTag,
-			Message: fmt.Sprintf("empty value for key '%s'", currentKey.String()),
+			Code:    ErrorInvalidMediaUrn,
+			Message: fmt.Sprintf("'in' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", inSpec),
 		}
 	}
 
-	// Extract required in and out specs
-	inSpec, hasIn := tags["in"]
-	if !hasIn {
-		return nil, &CapUrnError{
-			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use std:void.v1 for no input)",
-		}
-	}
-	delete(tags, "in")
-
-	outSpec, hasOut := tags["out"]
-	if !hasOut {
+	// Extract required 'out' tag
+	outSpec, hasOut := taggedUrn.GetTag("out")
+	if !hasOut || outSpec == "" {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingOutSpec,
 			Message: "cap URN is missing required 'out' tag - caps must declare their output type",
 		}
 	}
-	delete(tags, "out")
+
+	// Validate out is a valid media URN or wildcard
+	if !isValidMediaUrnOrWildcard(outSpec) {
+		return nil, &CapUrnError{
+			Code:    ErrorInvalidMediaUrn,
+			Message: fmt.Sprintf("'out' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", outSpec),
+		}
+	}
+
+	// Build tags map without in/out
+	tags := make(map[string]string)
+	for key, value := range taggedUrn.AllTags() {
+		if key != "in" && key != "out" {
+			tags[key] = value
+		}
+	}
 
 	return &CapUrn{inSpec: inSpec, outSpec: outSpec, tags: tags}, nil
 }
 
 // NewCapUrnFromTags creates a cap URN from tags that must contain 'in' and 'out'
 // Keys are normalized to lowercase; values are preserved as-is
-// Returns error if 'in' or 'out' tags are missing
+// Returns error if 'in' or 'out' tags are missing or invalid
 func NewCapUrnFromTags(tags map[string]string) (*CapUrn, error) {
 	// Normalize keys to lowercase
 	result := make(map[string]string)
@@ -358,10 +225,18 @@ func NewCapUrnFromTags(tags map[string]string) (*CapUrn, error) {
 	if !hasIn {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use std:void.v1 for no input)",
+			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:type=void;v=1 for no input)",
 		}
 	}
 	delete(result, "in")
+
+	// Validate in is a valid media URN or wildcard
+	if !isValidMediaUrnOrWildcard(inSpec) {
+		return nil, &CapUrnError{
+			Code:    ErrorInvalidMediaUrn,
+			Message: fmt.Sprintf("'in' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", inSpec),
+		}
+	}
 
 	outSpec, hasOut := result["out"]
 	if !hasOut {
@@ -371,6 +246,14 @@ func NewCapUrnFromTags(tags map[string]string) (*CapUrn, error) {
 		}
 	}
 	delete(result, "out")
+
+	// Validate out is a valid media URN or wildcard
+	if !isValidMediaUrnOrWildcard(outSpec) {
+		return nil, &CapUrnError{
+			Code:    ErrorInvalidMediaUrn,
+			Message: fmt.Sprintf("'out' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", outSpec),
+		}
+	}
 
 	return &CapUrn{inSpec: inSpec, outSpec: outSpec, tags: result}, nil
 }
@@ -872,7 +755,7 @@ func (b *CapUrnBuilder) Build() (*CapUrn, error) {
 	if b.inSpec == nil {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' spec - caps must declare their input type (use std:void.v1 for no input)",
+			Message: "cap URN is missing required 'in' spec - caps must declare their input type (use media:type=void;v=1 for no input)",
 		}
 	}
 
