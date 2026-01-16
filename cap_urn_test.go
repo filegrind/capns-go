@@ -149,12 +149,14 @@ func TestInvalidCapUrn(t *testing.T) {
 	assert.Equal(t, ErrorInvalidFormat, err.(*CapUrnError).Code)
 }
 
-func TestInvalidTagFormat(t *testing.T) {
-	capUrn, err := NewCapUrnFromString("cap:invalid_tag")
+func TestValuelessTagWithMissingSpecs(t *testing.T) {
+	// Value-less tag is now valid (parsed as wildcard), but cap URN still requires in/out specs
+	capUrn, err := NewCapUrnFromString("cap:optimize")
 
 	assert.Nil(t, capUrn)
 	assert.Error(t, err)
-	assert.Equal(t, ErrorInvalidTagFormat, err.(*CapUrnError).Code)
+	// Should fail because of missing 'in' spec, not invalid tag format
+	assert.Equal(t, ErrorMissingInSpec, err.(*CapUrnError).Code)
 }
 
 func TestInvalidCharacters(t *testing.T) {
