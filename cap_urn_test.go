@@ -342,9 +342,9 @@ func TestWithTag(t *testing.T) {
 	assert.True(t, modExists)
 	assert.Equal(t, "pdf", ext)
 
-	// Direction specs preserved
-	assert.Equal(t, MediaVoid, modified.InSpec())
-	assert.Equal(t, MediaObject, modified.OutSpec())
+	// Direction specs preserved (from parsed string - no coercion tags)
+	assert.Equal(t, "media:type=void;v=1", modified.InSpec())
+	assert.Equal(t, "media:type=object;v=1", modified.OutSpec())
 }
 
 func TestWithoutTag(t *testing.T) {
@@ -362,25 +362,25 @@ func TestWithoutTag(t *testing.T) {
 	assert.True(t, origExists)
 	assert.Equal(t, "pdf", ext)
 
-	// Direction specs preserved
-	assert.Equal(t, MediaVoid, modified.InSpec())
-	assert.Equal(t, MediaObject, modified.OutSpec())
+	// Direction specs preserved (from parsed string - no coercion tags)
+	assert.Equal(t, "media:type=void;v=1", modified.InSpec())
+	assert.Equal(t, "media:type=object;v=1", modified.OutSpec())
 }
 
 func TestWithInSpecOutSpec(t *testing.T) {
 	original, err := NewCapUrnFromString(testUrn("op=test"))
 	require.NoError(t, err)
 
-	// Change input spec
+	// Change input spec (using constant with coercion tags)
 	modified1 := original.WithInSpec(MediaBinary)
 	assert.Equal(t, MediaBinary, modified1.InSpec())
-	assert.Equal(t, MediaObject, modified1.OutSpec())
+	assert.Equal(t, "media:type=object;v=1", modified1.OutSpec()) // from parsed string
 	// Original unchanged
-	assert.Equal(t, MediaVoid, original.InSpec())
+	assert.Equal(t, "media:type=void;v=1", original.InSpec())
 
-	// Change output spec
+	// Change output spec (using constant with coercion tags)
 	modified2 := original.WithOutSpec(MediaInteger)
-	assert.Equal(t, MediaVoid, modified2.InSpec())
+	assert.Equal(t, "media:type=void;v=1", modified2.InSpec()) // from parsed string
 	assert.Equal(t, MediaInteger, modified2.OutSpec())
 }
 
@@ -415,9 +415,9 @@ func TestSubset(t *testing.T) {
 	_, opExists := subset.GetTag("op")
 	assert.False(t, opExists)
 
-	// Direction specs preserved
-	assert.Equal(t, MediaVoid, subset.InSpec())
-	assert.Equal(t, MediaObject, subset.OutSpec())
+	// Direction specs preserved (from parsed string - no coercion tags)
+	assert.Equal(t, "media:type=void;v=1", subset.InSpec())
+	assert.Equal(t, "media:type=object;v=1", subset.OutSpec())
 }
 
 func TestMerge(t *testing.T) {
@@ -429,9 +429,9 @@ func TestMerge(t *testing.T) {
 
 	merged := cap1.Merge(cap2)
 
-	// Merged takes in/out from cap2
-	assert.Equal(t, MediaBinary, merged.InSpec())
-	assert.Equal(t, MediaInteger, merged.OutSpec())
+	// Merged takes in/out from cap2 (parsed values without coercion tags)
+	assert.Equal(t, "media:type=binary;v=1", merged.InSpec())
+	assert.Equal(t, "media:type=integer;v=1", merged.OutSpec())
 
 	// Has tags from both
 	op, _ := merged.GetTag("op")
@@ -641,13 +641,14 @@ func TestInvalidEscapeSequenceError(t *testing.T) {
 
 func TestSerializationSmartQuoting(t *testing.T) {
 	// Simple lowercase value - no quoting needed (but media URNs in in/out are quoted)
+	// MediaVoid has no coercion tags, MediaObject has ;textable;keyed
 	cap, err := NewCapUrnBuilder().
 		InSpec(MediaVoid).
 		OutSpec(MediaObject).
 		Tag("key", "simple").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in="media:type=void;v=1";key=simple;out="media:type=object;v=1"`, cap.ToString())
+	assert.Equal(t, `cap:in="media:type=void;v=1";key=simple;out="media:type=object;v=1;textable;keyed"`, cap.ToString())
 
 	// Value with spaces - needs quoting
 	cap2, err := NewCapUrnBuilder().
@@ -656,7 +657,7 @@ func TestSerializationSmartQuoting(t *testing.T) {
 		Tag("key", "has spaces").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in="media:type=void;v=1";key="has spaces";out="media:type=object;v=1"`, cap2.ToString())
+	assert.Equal(t, `cap:in="media:type=void;v=1";key="has spaces";out="media:type=object;v=1;textable;keyed"`, cap2.ToString())
 
 	// Value with uppercase - needs quoting to preserve
 	cap4, err := NewCapUrnBuilder().
@@ -665,7 +666,7 @@ func TestSerializationSmartQuoting(t *testing.T) {
 		Tag("key", "HasUpper").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in="media:type=void;v=1";key="HasUpper";out="media:type=object;v=1"`, cap4.ToString())
+	assert.Equal(t, `cap:in="media:type=void;v=1";key="HasUpper";out="media:type=object;v=1;textable;keyed"`, cap4.ToString())
 }
 
 func TestRoundTripSimple(t *testing.T) {
@@ -748,9 +749,9 @@ func TestHasTagCaseSensitive(t *testing.T) {
 	assert.True(t, cap.HasTag("KEY", "Value"))
 	assert.True(t, cap.HasTag("Key", "Value"))
 
-	// HasTag works for in/out
-	assert.True(t, cap.HasTag("in", MediaVoid))
-	assert.True(t, cap.HasTag("out", MediaObject))
+	// HasTag works for in/out (using parsed values without coercion tags)
+	assert.True(t, cap.HasTag("in", "media:type=void;v=1"))
+	assert.True(t, cap.HasTag("out", "media:type=object;v=1"))
 }
 
 func TestWithTagPreservesValue(t *testing.T) {
@@ -788,8 +789,9 @@ func TestMinimalCapUrn(t *testing.T) {
 	// Minimal valid cap URN has just in and out
 	cap, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";out="media:type=object;v=1"`)
 	require.NoError(t, err)
-	assert.Equal(t, MediaVoid, cap.InSpec())
-	assert.Equal(t, MediaObject, cap.OutSpec())
+	// InSpec and OutSpec return actual values from parsed string
+	assert.Equal(t, "media:type=void;v=1", cap.InSpec())
+	assert.Equal(t, "media:type=object;v=1", cap.OutSpec())
 	assert.Equal(t, 0, len(cap.tags))
 }
 
@@ -879,14 +881,14 @@ func TestGetTagReturnsDirectionSpecs(t *testing.T) {
 	cap, err := NewCapUrnFromString(`cap:in="media:type=string;v=1";out="media:type=integer;v=1";op=test`)
 	require.NoError(t, err)
 
-	// GetTag works for in/out
+	// GetTag works for in/out - returns actual value from URN, not constants
 	inVal, exists := cap.GetTag("in")
 	assert.True(t, exists)
-	assert.Equal(t, MediaString, inVal)
+	assert.Equal(t, "media:type=string;v=1", inVal)
 
 	outVal, exists := cap.GetTag("out")
 	assert.True(t, exists)
-	assert.Equal(t, MediaInteger, outVal)
+	assert.Equal(t, "media:type=integer;v=1", outVal)
 
 	opVal, exists := cap.GetTag("op")
 	assert.True(t, exists)
@@ -895,11 +897,11 @@ func TestGetTagReturnsDirectionSpecs(t *testing.T) {
 	// Case-insensitive lookup for in/out
 	inVal2, exists := cap.GetTag("IN")
 	assert.True(t, exists)
-	assert.Equal(t, MediaString, inVal2)
+	assert.Equal(t, "media:type=string;v=1", inVal2)
 
 	outVal2, exists := cap.GetTag("OUT")
 	assert.True(t, exists)
-	assert.Equal(t, MediaInteger, outVal2)
+	assert.Equal(t, "media:type=integer;v=1", outVal2)
 }
 
 // ============================================================================

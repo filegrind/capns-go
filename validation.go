@@ -336,23 +336,26 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, re
 
 // getExpectedTypeFromMediaUrn determines the expected Go type from a media URN
 func getExpectedTypeFromMediaUrn(mediaUrn string, resolved *ResolvedMediaSpec) string {
-	// First try built-in media URNs
-	switch mediaUrn {
-	case MediaString:
+	// Extract base type to match regardless of coercion tags
+	baseType := extractBaseType(mediaUrn)
+
+	// Try built-in media URN types based on base type
+	switch baseType {
+	case "string;v=1":
 		return "string"
-	case MediaInteger:
+	case "integer;v=1":
 		return "integer"
-	case MediaNumber:
+	case "number;v=1":
 		return "number"
-	case MediaBoolean:
+	case "boolean;v=1":
 		return "boolean"
-	case MediaObject:
+	case "object;v=1":
 		return "object"
-	case MediaStringArray, MediaIntegerArray, MediaNumberArray, MediaBooleanArray, MediaObjectArray:
+	case "string-array;v=1", "integer-array;v=1", "number-array;v=1", "boolean-array;v=1", "object-array;v=1":
 		return "array"
-	case MediaBinary:
+	case "binary;v=1":
 		return "binary"
-	case MediaVoid:
+	case "void;v=1":
 		return "void"
 	}
 

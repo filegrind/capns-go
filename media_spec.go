@@ -17,20 +17,20 @@ import (
 	"strings"
 )
 
-// Built-in media URN constants
+// Built-in media URN constants with coercion tags
 const (
-	MediaVoid        = "media:type=void;v=1"
-	MediaString      = "media:type=string;v=1"
-	MediaInteger     = "media:type=integer;v=1"
-	MediaNumber      = "media:type=number;v=1"
-	MediaBoolean     = "media:type=boolean;v=1"
-	MediaObject      = "media:type=object;v=1"
-	MediaBinary      = "media:type=binary;v=1"
-	MediaStringArray = "media:type=string-array;v=1"
-	MediaIntegerArray = "media:type=integer-array;v=1"
-	MediaNumberArray = "media:type=number-array;v=1"
-	MediaBooleanArray = "media:type=boolean-array;v=1"
-	MediaObjectArray = "media:type=object-array;v=1"
+	MediaVoid         = "media:type=void;v=1"
+	MediaString       = "media:type=string;v=1;textable;scalar"
+	MediaInteger      = "media:type=integer;v=1;textable;numeric;scalar"
+	MediaNumber       = "media:type=number;v=1;textable;numeric;scalar"
+	MediaBoolean      = "media:type=boolean;v=1;textable;scalar"
+	MediaObject       = "media:type=object;v=1;textable;keyed"
+	MediaBinary       = "media:type=binary;v=1;binary"
+	MediaStringArray  = "media:type=string-array;v=1;textable;sequence"
+	MediaIntegerArray = "media:type=integer-array;v=1;textable;numeric;sequence"
+	MediaNumberArray  = "media:type=number-array;v=1;textable;numeric;sequence"
+	MediaBooleanArray = "media:type=boolean-array;v=1;textable;sequence"
+	MediaObjectArray  = "media:type=object-array;v=1;textable;keyed;sequence"
 )
 
 // Profile URL constants
@@ -261,32 +261,65 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 	}, nil
 }
 
-// resolveBuiltin resolves built-in media URNs
+// extractBaseType extracts the base type identifier from a media URN
+// e.g., "media:type=string;v=1;textable;scalar" -> "string;v=1"
+func extractBaseType(mediaUrn string) string {
+	if !strings.HasPrefix(mediaUrn, "media:") {
+		return ""
+	}
+	// Parse tags from the media URN
+	rest := mediaUrn[6:] // Skip "media:"
+	parts := strings.Split(rest, ";")
+
+	var typeVal, vVal string
+	for _, part := range parts {
+		if strings.HasPrefix(part, "type=") {
+			typeVal = part[5:]
+		} else if strings.HasPrefix(part, "v=") {
+			vVal = part[2:]
+		}
+	}
+	if typeVal != "" && vVal != "" {
+		return typeVal + ";v=" + vVal
+	}
+	if typeVal != "" {
+		return typeVal
+	}
+	return ""
+}
+
+// resolveBuiltin resolves built-in media URNs based on type and version
+// This matches media URNs regardless of coercion tags
 func resolveBuiltin(mediaUrn string) *ResolvedMediaSpec {
-	switch mediaUrn {
-	case MediaString:
+	baseType := extractBaseType(mediaUrn)
+	if baseType == "" {
+		return nil
+	}
+
+	switch baseType {
+	case "string;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileStr}
-	case MediaInteger:
+	case "integer;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileInt}
-	case MediaNumber:
+	case "number;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileNum}
-	case MediaBoolean:
+	case "boolean;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileBool}
-	case MediaObject:
+	case "object;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObj}
-	case MediaStringArray:
+	case "string-array;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileStrArray}
-	case MediaIntegerArray:
+	case "integer-array;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileIntArray}
-	case MediaNumberArray:
+	case "number-array;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileNumArray}
-	case MediaBooleanArray:
+	case "boolean-array;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileBoolArray}
-	case MediaObjectArray:
+	case "object-array;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObjArray}
-	case MediaBinary:
+	case "binary;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/octet-stream", ProfileURI: ""}
-	case MediaVoid:
+	case "void;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-void", ProfileURI: ProfileVoid}
 	default:
 		return nil
