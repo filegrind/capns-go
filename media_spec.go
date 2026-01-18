@@ -31,6 +31,23 @@ const (
 	MediaNumberArray  = "media:type=number-array;v=1;textable;numeric;sequence"
 	MediaBooleanArray = "media:type=boolean-array;v=1;textable;sequence"
 	MediaObjectArray  = "media:type=object-array;v=1;textable;keyed;sequence"
+	// Semantic content types
+	MediaImage = "media:type=image;v=1;binary"
+	MediaAudio = "media:type=audio;v=1;binary"
+	MediaVideo = "media:type=video;v=1;binary"
+	MediaText  = "media:type=text;v=1;textable"
+	// Document types (PRIMARY naming - type IS the format)
+	MediaPdf  = "media:type=pdf;v=1;binary"
+	MediaEpub = "media:type=epub;v=1;binary"
+	// Text format types (PRIMARY naming - type IS the format)
+	MediaMd   = "media:type=md;v=1;textable"
+	MediaTxt  = "media:type=txt;v=1;textable"
+	MediaRst  = "media:type=rst;v=1;textable"
+	MediaLog  = "media:type=log;v=1;textable"
+	MediaHtml = "media:type=html;v=1;textable"
+	MediaXml  = "media:type=xml;v=1;textable"
+	MediaJson = "media:type=json;v=1;textable;keyed"
+	MediaYaml = "media:type=yaml;v=1;textable;keyed"
 )
 
 // Profile URL constants
@@ -47,13 +64,32 @@ const (
 	ProfileBoolArray = "https://capns.org/schema/bool-array"
 	ProfileObjArray  = "https://capns.org/schema/obj-array"
 	ProfileVoid      = "https://capns.org/schema/void"
+	// Semantic content type profiles
+	ProfileImage = "https://capns.org/schema/image"
+	ProfileAudio = "https://capns.org/schema/audio"
+	ProfileVideo = "https://capns.org/schema/video"
+	ProfileText  = "https://capns.org/schema/text"
+	// Document type profiles (PRIMARY naming)
+	ProfilePdf  = "https://capns.org/schema/pdf"
+	ProfileEpub = "https://capns.org/schema/epub"
+	// Text format type profiles (PRIMARY naming)
+	ProfileMd   = "https://capns.org/schema/md"
+	ProfileTxt  = "https://capns.org/schema/txt"
+	ProfileRst  = "https://capns.org/schema/rst"
+	ProfileLog  = "https://capns.org/schema/log"
+	ProfileHtml = "https://capns.org/schema/html"
+	ProfileXml  = "https://capns.org/schema/xml"
+	ProfileJson = "https://capns.org/schema/json"
+	ProfileYaml = "https://capns.org/schema/yaml"
 )
 
 // MediaSpecDefObject represents the rich object form of a media spec definition
 type MediaSpecDefObject struct {
-	MediaType  string      `json:"media_type"`
-	ProfileURI string      `json:"profile_uri"`
-	Schema     interface{} `json:"schema,omitempty"`
+	MediaType   string      `json:"media_type"`
+	ProfileURI  string      `json:"profile_uri"`
+	Schema      interface{} `json:"schema,omitempty"`
+	Title       string      `json:"title,omitempty"`
+	Description string      `json:"description,omitempty"`
 }
 
 // MediaSpecDef represents a media spec definition - can be string (compact) or object (rich)
@@ -130,10 +166,12 @@ func (m *MediaSpecDef) UnmarshalJSON(data []byte) error {
 
 // ResolvedMediaSpec represents a fully resolved media spec with all fields populated
 type ResolvedMediaSpec struct {
-	SpecID     string
-	MediaType  string
-	ProfileURI string
-	Schema     interface{}
+	SpecID      string
+	MediaType   string
+	ProfileURI  string
+	Schema      interface{}
+	Title       string
+	Description string
 }
 
 // IsBinary returns true if this media spec represents binary output
@@ -246,6 +284,8 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 			MediaType:  parsed.MediaType,
 			ProfileURI: parsed.ProfileURI,
 			Schema:     nil,
+			Title:      "",
+			Description: "",
 		}, nil
 	}
 
@@ -254,10 +294,12 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 		return nil, &MediaSpecError{Message: "invalid media spec def: object value is nil"}
 	}
 	return &ResolvedMediaSpec{
-		SpecID:     specID,
-		MediaType:  def.ObjectValue.MediaType,
-		ProfileURI: def.ObjectValue.ProfileURI,
-		Schema:     def.ObjectValue.Schema,
+		SpecID:      specID,
+		MediaType:   def.ObjectValue.MediaType,
+		ProfileURI:  def.ObjectValue.ProfileURI,
+		Schema:      def.ObjectValue.Schema,
+		Title:       def.ObjectValue.Title,
+		Description: def.ObjectValue.Description,
 	}, nil
 }
 
@@ -321,6 +363,37 @@ func resolveBuiltin(mediaUrn string) *ResolvedMediaSpec {
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/octet-stream", ProfileURI: ""}
 	case "void;v=1":
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-void", ProfileURI: ProfileVoid}
+	// Semantic content types
+	case "image;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "image/png", ProfileURI: ProfileImage}
+	case "audio;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "audio/wav", ProfileURI: ProfileAudio}
+	case "video;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "video/mp4", ProfileURI: ProfileVideo}
+	case "text;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileText}
+	// Document types (PRIMARY naming)
+	case "pdf;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/pdf", ProfileURI: ProfilePdf}
+	case "epub;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/epub+zip", ProfileURI: ProfileEpub}
+	// Text format types (PRIMARY naming)
+	case "md;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/markdown", ProfileURI: ProfileMd}
+	case "txt;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileTxt}
+	case "rst;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/x-rst", ProfileURI: ProfileRst}
+	case "log;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileLog}
+	case "html;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/html", ProfileURI: ProfileHtml}
+	case "xml;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/xml", ProfileURI: ProfileXml}
+	case "json;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileJson}
+	case "yaml;v=1":
+		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-yaml", ProfileURI: ProfileYaml}
 	default:
 		return nil
 	}
@@ -455,6 +528,68 @@ func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs map[string]MediaSpecDef) (*R
 		return nil, errors.New("no 'out' tag found in cap URN")
 	}
 	return ResolveMediaUrn(outUrn, mediaSpecs)
+}
+
+// extractMediaUrnTag extracts a tag value from a media URN string
+// e.g., extractMediaUrnTag("media:type=image;ext=png;v=1", "type") returns "image"
+func extractMediaUrnTag(mediaUrn, tagName string) string {
+	prefix := tagName + "="
+	pos := strings.Index(mediaUrn, prefix)
+	if pos == -1 {
+		return ""
+	}
+
+	start := pos + len(prefix)
+	rest := mediaUrn[start:]
+	semicolonPos := strings.Index(rest, ";")
+	if semicolonPos == -1 {
+		return rest
+	}
+	return rest[:semicolonPos]
+}
+
+// MediaUrnSatisfies checks if a provided media URN satisfies another media URN's requirements.
+// Used for cap matching - checks if a provided media type can satisfy a cap's input requirement.
+//
+// Matching rules:
+// - Type must match (e.g., "image" != "binary")
+// - Extension must match if specified in requirement
+// - Version must match if specified in requirement
+func MediaUrnSatisfies(providedUrn, requirementUrn string) bool {
+	if providedUrn == "" || requirementUrn == "" {
+		return false
+	}
+
+	// Extract type from both URNs
+	providedType := extractMediaUrnTag(providedUrn, "type")
+	requiredType := extractMediaUrnTag(requirementUrn, "type")
+
+	// Type must match if required
+	if requiredType != "" {
+		if providedType == "" || providedType != requiredType {
+			return false
+		}
+	}
+
+	// Extension must match if specified in requirement
+	requiredExt := extractMediaUrnTag(requirementUrn, "ext")
+	if requiredExt != "" {
+		providedExt := extractMediaUrnTag(providedUrn, "ext")
+		if providedExt == "" || providedExt != requiredExt {
+			return false
+		}
+	}
+
+	// Version must match if specified in requirement
+	requiredVersion := extractMediaUrnTag(requirementUrn, "v")
+	if requiredVersion != "" {
+		providedVersion := extractMediaUrnTag(providedUrn, "v")
+		if providedVersion == "" || providedVersion != requiredVersion {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Legacy compatibility shim - REMOVED

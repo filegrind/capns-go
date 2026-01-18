@@ -511,13 +511,28 @@ func (g *CapGraph) GetEdges() []CapGraphEdge {
 	return g.edges
 }
 
-// GetOutgoing returns all edges originating from a spec.
+// GetOutgoing returns all edges where the provided spec satisfies the edge's input requirement.
+// Uses satisfies-based matching: checks if spec can satisfy each edge's FromSpec requirement.
 func (g *CapGraph) GetOutgoing(spec string) []*CapGraphEdge {
-	indices := g.outgoing[spec]
-	edges := make([]*CapGraphEdge, len(indices))
-	for i, idx := range indices {
-		edges[i] = &g.edges[idx]
+	var edges []*CapGraphEdge
+
+	// Iterate all edges and check which ones the provided spec satisfies
+	for i := range g.edges {
+		edge := &g.edges[i]
+		if MediaUrnSatisfies(spec, edge.FromSpec) {
+			edges = append(edges, edge)
+		}
 	}
+
+	// Sort by specificity (highest first) for consistent ordering
+	for i := 0; i < len(edges)-1; i++ {
+		for j := i + 1; j < len(edges); j++ {
+			if edges[j].Specificity > edges[i].Specificity {
+				edges[i], edges[j] = edges[j], edges[i]
+			}
+		}
+	}
+
 	return edges
 }
 
