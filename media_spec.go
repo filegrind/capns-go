@@ -25,15 +25,15 @@ const (
 	MediaNumber       = "media:type=number;v=1;textable;numeric;scalar"
 	MediaBoolean      = "media:type=boolean;v=1;textable;scalar"
 	MediaObject       = "media:type=object;v=1;textable;keyed"
-	MediaBinary       = "media:type=binary;v=1;binary"
+	MediaBinary       = "media:type=raw;v=1;binary"
 	MediaStringArray  = "media:type=string-array;v=1;textable;sequence"
 	MediaIntegerArray = "media:type=integer-array;v=1;textable;numeric;sequence"
 	MediaNumberArray  = "media:type=number-array;v=1;textable;numeric;sequence"
 	MediaBooleanArray = "media:type=boolean-array;v=1;textable;sequence"
 	MediaObjectArray  = "media:type=object-array;v=1;textable;keyed;sequence"
 	// Semantic content types
-	MediaImage = "media:type=image;v=1;binary"
-	MediaAudio = "media:type=audio;v=1;binary"
+	MediaImage = "media:type=png;v=1;binary"
+	MediaAudio = "media:type=wav;audio;binary;v=1;"
 	MediaVideo = "media:type=video;v=1;binary"
 	MediaText  = "media:type=text;v=1;textable"
 	// Document types (PRIMARY naming - type IS the format)
