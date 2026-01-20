@@ -8,12 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Test helper for manifest tests
+// Test helper for manifest tests - use proper media URNs with tags
 func manifestTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
+		return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed"`
 	}
-	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
+	return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed";` + tags
 }
 
 func TestCapManifestCreation(t *testing.T) {
@@ -58,7 +58,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
-	cap.AcceptsStdin = true
+	cap.SetStdin("media:type=pdf;v=1;binary")
 
 	manifest := NewCapManifest(
 		"TestComponent",
@@ -75,7 +75,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	assert.Contains(t, jsonStr, `"name":"TestComponent"`)
 	assert.Contains(t, jsonStr, `"version":"0.1.0"`)
 	assert.Contains(t, jsonStr, `"author":"Test Author"`)
-	assert.Contains(t, jsonStr, `"accepts_stdin":true`)
+	assert.Contains(t, jsonStr, `"stdin":"media:type=pdf;v=1;binary"`)
 
 	// Test deserialization
 	var deserialized CapManifest
@@ -87,7 +87,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	assert.Equal(t, manifest.Description, deserialized.Description)
 	assert.Equal(t, manifest.Author, deserialized.Author)
 	assert.Len(t, deserialized.Caps, len(manifest.Caps))
-	assert.Equal(t, manifest.Caps[0].AcceptsStdin, deserialized.Caps[0].AcceptsStdin)
+	assert.Equal(t, *manifest.Caps[0].Stdin, *deserialized.Caps[0].Stdin)
 }
 
 func TestCapManifestRequiredFields(t *testing.T) {
@@ -228,7 +228,7 @@ func TestCapManifestValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
-	cap.AcceptsStdin = true
+	cap.SetStdin("media:type=pdf;v=1;binary")
 
 	manifest := NewCapManifest(
 		"ValidComponent",
@@ -248,7 +248,7 @@ func TestCapManifestValidation(t *testing.T) {
 	capInManifest := manifest.Caps[0]
 	// Version field removed from Cap struct
 	assert.Equal(t, "extract-metadata", capInManifest.Command)
-	assert.True(t, capInManifest.AcceptsStdin)
+	assert.True(t, capInManifest.AcceptsStdin())
 }
 
 func TestCapManifestCompatibility(t *testing.T) {

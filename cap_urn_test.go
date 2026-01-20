@@ -10,11 +10,12 @@ import (
 
 // All cap URNs now require in and out specs. Use these helpers:
 // Media URNs must be quoted in cap URNs because they contain semicolons
+// Use proper tags for is_binary/is_json/is_text detection
 func testUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
+		return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed"`
 	}
-	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
+	return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed";` + tags
 }
 
 func testUrnWithIO(inSpec, outSpec, tags string) string {
@@ -44,8 +45,8 @@ func TestCapUrnCreation(t *testing.T) {
 	assert.Equal(t, "json", format)
 
 	// Direction specs are required and accessible
-	assert.Equal(t, "media:type=void;v=1", capUrn.InSpec())
-	assert.Equal(t, "media:type=object;v=1", capUrn.OutSpec())
+	assert.Equal(t, MediaVoid, capUrn.InSpec())
+	assert.Equal(t, MediaObject, capUrn.OutSpec())
 }
 
 func TestDirectionSpecsRequired(t *testing.T) {
@@ -96,7 +97,7 @@ func TestCanonicalStringFormat(t *testing.T) {
 	// Should be sorted alphabetically with in/out in their sorted positions
 	// Media URNs in in/out are quoted because they contain semicolons
 	// Alphabetical order: ext < in < op < out < target
-	assert.Equal(t, `cap:ext=pdf;in="media:type=void;v=1";op=generate;out="media:type=object;v=1";target=thumbnail`, capUrn.ToString())
+	assert.Equal(t, `cap:ext=pdf;in="`+MediaVoid+`";op=generate;out="`+MediaObject+`";target=thumbnail`, capUrn.ToString())
 }
 
 func TestCapPrefixRequired(t *testing.T) {
@@ -279,11 +280,11 @@ func TestConvenienceMethods(t *testing.T) {
 	// GetTag works for in/out
 	inVal, exists := cap.GetTag("in")
 	assert.True(t, exists)
-	assert.Equal(t, "media:type=void;v=1", inVal)
+	assert.Equal(t, MediaVoid, inVal)
 
 	outVal, exists := cap.GetTag("out")
 	assert.True(t, exists)
-	assert.Equal(t, "media:type=object;v=1", outVal)
+	assert.Equal(t, MediaObject, outVal)
 }
 
 func TestBuilder(t *testing.T) {
@@ -342,9 +343,9 @@ func TestWithTag(t *testing.T) {
 	assert.True(t, modExists)
 	assert.Equal(t, "pdf", ext)
 
-	// Direction specs preserved (from parsed string - no coercion tags)
-	assert.Equal(t, "media:type=void;v=1", modified.InSpec())
-	assert.Equal(t, "media:type=object;v=1", modified.OutSpec())
+	// Direction specs preserved (testUrn uses constants with tags)
+	assert.Equal(t, MediaVoid, modified.InSpec())
+	assert.Equal(t, MediaObject, modified.OutSpec())
 }
 
 func TestWithoutTag(t *testing.T) {
@@ -362,9 +363,9 @@ func TestWithoutTag(t *testing.T) {
 	assert.True(t, origExists)
 	assert.Equal(t, "pdf", ext)
 
-	// Direction specs preserved (from parsed string - no coercion tags)
-	assert.Equal(t, "media:type=void;v=1", modified.InSpec())
-	assert.Equal(t, "media:type=object;v=1", modified.OutSpec())
+	// Direction specs preserved (testUrn uses constants with tags)
+	assert.Equal(t, MediaVoid, modified.InSpec())
+	assert.Equal(t, MediaObject, modified.OutSpec())
 }
 
 func TestWithInSpecOutSpec(t *testing.T) {
@@ -374,13 +375,13 @@ func TestWithInSpecOutSpec(t *testing.T) {
 	// Change input spec (using constant with coercion tags)
 	modified1 := original.WithInSpec(MediaBinary)
 	assert.Equal(t, MediaBinary, modified1.InSpec())
-	assert.Equal(t, "media:type=object;v=1", modified1.OutSpec()) // from parsed string
+	assert.Equal(t, MediaObject, modified1.OutSpec()) // testUrn uses MediaObject
 	// Original unchanged
-	assert.Equal(t, "media:type=void;v=1", original.InSpec())
+	assert.Equal(t, MediaVoid, original.InSpec())
 
 	// Change output spec (using constant with coercion tags)
 	modified2 := original.WithOutSpec(MediaInteger)
-	assert.Equal(t, "media:type=void;v=1", modified2.InSpec()) // from parsed string
+	assert.Equal(t, MediaVoid, modified2.InSpec()) // testUrn uses MediaVoid
 	assert.Equal(t, MediaInteger, modified2.OutSpec())
 }
 
@@ -415,9 +416,9 @@ func TestSubset(t *testing.T) {
 	_, opExists := subset.GetTag("op")
 	assert.False(t, opExists)
 
-	// Direction specs preserved (from parsed string - no coercion tags)
-	assert.Equal(t, "media:type=void;v=1", subset.InSpec())
-	assert.Equal(t, "media:type=object;v=1", subset.OutSpec())
+	// Direction specs preserved (testUrn uses constants with tags)
+	assert.Equal(t, MediaVoid, subset.InSpec())
+	assert.Equal(t, MediaObject, subset.OutSpec())
 }
 
 func TestMerge(t *testing.T) {
@@ -749,9 +750,9 @@ func TestHasTagCaseSensitive(t *testing.T) {
 	assert.True(t, cap.HasTag("KEY", "Value"))
 	assert.True(t, cap.HasTag("Key", "Value"))
 
-	// HasTag works for in/out (using parsed values without coercion tags)
-	assert.True(t, cap.HasTag("in", "media:type=void;v=1"))
-	assert.True(t, cap.HasTag("out", "media:type=object;v=1"))
+	// HasTag works for in/out (testUrn uses constants with tags)
+	assert.True(t, cap.HasTag("in", MediaVoid))
+	assert.True(t, cap.HasTag("out", MediaObject))
 }
 
 func TestWithTagPreservesValue(t *testing.T) {

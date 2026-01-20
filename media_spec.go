@@ -15,6 +15,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	taggedurn "github.com/fgrnd/tagged-urn-go"
 )
 
 // Built-in media URN constants with coercion tags
@@ -174,29 +176,33 @@ type ResolvedMediaSpec struct {
 	Description string
 }
 
-// IsBinary returns true if this media spec represents binary output
+// IsBinary returns true if the "binary" marker tag is present in the source media URN.
 func (r *ResolvedMediaSpec) IsBinary() bool {
-	ct := strings.ToLower(r.MediaType)
-	return strings.HasPrefix(ct, "image/") ||
-		strings.HasPrefix(ct, "audio/") ||
-		strings.HasPrefix(ct, "video/") ||
-		ct == "application/octet-stream" ||
-		ct == "application/pdf" ||
-		strings.HasPrefix(ct, "application/x-") ||
-		strings.Contains(ct, "+zip") ||
-		strings.Contains(ct, "+gzip")
+	return HasMediaUrnTag(r.SpecID, "binary")
 }
 
-// IsJSON returns true if this media spec represents JSON output
+// IsJSON returns true if the "keyed" marker tag is present in the source media URN.
 func (r *ResolvedMediaSpec) IsJSON() bool {
-	ct := strings.ToLower(r.MediaType)
-	return ct == "application/json" || strings.HasSuffix(ct, "+json")
+	return HasMediaUrnTag(r.SpecID, "keyed")
 }
 
-// IsText returns true if this media spec represents text output
+// IsText returns true if the "textable" marker tag is present in the source media URN.
 func (r *ResolvedMediaSpec) IsText() bool {
-	ct := strings.ToLower(r.MediaType)
-	return strings.HasPrefix(ct, "text/") || (!r.IsBinary() && !r.IsJSON())
+	return HasMediaUrnTag(r.SpecID, "textable")
+}
+
+// HasMediaUrnTag checks if a media URN has a marker tag (e.g., binary, keyed, textable).
+// Uses tagged-urn parsing for proper tag detection.
+func HasMediaUrnTag(mediaUrn, tagName string) bool {
+	if mediaUrn == "" {
+		return false
+	}
+	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
+	if err != nil {
+		return false
+	}
+	_, exists := parsed.GetTag(tagName)
+	return exists
 }
 
 // PrimaryType returns the primary type (e.g., "image" from "image/png")
@@ -330,69 +336,65 @@ func extractBaseType(mediaUrn string) string {
 	return ""
 }
 
-// resolveBuiltin resolves built-in media URNs based on type and version
-// This matches media URNs regardless of coercion tags
+// resolveBuiltin resolves built-in media URNs by exact match against constants
+// Mirrors the Rust reference implementation exactly
 func resolveBuiltin(mediaUrn string) *ResolvedMediaSpec {
-	baseType := extractBaseType(mediaUrn)
-	if baseType == "" {
-		return nil
-	}
-
-	switch baseType {
-	case "string;v=1":
+	switch mediaUrn {
+	// Standard primitives
+	case MediaString:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileStr}
-	case "integer;v=1":
+	case MediaInteger:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileInt}
-	case "number;v=1":
+	case MediaNumber:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileNum}
-	case "boolean;v=1":
+	case MediaBoolean:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileBool}
-	case "object;v=1":
+	case MediaObject:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObj}
-	case "string-array;v=1":
+	case MediaStringArray:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileStrArray}
-	case "integer-array;v=1":
+	case MediaIntegerArray:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileIntArray}
-	case "number-array;v=1":
+	case MediaNumberArray:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileNumArray}
-	case "boolean-array;v=1":
+	case MediaBooleanArray:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileBoolArray}
-	case "object-array;v=1":
+	case MediaObjectArray:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObjArray}
-	case "binary;v=1":
+	case MediaBinary:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/octet-stream", ProfileURI: ""}
-	case "void;v=1":
+	case MediaVoid:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-void", ProfileURI: ProfileVoid}
 	// Semantic content types
-	case "image;v=1":
+	case MediaImage:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "image/png", ProfileURI: ProfileImage}
-	case "audio;v=1":
+	case MediaAudio:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "audio/wav", ProfileURI: ProfileAudio}
-	case "video;v=1":
+	case MediaVideo:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "video/mp4", ProfileURI: ProfileVideo}
-	case "text;v=1":
+	case MediaText:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileText}
 	// Document types (PRIMARY naming)
-	case "pdf;v=1":
+	case MediaPdf:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/pdf", ProfileURI: ProfilePdf}
-	case "epub;v=1":
+	case MediaEpub:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/epub+zip", ProfileURI: ProfileEpub}
 	// Text format types (PRIMARY naming)
-	case "md;v=1":
+	case MediaMd:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/markdown", ProfileURI: ProfileMd}
-	case "txt;v=1":
+	case MediaTxt:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileTxt}
-	case "rst;v=1":
+	case MediaRst:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/x-rst", ProfileURI: ProfileRst}
-	case "log;v=1":
+	case MediaLog:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileLog}
-	case "html;v=1":
+	case MediaHtml:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/html", ProfileURI: ProfileHtml}
-	case "xml;v=1":
+	case MediaXml:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/xml", ProfileURI: ProfileXml}
-	case "json;v=1":
+	case MediaJson:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileJson}
-	case "yaml;v=1":
+	case MediaYaml:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-yaml", ProfileURI: ProfileYaml}
 	default:
 		return nil

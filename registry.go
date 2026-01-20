@@ -40,7 +40,7 @@ type RegistryCapResponse struct {
 	Command      string      `json:"command"`
 	Arguments    CapArguments `json:"arguments"`
 	Output       *CapOutput  `json:"output,omitempty"`
-	AcceptsStdin bool        `json:"accepts_stdin"`
+	Stdin        *string     `json:"stdin,omitempty"` // Media URN for stdin, nil means no stdin
 }
 
 // ToCap converts a registry response to a standard Cap
@@ -87,8 +87,8 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 	}
 	cap.Arguments = &r.Arguments
 	cap.Output = r.Output
-	cap.AcceptsStdin = r.AcceptsStdin
-	
+	cap.Stdin = r.Stdin
+
 	return cap, nil
 }
 
@@ -176,8 +176,20 @@ func (r *CapRegistry) ValidateCap(cap *Cap) error {
 		return fmt.Errorf("command mismatch. Local: %s, Canonical: %s", cap.Command, canonicalCap.Command)
 	}
 
-	if cap.AcceptsStdin != canonicalCap.AcceptsStdin {
-		return fmt.Errorf("accepts_stdin mismatch. Local: %t, Canonical: %t", cap.AcceptsStdin, canonicalCap.AcceptsStdin)
+	// Compare stdin (nil means no stdin)
+	if (cap.Stdin == nil) != (canonicalCap.Stdin == nil) {
+		localStdin := "<none>"
+		canonicalStdin := "<none>"
+		if cap.Stdin != nil {
+			localStdin = *cap.Stdin
+		}
+		if canonicalCap.Stdin != nil {
+			canonicalStdin = *canonicalCap.Stdin
+		}
+		return fmt.Errorf("stdin mismatch. Local: %s, Canonical: %s", localStdin, canonicalStdin)
+	}
+	if cap.Stdin != nil && *cap.Stdin != *canonicalCap.Stdin {
+		return fmt.Errorf("stdin mismatch. Local: %s, Canonical: %s", *cap.Stdin, *canonicalCap.Stdin)
 	}
 
 	return nil

@@ -103,28 +103,35 @@ func TestCapDescription(t *testing.T) {
 	assert.True(t, cap1.Equals(cap3))  // Same everything
 }
 
-func TestCapAcceptsStdin(t *testing.T) {
+func TestCapStdin(t *testing.T) {
 	id, err := NewCapUrnFromString(capTestUrn("op=generate;target=embeddings"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Generate Embeddings", "generate")
 
 	// By default, caps should not accept stdin
-	assert.False(t, cap.AcceptsStdin)
+	assert.False(t, cap.AcceptsStdin())
+	assert.Nil(t, cap.Stdin)
+	assert.Nil(t, cap.StdinMediaType())
 
-	// Enable stdin support
-	cap.AcceptsStdin = true
-	assert.True(t, cap.AcceptsStdin)
+	// Enable stdin support with a media URN
+	cap.SetStdin("media:type=text;v=1;textable")
+	assert.True(t, cap.AcceptsStdin())
+	assert.Equal(t, "media:type=text;v=1;textable", *cap.StdinMediaType())
 
 	// Test JSON serialization/deserialization preserves the field
 	jsonData, err := json.Marshal(cap)
 	require.NoError(t, err)
 
+	// Verify JSON contains stdin field
+	assert.Contains(t, string(jsonData), `"stdin":"media:type=text;v=1;textable"`)
+
 	var deserialized Cap
 	err = json.Unmarshal(jsonData, &deserialized)
 	require.NoError(t, err)
 
-	assert.Equal(t, cap.AcceptsStdin, deserialized.AcceptsStdin)
+	assert.True(t, deserialized.AcceptsStdin())
+	assert.Equal(t, *cap.Stdin, *deserialized.Stdin)
 }
 
 func TestCapWithMediaSpecs(t *testing.T) {

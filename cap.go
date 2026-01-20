@@ -201,8 +201,9 @@ type Cap struct {
 	// Output defines the output format for this cap
 	Output *CapOutput `json:"output,omitempty"`
 
-	// AcceptsStdin indicates whether this cap accepts input via stdin
-	AcceptsStdin bool `json:"accepts_stdin,omitempty"`
+	// Stdin is the media URN that stdin expects. Nil means cap does NOT accept stdin.
+	// Example: "media:type=pdf;v=1;binary"
+	Stdin *string `json:"stdin,omitempty"`
 
 	// MetadataJSON contains arbitrary metadata as JSON object
 	MetadataJSON interface{} `json:"metadata_json,omitempty"`
@@ -576,6 +577,26 @@ func (c *Cap) ClearRegisteredBy() {
 	c.RegisteredBy = nil
 }
 
+// AcceptsStdin returns true if cap accepts stdin
+func (c *Cap) AcceptsStdin() bool {
+	return c.Stdin != nil
+}
+
+// StdinMediaType returns the media URN expected for stdin, or nil if cap doesn't accept stdin
+func (c *Cap) StdinMediaType() *string {
+	return c.Stdin
+}
+
+// SetStdin sets the stdin media URN
+func (c *Cap) SetStdin(mediaUrn string) {
+	c.Stdin = &mediaUrn
+}
+
+// ClearStdin clears the stdin (cap will no longer accept stdin)
+func (c *Cap) ClearStdin() {
+	c.Stdin = nil
+}
+
 // GetMetadata gets the metadata JSON for CapArgument
 func (ca *CapArgument) GetMetadata() interface{} {
 	return ca.Metadata
@@ -663,8 +684,11 @@ func (c *Cap) Equals(other *Cap) bool {
 		return false
 	}
 
-	// Compare AcceptsStdin
-	if c.AcceptsStdin != other.AcceptsStdin {
+	// Compare Stdin
+	if (c.Stdin == nil) != (other.Stdin == nil) {
+		return false
+	}
+	if c.Stdin != nil && *c.Stdin != *other.Stdin {
 		return false
 	}
 
@@ -719,8 +743,9 @@ func (c *Cap) MarshalJSON() ([]byte, error) {
 		capData["output"] = c.Output
 	}
 
-	if c.AcceptsStdin {
-		capData["accepts_stdin"] = c.AcceptsStdin
+	// Only include stdin if present (absence means no stdin)
+	if c.Stdin != nil {
+		capData["stdin"] = *c.Stdin
 	}
 
 	if c.MetadataJSON != nil {
@@ -813,8 +838,9 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	if acceptsStdin, ok := raw["accepts_stdin"].(bool); ok {
-		c.AcceptsStdin = acceptsStdin
+	// Handle stdin field (absence means no stdin)
+	if stdin, ok := raw["stdin"].(string); ok {
+		c.Stdin = &stdin
 	}
 
 	// Handle arguments and output if present
