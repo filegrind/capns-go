@@ -8,10 +8,66 @@ import (
 	"strings"
 )
 
+// StdinSourceKind identifies the type of stdin source
+type StdinSourceKind int
+
+const (
+	// StdinSourceKindData represents raw byte data for stdin
+	StdinSourceKindData StdinSourceKind = iota
+	// StdinSourceKindFileReference represents a file reference for stdin
+	// Used for plugins to read files locally instead of sending bytes over the wire
+	StdinSourceKindFileReference
+)
+
+// StdinSource represents the source for stdin data.
+// For plugins (via gRPC/XPC), using FileReference avoids size limits
+// by letting the receiving side read the file locally.
+type StdinSource struct {
+	Kind StdinSourceKind
+
+	// Data is the raw byte data (used when Kind == StdinSourceKindData)
+	Data []byte
+
+	// FileReference fields (used when Kind == StdinSourceKindFileReference)
+	TrackedFileID    string
+	OriginalPath     string
+	SecurityBookmark []byte
+	MediaUrn         string
+}
+
+// NewStdinSourceFromData creates a StdinSource from raw bytes
+func NewStdinSourceFromData(data []byte) *StdinSource {
+	return &StdinSource{
+		Kind: StdinSourceKindData,
+		Data: data,
+	}
+}
+
+// NewStdinSourceFromFileReference creates a StdinSource from a file reference
+func NewStdinSourceFromFileReference(trackedFileID, originalPath string, securityBookmark []byte, mediaUrn string) *StdinSource {
+	return &StdinSource{
+		Kind:             StdinSourceKindFileReference,
+		TrackedFileID:    trackedFileID,
+		OriginalPath:     originalPath,
+		SecurityBookmark: securityBookmark,
+		MediaUrn:         mediaUrn,
+	}
+}
+
+// IsData returns true if this is a data source
+func (s *StdinSource) IsData() bool {
+	return s != nil && s.Kind == StdinSourceKindData
+}
+
+// IsFileReference returns true if this is a file reference source
+func (s *StdinSource) IsFileReference() bool {
+	return s != nil && s.Kind == StdinSourceKindFileReference
+}
+
 // CapCaller executes caps via host service with strict validation
 type CapCaller struct {
 	cap           string
-	capSet       CapSet
+	capSet        CapSet
 	capDefinition *Cap
 }
 
@@ -22,7 +78,7 @@ type CapSet interface {
 		capUrn string,
 		positionalArgs []string,
 		namedArgs map[string]string,
-		stdinData []byte,
+		stdinSource *StdinSource,
 	) (*HostResult, error)
 }
 
@@ -41,13 +97,13 @@ func NewCapCaller(cap string, capSet CapSet, capDefinition *Cap) *CapCaller {
 	}
 }
 
-// Call executes the cap with structured arguments and optional stdin data
+// Call executes the cap with structured arguments and optional stdin source
 // Validates inputs against cap definition before execution
 func (cc *CapCaller) Call(
 	ctx context.Context,
 	positionalArgs []interface{},
 	namedArgs []interface{},
-	stdinData []byte,
+	stdinSource *StdinSource,
 ) (*ResponseWrapper, error) {
 	// Validate inputs against cap definition
 	if err := cc.validateInputs(positionalArgs, namedArgs); err != nil {
@@ -78,7 +134,7 @@ func (cc *CapCaller) Call(
 		cc.cap,
 		stringPositionalArgs,
 		stringNamedArgs,
-		stdinData,
+		stdinSource,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("cap execution failed: %w", err)

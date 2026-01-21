@@ -13,7 +13,7 @@ type MockCapSet struct {
 	expectedCapUrn         string
 	expectedPositionalArgs []string
 	expectedNamedArgs      map[string]string
-	expectedStdinData      []byte
+	expectedStdinSource    *StdinSource
 	returnResult           *HostResult
 	returnError            error
 }
@@ -23,7 +23,7 @@ func (m *MockCapSet) ExecuteCap(
 	capUrn string,
 	positionalArgs []string,
 	namedArgs map[string]string,
-	stdinData []byte,
+	stdinSource *StdinSource,
 ) (*HostResult, error) {
 	if m.expectedCapUrn != "" {
 		if capUrn != m.expectedCapUrn {
@@ -195,4 +195,129 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 	require.NotNil(t, result)
 	assert.True(t, result.IsBinary())
 	assert.Equal(t, pngHeader, result.AsBytes())
+}
+
+// TestStdinSourceCreation tests the creation of StdinSource types
+func TestStdinSourceCreation(t *testing.T) {
+	// Test Data source creation
+	data := []byte("test data")
+	dataSource := NewStdinSourceFromData(data)
+
+	assert.NotNil(t, dataSource)
+	assert.Equal(t, StdinSourceKindData, dataSource.Kind)
+	assert.True(t, dataSource.IsData())
+	assert.False(t, dataSource.IsFileReference())
+	assert.Equal(t, data, dataSource.Data)
+
+	// Test FileReference source creation
+	fileSource := NewStdinSourceFromFileReference(
+		"tracked-123",
+		"/path/to/original.pdf",
+		[]byte("security-bookmark-data"),
+		"media:type=pdf;v=1;binary",
+	)
+
+	assert.NotNil(t, fileSource)
+	assert.Equal(t, StdinSourceKindFileReference, fileSource.Kind)
+	assert.False(t, fileSource.IsData())
+	assert.True(t, fileSource.IsFileReference())
+	assert.Equal(t, "tracked-123", fileSource.TrackedFileID)
+	assert.Equal(t, "/path/to/original.pdf", fileSource.OriginalPath)
+	assert.Equal(t, []byte("security-bookmark-data"), fileSource.SecurityBookmark)
+	assert.Equal(t, "media:type=pdf;v=1;binary", fileSource.MediaUrn)
+}
+
+// TestStdinSourceNilHandling tests that nil StdinSource is handled correctly
+func TestStdinSourceNilHandling(t *testing.T) {
+	var nilSource *StdinSource = nil
+
+	// IsData and IsFileReference should return false for nil
+	assert.False(t, nilSource.IsData())
+	assert.False(t, nilSource.IsFileReference())
+}
+
+// MockCapSetWithStdinVerification implements CapSet and verifies stdin source
+type MockCapSetWithStdinVerification struct {
+	t                 *testing.T
+	expectedStdinKind StdinSourceKind
+	expectedStdinData []byte
+	expectedFileID    string
+}
+
+func (m *MockCapSetWithStdinVerification) ExecuteCap(
+	ctx context.Context,
+	capUrn string,
+	positionalArgs []string,
+	namedArgs map[string]string,
+	stdinSource *StdinSource,
+) (*HostResult, error) {
+	if stdinSource == nil {
+		m.t.Fatal("Expected StdinSource but got nil")
+	}
+
+	assert.Equal(m.t, m.expectedStdinKind, stdinSource.Kind)
+
+	if stdinSource.IsData() {
+		assert.Equal(m.t, m.expectedStdinData, stdinSource.Data)
+	} else if stdinSource.IsFileReference() {
+		assert.Equal(m.t, m.expectedFileID, stdinSource.TrackedFileID)
+	}
+
+	return &HostResult{TextOutput: "ok"}, nil
+}
+
+// TestCapCallerWithStdinSourceData tests calling a cap with StdinSource Data
+func TestCapCallerWithStdinSourceData(t *testing.T) {
+	capUrnStr := `cap:in="` + MediaVoid + `";op=process;out="` + MediaString + `"`
+	capUrn, err := NewCapUrnFromString(capUrnStr)
+	require.NoError(t, err)
+
+	capDef := NewCap(capUrn, "Process Capability", "process-command")
+	capDef.SetOutput(NewCapOutput(MediaString, "Process output"))
+
+	stdinData := []byte("test stdin content")
+	mockHost := &MockCapSetWithStdinVerification{
+		t:                 t,
+		expectedStdinKind: StdinSourceKindData,
+		expectedStdinData: stdinData,
+	}
+
+	caller := NewCapCaller(capUrnStr, mockHost, capDef)
+
+	ctx := context.Background()
+	stdinSource := NewStdinSourceFromData(stdinData)
+	result, err := caller.Call(ctx, []interface{}{}, []interface{}{}, stdinSource)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+}
+
+// TestCapCallerWithStdinSourceFileReference tests calling a cap with StdinSource FileReference
+func TestCapCallerWithStdinSourceFileReference(t *testing.T) {
+	capUrnStr := `cap:in="` + MediaVoid + `";op=process;out="` + MediaString + `"`
+	capUrn, err := NewCapUrnFromString(capUrnStr)
+	require.NoError(t, err)
+
+	capDef := NewCap(capUrn, "Process Capability", "process-command")
+	capDef.SetOutput(NewCapOutput(MediaString, "Process output"))
+
+	mockHost := &MockCapSetWithStdinVerification{
+		t:                 t,
+		expectedStdinKind: StdinSourceKindFileReference,
+		expectedFileID:    "tracked-file-123",
+	}
+
+	caller := NewCapCaller(capUrnStr, mockHost, capDef)
+
+	ctx := context.Background()
+	stdinSource := NewStdinSourceFromFileReference(
+		"tracked-file-123",
+		"/path/to/file.pdf",
+		[]byte("bookmark"),
+		"media:type=pdf;v=1;binary",
+	)
+	result, err := caller.Call(ctx, []interface{}{}, []interface{}{}, stdinSource)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
 }

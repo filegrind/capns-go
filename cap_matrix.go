@@ -373,7 +373,7 @@ func (cs *CompositeCapSet) ExecuteCap(
 	capUrn string,
 	positionalArgs []string,
 	namedArgs map[string]string,
-	stdinData []byte,
+	stdinSource *StdinSource,
 ) (*HostResult, error) {
 	// Parse the request URN
 	request, err := NewCapUrnFromString(capUrn)
@@ -405,7 +405,7 @@ func (cs *CompositeCapSet) ExecuteCap(
 	}
 
 	// Delegate execution to the best matching host
-	return bestHost.ExecuteCap(ctx, capUrn, positionalArgs, namedArgs, stdinData)
+	return bestHost.ExecuteCap(ctx, capUrn, positionalArgs, namedArgs, stdinSource)
 }
 
 // Graph builds a directed graph from all capabilities in the registries.

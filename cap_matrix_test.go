@@ -15,7 +15,7 @@ func (m *MockCapSetForRegistry) ExecuteCap(
 	capUrn string,
 	positionalArgs []string,
 	namedArgs map[string]string,
-	stdinData []byte,
+	stdinSource *StdinSource,
 ) (*HostResult, error) {
 	return &HostResult{
 		TextOutput: "Mock response from " + m.name,
