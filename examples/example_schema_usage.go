@@ -11,8 +11,8 @@ import (
 func main() {
 	// Example 1: Create capability with embedded schema
 	fmt.Println("=== Example 1: Basic Schema Validation ===")
-	
-	urn, _ := capns.NewCapUrnFromString("cap:op=query;target=structured;")
+
+	urn, _ := capns.NewCapUrnFromString(`cap:in="media:type=void;v=1";op=query;out="media:type=object;v=1;textable;keyed";target=structured`)
 	cap := capns.NewCap(urn, "Query Command", "query-command")
 
 	// Define JSON schema for user data
@@ -36,9 +36,23 @@ func main() {
 		"required": []interface{}{"name", "age"},
 	}
 
-	// Add argument with schema
-	userArg := capns.NewCapArgumentWithSchema("user", capns.ArgumentTypeObject, "User data", "--user", userSchema)
-	cap.AddRequiredArgument(userArg)
+	// Add custom media spec with schema
+	cap.AddMediaSpec("media:type=user;v=1;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/user",
+		userSchema,
+	))
+
+	// Add argument with schema using new CapArg architecture
+	cliFlag := "--user"
+	pos := 0
+	userArg := capns.CapArg{
+		MediaUrn:       "media:type=user;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []capns.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "User data",
+	}
+	cap.AddArg(userArg)
 
 	// Create validator and test
 	validator := capns.NewSchemaValidator()
@@ -50,11 +64,18 @@ func main() {
 		"email": "john@example.com",
 	}
 
-	err := validator.ValidateArgument(&userArg, validUser)
-	if err != nil {
-		fmt.Printf("ERR Validation failed: %v\n", err)
-	} else {
-		fmt.Printf("OK Valid data passed validation\n")
+	// Resolve the arg and validate
+	args := cap.GetArgs()
+	if len(args) > 0 {
+		resolved, _ := args[0].Resolve(cap.GetMediaSpecs())
+		if resolved != nil && resolved.Schema != nil {
+			err := validator.ValidateArgumentWithSchema(&args[0], resolved.Schema, validUser)
+			if err != nil {
+				fmt.Printf("ERR Validation failed: %v\n", err)
+			} else {
+				fmt.Printf("OK Valid data passed validation\n")
+			}
+		}
 	}
 
 	// Invalid data
@@ -63,11 +84,16 @@ func main() {
 		"age":  -5,  // Negative age
 	}
 
-	err = validator.ValidateArgument(&userArg, invalidUser)
-	if err != nil {
-		fmt.Printf("OK Invalid data correctly rejected: %v\n", err)
-	} else {
-		fmt.Printf("ERR Invalid data incorrectly accepted\n")
+	if len(args) > 0 {
+		resolved, _ := args[0].Resolve(cap.GetMediaSpecs())
+		if resolved != nil && resolved.Schema != nil {
+			err := validator.ValidateArgumentWithSchema(&args[0], resolved.Schema, invalidUser)
+			if err != nil {
+				fmt.Printf("OK Invalid data correctly rejected: %v\n", err)
+			} else {
+				fmt.Printf("ERR Invalid data incorrectly accepted\n")
+			}
+		}
 	}
 
 	// Example 2: Output validation
@@ -98,7 +124,14 @@ func main() {
 		"required": []interface{}{"status", "total"},
 	}
 
-	output := capns.NewCapOutputWithEmbeddedSchema(capns.OutputTypeObject, "Query results", outputSchema)
+	// Add custom media spec for output with schema
+	cap.AddMediaSpec("media:type=query-result;v=1;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/query-result",
+		outputSchema,
+	))
+
+	output := capns.NewCapOutput("media:type=query-result;v=1;textable;keyed", "Query results")
 	cap.SetOutput(output)
 
 	// Valid output
@@ -111,11 +144,17 @@ func main() {
 		"total": 2,
 	}
 
-	err = validator.ValidateOutput(output, validOutput)
-	if err != nil {
-		fmt.Printf("ERR Output validation failed: %v\n", err)
-	} else {
-		fmt.Printf("OK Valid output passed validation\n")
+	// Resolve output and validate
+	if cap.Output != nil {
+		resolved, _ := cap.Output.Resolve(cap.GetMediaSpecs())
+		if resolved != nil && resolved.Schema != nil {
+			err := validator.ValidateOutputWithSchema(cap.Output, resolved.Schema, validOutput)
+			if err != nil {
+				fmt.Printf("ERR Output validation failed: %v\n", err)
+			} else {
+				fmt.Printf("OK Valid output passed validation\n")
+			}
+		}
 	}
 
 	// Example 3: Integration with CapValidationCoordinator
@@ -126,7 +165,7 @@ func main() {
 
 	// Test input validation through coordinator
 	positionalArgs := []interface{}{validUser}
-	err = coordinator.ValidateInputs(cap.UrnString(), positionalArgs)
+	err := coordinator.ValidateInputs(cap.UrnString(), positionalArgs)
 	if err != nil {
 		fmt.Printf("ERR Coordinator input validation failed: %v\n", err)
 	} else {
@@ -158,18 +197,35 @@ func main() {
 		"maxItems": 10,
 	}
 
-	itemsArg := capns.NewCapArgumentWithSchema("items", capns.ArgumentTypeArray, "List of items", "--items", arraySchema)
+	// Add custom media spec for array with schema
+	cap.AddMediaSpec("media:type=items;v=1;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/items",
+		arraySchema,
+	))
+
+	cliFlag2 := "--items"
+	pos2 := 1
+	itemsArg := capns.CapArg{
+		MediaUrn:       "media:type=items;v=1;textable;keyed",
+		Required:       false,
+		Sources:        []capns.ArgSource{{CliFlag: &cliFlag2}, {Position: &pos2}},
+		ArgDescription: "List of items",
+	}
 
 	validArray := []interface{}{
 		map[string]interface{}{"id": 1, "name": "Item 1"},
 		map[string]interface{}{"id": 2, "name": "Item 2"},
 	}
 
-	err = validator.ValidateArgument(&itemsArg, validArray)
-	if err != nil {
-		fmt.Printf("ERR Array validation failed: %v\n", err)
-	} else {
-		fmt.Printf("OK Valid array passed validation\n")
+	resolved, _ := itemsArg.Resolve(cap.GetMediaSpecs())
+	if resolved != nil && resolved.Schema != nil {
+		err = validator.ValidateArgumentWithSchema(&itemsArg, resolved.Schema, validArray)
+		if err != nil {
+			fmt.Printf("ERR Array validation failed: %v\n", err)
+		} else {
+			fmt.Printf("OK Valid array passed validation\n")
+		}
 	}
 
 	fmt.Println("\n=== Schema validation examples completed successfully! ===")

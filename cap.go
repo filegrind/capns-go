@@ -16,85 +16,170 @@ type ArgumentValidation struct {
 	AllowedValues []string `json:"allowed_values,omitempty"`
 }
 
-// CapArgument represents a single argument definition for a cap
-type CapArgument struct {
-	Name           string              `json:"name"`
-	MediaUrn       string              `json:"media_urn"` // Media URN, e.g., "media:type=string;v=1"
-	ArgDescription string              `json:"arg_description"`
-	CliFlag        string              `json:"cli_flag"`
-	Position       *int                `json:"position,omitempty"`
+// ArgSource specifies how an argument can be provided
+type ArgSource struct {
+	Stdin    *string `json:"stdin,omitempty"`
+	Position *int    `json:"position,omitempty"`
+	CliFlag  *string `json:"cli_flag,omitempty"`
+}
+
+// GetType returns the type of this source
+func (s *ArgSource) GetType() string {
+	if s.Stdin != nil {
+		return "stdin"
+	}
+	if s.Position != nil {
+		return "position"
+	}
+	if s.CliFlag != nil {
+		return "cli_flag"
+	}
+	return ""
+}
+
+// IsStdin returns true if this is a stdin source
+func (s *ArgSource) IsStdin() bool {
+	return s.Stdin != nil
+}
+
+// IsPosition returns true if this is a position source
+func (s *ArgSource) IsPosition() bool {
+	return s.Position != nil
+}
+
+// IsCliFlag returns true if this is a cli_flag source
+func (s *ArgSource) IsCliFlag() bool {
+	return s.CliFlag != nil
+}
+
+// CapArg represents an argument definition with sources
+type CapArg struct {
+	MediaUrn       string              `json:"media_urn"`
+	Required       bool                `json:"required"`
+	Sources        []ArgSource         `json:"sources"`
+	ArgDescription string              `json:"arg_description,omitempty"`
 	Validation     *ArgumentValidation `json:"validation,omitempty"`
-	DefaultValue   interface{}         `json:"default_value,omitempty"`
-	Metadata       interface{}         `json:"metadata,omitempty"`
+	DefaultValue   any                 `json:"default_value,omitempty"`
+	Metadata       any                 `json:"metadata,omitempty"`
+}
+
+// NewCapArg creates a new cap argument
+func NewCapArg(mediaUrn string, required bool, sources []ArgSource) CapArg {
+	return CapArg{
+		MediaUrn: mediaUrn,
+		Required: required,
+		Sources:  sources,
+	}
+}
+
+// NewCapArgWithDescription creates a new cap argument with description
+func NewCapArgWithDescription(mediaUrn string, required bool, sources []ArgSource, description string) CapArg {
+	return CapArg{
+		MediaUrn:       mediaUrn,
+		Required:       required,
+		Sources:        sources,
+		ArgDescription: description,
+	}
+}
+
+// HasStdinSource returns true if this argument has a stdin source
+func (a *CapArg) HasStdinSource() bool {
+	for _, s := range a.Sources {
+		if s.IsStdin() {
+			return true
+		}
+	}
+	return false
+}
+
+// GetStdinMediaUrn returns the stdin media URN if present
+func (a *CapArg) GetStdinMediaUrn() *string {
+	for _, s := range a.Sources {
+		if s.Stdin != nil {
+			return s.Stdin
+		}
+	}
+	return nil
+}
+
+// HasPositionSource returns true if this argument has a position source
+func (a *CapArg) HasPositionSource() bool {
+	for _, s := range a.Sources {
+		if s.IsPosition() {
+			return true
+		}
+	}
+	return false
+}
+
+// GetPosition returns the position if present
+func (a *CapArg) GetPosition() *int {
+	for _, s := range a.Sources {
+		if s.Position != nil {
+			return s.Position
+		}
+	}
+	return nil
+}
+
+// HasCliFlagSource returns true if this argument has a cli_flag source
+func (a *CapArg) HasCliFlagSource() bool {
+	for _, s := range a.Sources {
+		if s.IsCliFlag() {
+			return true
+		}
+	}
+	return false
+}
+
+// GetCliFlag returns the cli_flag if present
+func (a *CapArg) GetCliFlag() *string {
+	for _, s := range a.Sources {
+		if s.CliFlag != nil {
+			return s.CliFlag
+		}
+	}
+	return nil
 }
 
 // Resolve resolves the argument's media URN to a ResolvedMediaSpec
-func (ca *CapArgument) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
-	return ResolveMediaUrn(ca.MediaUrn, mediaSpecs)
+func (a *CapArg) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+	return ResolveMediaUrn(a.MediaUrn, mediaSpecs)
 }
 
 // IsBinary checks if this argument expects binary data.
-// Returns error if the media URN cannot be resolved - no fallbacks.
-func (ca *CapArgument) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
-	resolved, err := ca.Resolve(mediaSpecs)
+func (a *CapArg) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+	resolved, err := a.Resolve(mediaSpecs)
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
+		return false, fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
 	}
 	return resolved.IsBinary(), nil
 }
 
 // IsJSON checks if this argument expects JSON data.
-// Returns error if the media URN cannot be resolved - no fallbacks.
-func (ca *CapArgument) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
-	resolved, err := ca.Resolve(mediaSpecs)
+func (a *CapArg) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+	resolved, err := a.Resolve(mediaSpecs)
 	if err != nil {
-		return false, fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
+		return false, fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
 	}
 	return resolved.IsJSON(), nil
 }
 
 // GetMediaType returns the resolved media type for this argument.
-// Returns error if the media URN cannot be resolved - no fallbacks.
-func (ca *CapArgument) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error) {
-	resolved, err := ca.Resolve(mediaSpecs)
+func (a *CapArg) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error) {
+	resolved, err := a.Resolve(mediaSpecs)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
+		return "", fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
 	}
 	return resolved.MediaType, nil
 }
 
-// GetProfileURI returns the resolved profile URI for this argument.
-// Returns error if the media URN cannot be resolved - no fallbacks.
-func (ca *CapArgument) GetProfileURI(mediaSpecs map[string]MediaSpecDef) (string, error) {
-	resolved, err := ca.Resolve(mediaSpecs)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
-	}
-	return resolved.ProfileURI, nil
-}
-
-// GetSchema returns the resolved schema for this argument.
-// Returns error if the media URN cannot be resolved - no fallbacks.
-func (ca *CapArgument) GetSchema(mediaSpecs map[string]MediaSpecDef) (interface{}, error) {
-	resolved, err := ca.Resolve(mediaSpecs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve argument '%s' media_urn '%s': %w", ca.Name, ca.MediaUrn, err)
-	}
-	return resolved.Schema, nil
-}
-
-// CapArguments represents the collection of arguments for a cap
-type CapArguments struct {
-	Required []CapArgument `json:"required,omitempty"`
-	Optional []CapArgument `json:"optional,omitempty"`
-}
-
 // CapOutput represents the output definition for a cap
 type CapOutput struct {
-	MediaUrn          string              `json:"media_urn"` // Media URN, e.g., "media:type=object;v=1"
+	MediaUrn          string              `json:"media_urn"`
 	OutputDescription string              `json:"output_description"`
 	Validation        *ArgumentValidation `json:"validation,omitempty"`
-	Metadata          interface{}         `json:"metadata,omitempty"`
+	Metadata          any                 `json:"metadata,omitempty"`
 }
 
 // Resolve resolves the output's media URN to a ResolvedMediaSpec
@@ -103,7 +188,6 @@ func (co *CapOutput) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMedia
 }
 
 // IsBinary checks if this output produces binary data.
-// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
@@ -113,7 +197,6 @@ func (co *CapOutput) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) 
 }
 
 // IsJSON checks if this output produces JSON data.
-// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
@@ -123,7 +206,6 @@ func (co *CapOutput) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 }
 
 // GetMediaType returns the resolved media type for this output.
-// Returns error if the media URN cannot be resolved - no fallbacks.
 func (co *CapOutput) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
@@ -132,32 +214,27 @@ func (co *CapOutput) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, e
 	return resolved.MediaType, nil
 }
 
-// GetProfileURI returns the resolved profile URI for this output.
-// Returns error if the media URN cannot be resolved - no fallbacks.
-func (co *CapOutput) GetProfileURI(mediaSpecs map[string]MediaSpecDef) (string, error) {
-	resolved, err := co.Resolve(mediaSpecs)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
-	}
-	return resolved.ProfileURI, nil
+// GetMetadata gets the metadata JSON for CapOutput
+func (co *CapOutput) GetMetadata() any {
+	return co.Metadata
 }
 
-// GetSchema returns the resolved schema for this output.
-// Returns error if the media URN cannot be resolved - no fallbacks.
-func (co *CapOutput) GetSchema(mediaSpecs map[string]MediaSpecDef) (interface{}, error) {
-	resolved, err := co.Resolve(mediaSpecs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
+// SetMetadata sets the metadata JSON for CapOutput
+func (co *CapOutput) SetMetadata(metadata any) {
+	co.Metadata = metadata
+}
+
+// NewCapOutput creates a new output definition with a media URN
+func NewCapOutput(mediaUrn string, description string) *CapOutput {
+	return &CapOutput{
+		MediaUrn:          mediaUrn,
+		OutputDescription: description,
 	}
-	return resolved.Schema, nil
 }
 
 // RegisteredBy represents registration attribution - who registered a capability and when
 type RegisteredBy struct {
-	// Username of the user who registered this capability
-	Username string `json:"username"`
-
-	// RegisteredAt is the ISO 8601 timestamp of when the capability was registered
+	Username     string `json:"username"`
 	RegisteredAt string `json:"registered_at"`
 }
 
@@ -166,70 +243,6 @@ func NewRegisteredBy(username string, registeredAt string) RegisteredBy {
 	return RegisteredBy{
 		Username:     username,
 		RegisteredAt: registeredAt,
-	}
-}
-
-// Cap represents a formal cap definition
-//
-// This defines the structure for formal cap definitions that include
-// the cap URN, metadata, and arguments. Caps are general-purpose
-// and do not assume any specific domain like files or documents.
-type Cap struct {
-	// Urn is the formal cap URN with hierarchical naming
-	Urn *CapUrn `json:"urn"`
-
-	// Title is the human-readable title of the capability (required)
-	Title string `json:"title"`
-
-	// CapDescription is an optional description
-	CapDescription *string `json:"cap_description,omitempty"`
-
-	// Metadata contains optional metadata as key-value pairs
-	Metadata map[string]string `json:"metadata,omitempty"`
-
-	// Command defines the command string for this cap
-	Command string `json:"command"`
-
-	// MediaSpecs is the spec ID resolution table
-	// Maps spec IDs to their definitions (string or object form)
-	// Arguments and output media_spec fields reference entries here
-	MediaSpecs map[string]MediaSpecDef `json:"media_specs,omitempty"`
-
-	// Arguments defines the arguments for this cap
-	Arguments *CapArguments `json:"arguments,omitempty"`
-
-	// Output defines the output format for this cap
-	Output *CapOutput `json:"output,omitempty"`
-
-	// Stdin is the media URN that stdin expects. Nil means cap does NOT accept stdin.
-	// Example: "media:type=pdf;v=1;binary"
-	Stdin *string `json:"stdin,omitempty"`
-
-	// MetadataJSON contains arbitrary metadata as JSON object
-	MetadataJSON interface{} `json:"metadata_json,omitempty"`
-
-	// RegisteredBy contains registration attribution - who registered this capability and when
-	RegisteredBy *RegisteredBy `json:"registered_by,omitempty"`
-}
-
-// NewCapArgument creates a new cap argument with a media URN
-func NewCapArgument(name string, mediaUrn string, description string, cliFlag string) CapArgument {
-	return CapArgument{
-		Name:           name,
-		MediaUrn:       mediaUrn,
-		ArgDescription: description,
-		CliFlag:        cliFlag,
-	}
-}
-
-// NewCapArgumentWithPosition creates an argument with position
-func NewCapArgumentWithPosition(name string, mediaUrn string, description string, cliFlag string, position int) CapArgument {
-	return CapArgument{
-		Name:           name,
-		MediaUrn:       mediaUrn,
-		ArgDescription: description,
-		CliFlag:        cliFlag,
-		Position:       &position,
 	}
 }
 
@@ -263,90 +276,18 @@ func NewArgumentValidationAllowedValues(values []string) *ArgumentValidation {
 	}
 }
 
-// NewCapOutput creates a new output definition with a media URN
-func NewCapOutput(mediaUrn string, description string) *CapOutput {
-	return &CapOutput{
-		MediaUrn:          mediaUrn,
-		OutputDescription: description,
-	}
-}
-
-// NewCapArguments creates a new cap arguments collection
-func NewCapArguments() *CapArguments {
-	return &CapArguments{
-		Required: []CapArgument{},
-		Optional: []CapArgument{},
-	}
-}
-
-// IsEmpty checks if the cap arguments collection is empty
-func (ca *CapArguments) IsEmpty() bool {
-	return len(ca.Required) == 0 && len(ca.Optional) == 0
-}
-
-// AddRequired adds a required argument
-func (ca *CapArguments) AddRequired(arg CapArgument) {
-	ca.Required = append(ca.Required, arg)
-}
-
-// AddOptional adds an optional argument
-func (ca *CapArguments) AddOptional(arg CapArgument) {
-	ca.Optional = append(ca.Optional, arg)
-}
-
-// FindArgument finds an argument by name
-func (ca *CapArguments) FindArgument(name string) *CapArgument {
-	for i := range ca.Required {
-		if ca.Required[i].Name == name {
-			return &ca.Required[i]
-		}
-	}
-	for i := range ca.Optional {
-		if ca.Optional[i].Name == name {
-			return &ca.Optional[i]
-		}
-	}
-	return nil
-}
-
-// GetPositionalArgs returns arguments sorted by position
-func (ca *CapArguments) GetPositionalArgs() []CapArgument {
-	var args []CapArgument
-	for _, arg := range ca.Required {
-		if arg.Position != nil {
-			args = append(args, arg)
-		}
-	}
-	for _, arg := range ca.Optional {
-		if arg.Position != nil {
-			args = append(args, arg)
-		}
-	}
-	// Sort by position
-	for i := 0; i < len(args)-1; i++ {
-		for j := i + 1; j < len(args); j++ {
-			if *args[i].Position > *args[j].Position {
-				args[i], args[j] = args[j], args[i]
-			}
-		}
-	}
-	return args
-}
-
-// GetFlagArgs returns arguments that have CLI flags
-func (ca *CapArguments) GetFlagArgs() []CapArgument {
-	var args []CapArgument
-	for _, arg := range ca.Required {
-		if arg.CliFlag != "" {
-			args = append(args, arg)
-		}
-	}
-	for _, arg := range ca.Optional {
-		if arg.CliFlag != "" {
-			args = append(args, arg)
-		}
-	}
-	return args
+// Cap represents a formal cap definition
+type Cap struct {
+	Urn            *CapUrn                  `json:"urn"`
+	Title          string                   `json:"title"`
+	CapDescription *string                  `json:"cap_description,omitempty"`
+	Metadata       map[string]string        `json:"metadata,omitempty"`
+	Command        string                   `json:"command"`
+	MediaSpecs     map[string]MediaSpecDef  `json:"media_specs,omitempty"`
+	Args           []CapArg                 `json:"args,omitempty"`
+	Output         *CapOutput               `json:"output,omitempty"`
+	MetadataJSON   any                      `json:"metadata_json,omitempty"`
+	RegisteredBy   *RegisteredBy            `json:"registered_by,omitempty"`
 }
 
 // NewCap creates a new cap
@@ -357,7 +298,7 @@ func NewCap(urn *CapUrn, title string, command string) *Cap {
 		Command:    command,
 		Metadata:   make(map[string]string),
 		MediaSpecs: make(map[string]MediaSpecDef),
-		Arguments:  NewCapArguments(),
+		Args:       []CapArg{},
 	}
 }
 
@@ -370,7 +311,7 @@ func NewCapWithDescription(urn *CapUrn, title string, command string, descriptio
 		CapDescription: &description,
 		Metadata:       make(map[string]string),
 		MediaSpecs:     make(map[string]MediaSpecDef),
-		Arguments:      NewCapArguments(),
+		Args:           []CapArg{},
 	}
 }
 
@@ -385,23 +326,7 @@ func NewCapWithMetadata(urn *CapUrn, title string, command string, metadata map[
 		Command:    command,
 		Metadata:   metadata,
 		MediaSpecs: make(map[string]MediaSpecDef),
-		Arguments:  NewCapArguments(),
-	}
-}
-
-// NewCapWithDescriptionAndMetadata creates a new cap with description and metadata
-func NewCapWithDescriptionAndMetadata(urn *CapUrn, title string, command string, description string, metadata map[string]string) *Cap {
-	if metadata == nil {
-		metadata = make(map[string]string)
-	}
-	return &Cap{
-		Urn:            urn,
-		Title:          title,
-		Command:        command,
-		CapDescription: &description,
-		Metadata:       metadata,
-		MediaSpecs:     make(map[string]MediaSpecDef),
-		Arguments:      NewCapArguments(),
+		Args:       []CapArg{},
 	}
 }
 
@@ -511,32 +436,6 @@ func (c *Cap) SetCommand(command string) {
 	c.Command = command
 }
 
-// GetArguments gets the arguments
-func (c *Cap) GetArguments() *CapArguments {
-	return c.Arguments
-}
-
-// SetArguments sets the arguments
-func (c *Cap) SetArguments(arguments *CapArguments) {
-	c.Arguments = arguments
-}
-
-// AddRequiredArgument adds a required argument
-func (c *Cap) AddRequiredArgument(arg CapArgument) {
-	if c.Arguments == nil {
-		c.Arguments = NewCapArguments()
-	}
-	c.Arguments.AddRequired(arg)
-}
-
-// AddOptionalArgument adds an optional argument
-func (c *Cap) AddOptionalArgument(arg CapArgument) {
-	if c.Arguments == nil {
-		c.Arguments = NewCapArguments()
-	}
-	c.Arguments.AddOptional(arg)
-}
-
 // GetOutput gets the output definition if defined
 func (c *Cap) GetOutput() *CapOutput {
 	return c.Output
@@ -548,18 +447,13 @@ func (c *Cap) SetOutput(output *CapOutput) {
 }
 
 // GetMetadataJSON gets the metadata JSON
-func (c *Cap) GetMetadataJSON() interface{} {
+func (c *Cap) GetMetadataJSON() any {
 	return c.MetadataJSON
 }
 
 // SetMetadataJSON sets the metadata JSON
-func (c *Cap) SetMetadataJSON(metadata interface{}) {
+func (c *Cap) SetMetadataJSON(metadata any) {
 	c.MetadataJSON = metadata
-}
-
-// ClearMetadataJSON clears the metadata JSON
-func (c *Cap) ClearMetadataJSON() {
-	c.MetadataJSON = nil
 }
 
 // GetRegisteredBy gets the registration attribution
@@ -572,59 +466,93 @@ func (c *Cap) SetRegisteredBy(registeredBy *RegisteredBy) {
 	c.RegisteredBy = registeredBy
 }
 
-// ClearRegisteredBy clears the registration attribution
-func (c *Cap) ClearRegisteredBy() {
-	c.RegisteredBy = nil
+// GetStdinMediaUrn returns the stdin media URN from args (first stdin source found)
+func (c *Cap) GetStdinMediaUrn() *string {
+	for _, arg := range c.Args {
+		if urn := arg.GetStdinMediaUrn(); urn != nil {
+			return urn
+		}
+	}
+	return nil
 }
 
-// AcceptsStdin returns true if cap accepts stdin
+// AcceptsStdin returns true if any arg has a stdin source
 func (c *Cap) AcceptsStdin() bool {
-	return c.Stdin != nil
+	return c.GetStdinMediaUrn() != nil
 }
 
-// StdinMediaType returns the media URN expected for stdin, or nil if cap doesn't accept stdin
-func (c *Cap) StdinMediaType() *string {
-	return c.Stdin
+// GetArgs returns the args
+func (c *Cap) GetArgs() []CapArg {
+	return c.Args
 }
 
-// SetStdin sets the stdin media URN
-func (c *Cap) SetStdin(mediaUrn string) {
-	c.Stdin = &mediaUrn
+// AddArg adds an argument
+func (c *Cap) AddArg(arg CapArg) {
+	c.Args = append(c.Args, arg)
 }
 
-// ClearStdin clears the stdin (cap will no longer accept stdin)
-func (c *Cap) ClearStdin() {
-	c.Stdin = nil
+// GetRequiredArgs returns all required arguments
+func (c *Cap) GetRequiredArgs() []CapArg {
+	var required []CapArg
+	for _, arg := range c.Args {
+		if arg.Required {
+			required = append(required, arg)
+		}
+	}
+	return required
 }
 
-// GetMetadata gets the metadata JSON for CapArgument
-func (ca *CapArgument) GetMetadata() interface{} {
-	return ca.Metadata
+// GetOptionalArgs returns all optional arguments
+func (c *Cap) GetOptionalArgs() []CapArg {
+	var optional []CapArg
+	for _, arg := range c.Args {
+		if !arg.Required {
+			optional = append(optional, arg)
+		}
+	}
+	return optional
 }
 
-// SetMetadata sets the metadata JSON for CapArgument
-func (ca *CapArgument) SetMetadata(metadata interface{}) {
-	ca.Metadata = metadata
+// FindArgByMediaUrn finds an argument by media_urn
+func (c *Cap) FindArgByMediaUrn(mediaUrn string) *CapArg {
+	for i := range c.Args {
+		if c.Args[i].MediaUrn == mediaUrn {
+			return &c.Args[i]
+		}
+	}
+	return nil
 }
 
-// ClearMetadata clears the metadata JSON for CapArgument
-func (ca *CapArgument) ClearMetadata() {
-	ca.Metadata = nil
+// GetPositionalArgs returns arguments that have position sources, sorted by position
+func (c *Cap) GetPositionalArgs() []CapArg {
+	var positional []CapArg
+	for _, arg := range c.Args {
+		if arg.HasPositionSource() {
+			positional = append(positional, arg)
+		}
+	}
+	// Sort by position
+	for i := 0; i < len(positional)-1; i++ {
+		for j := i + 1; j < len(positional); j++ {
+			posI := positional[i].GetPosition()
+			posJ := positional[j].GetPosition()
+			if posI != nil && posJ != nil && *posI > *posJ {
+				positional[i], positional[j] = positional[j], positional[i]
+			}
+		}
+	}
+	return positional
 }
 
-// GetMetadata gets the metadata JSON for CapOutput
-func (co *CapOutput) GetMetadata() interface{} {
-	return co.Metadata
-}
-
-// SetMetadata sets the metadata JSON for CapOutput
-func (co *CapOutput) SetMetadata(metadata interface{}) {
-	co.Metadata = metadata
-}
-
-// ClearMetadata clears the metadata JSON for CapOutput
-func (co *CapOutput) ClearMetadata() {
-	co.Metadata = nil
+// GetFlagArgs returns arguments that have cli_flag sources
+func (c *Cap) GetFlagArgs() []CapArg {
+	var flagArgs []CapArg
+	for _, arg := range c.Args {
+		if arg.HasCliFlagSource() {
+			flagArgs = append(flagArgs, arg)
+		}
+	}
+	return flagArgs
 }
 
 // UrnString gets the cap URN as a string
@@ -633,7 +561,6 @@ func (c *Cap) UrnString() string {
 }
 
 // Equals checks if this cap is equal to another
-// Compares all fields to match Rust reference implementation
 func (c *Cap) Equals(other *Cap) bool {
 	if other == nil {
 		return false
@@ -669,35 +596,22 @@ func (c *Cap) Equals(other *Cap) bool {
 		}
 	}
 
-	// Compare MediaSpecs
 	if !reflect.DeepEqual(c.MediaSpecs, other.MediaSpecs) {
 		return false
 	}
 
-	// Compare Arguments
-	if !reflect.DeepEqual(c.Arguments, other.Arguments) {
+	if !reflect.DeepEqual(c.Args, other.Args) {
 		return false
 	}
 
-	// Compare Output
 	if !reflect.DeepEqual(c.Output, other.Output) {
 		return false
 	}
 
-	// Compare Stdin
-	if (c.Stdin == nil) != (other.Stdin == nil) {
-		return false
-	}
-	if c.Stdin != nil && *c.Stdin != *other.Stdin {
-		return false
-	}
-
-	// Compare MetadataJSON
 	if !reflect.DeepEqual(c.MetadataJSON, other.MetadataJSON) {
 		return false
 	}
 
-	// Compare RegisteredBy
 	if !reflect.DeepEqual(c.RegisteredBy, other.RegisteredBy) {
 		return false
 	}
@@ -707,7 +621,6 @@ func (c *Cap) Equals(other *Cap) bool {
 
 // MarshalJSON implements custom JSON marshaling
 func (c *Cap) MarshalJSON() ([]byte, error) {
-	// Build complete tags map including in and out
 	allTags := make(map[string]string)
 	allTags["in"] = c.Urn.inSpec
 	allTags["out"] = c.Urn.outSpec
@@ -715,8 +628,8 @@ func (c *Cap) MarshalJSON() ([]byte, error) {
 		allTags[k] = v
 	}
 
-	capData := map[string]interface{}{
-		"urn": map[string]interface{}{
+	capData := map[string]any{
+		"urn": map[string]any{
 			"tags": allTags,
 		},
 		"title":   c.Title,
@@ -735,21 +648,20 @@ func (c *Cap) MarshalJSON() ([]byte, error) {
 		capData["media_specs"] = c.MediaSpecs
 	}
 
-	if c.Arguments != nil && !c.Arguments.IsEmpty() {
-		capData["arguments"] = c.Arguments
+	if len(c.Args) > 0 {
+		capData["args"] = c.Args
 	}
 
 	if c.Output != nil {
 		capData["output"] = c.Output
 	}
 
-	// Only include stdin if present (absence means no stdin)
-	if c.Stdin != nil {
-		capData["stdin"] = *c.Stdin
-	}
-
 	if c.MetadataJSON != nil {
 		capData["metadata_json"] = c.MetadataJSON
+	}
+
+	if c.RegisteredBy != nil {
+		capData["registered_by"] = c.RegisteredBy
 	}
 
 	return json.Marshal(capData)
@@ -757,7 +669,7 @@ func (c *Cap) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON implements custom JSON unmarshaling
 func (c *Cap) UnmarshalJSON(data []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
@@ -776,12 +688,12 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("failed to parse URN string: %v", err)
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		tagsField, ok := v["tags"]
 		if !ok {
 			return fmt.Errorf("URN object missing 'tags' field")
 		}
-		tagsMap, ok := tagsField.(map[string]interface{})
+		tagsMap, ok := tagsField.(map[string]any)
 		if !ok {
 			return fmt.Errorf("URN tags field must be an object")
 		}
@@ -792,7 +704,6 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 				tags[k] = s
 			}
 		}
-		var err error
 		urn, err = NewCapUrnFromTags(tags)
 		if err != nil {
 			return fmt.Errorf("failed to create URN from tags: %v", err)
@@ -820,7 +731,7 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		c.CapDescription = &desc
 	}
 
-	if metadata, ok := raw["metadata"].(map[string]interface{}); ok {
+	if metadata, ok := raw["metadata"].(map[string]any); ok {
 		c.Metadata = make(map[string]string)
 		for k, v := range metadata {
 			if s, ok := v.(string); ok {
@@ -833,35 +744,43 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 	if mediaSpecsRaw, ok := raw["media_specs"]; ok {
 		mediaSpecsBytes, _ := json.Marshal(mediaSpecsRaw)
 		var mediaSpecs map[string]MediaSpecDef
-		if err := json.Unmarshal(mediaSpecsBytes, &mediaSpecs); err == nil {
-			c.MediaSpecs = mediaSpecs
+		if err := json.Unmarshal(mediaSpecsBytes, &mediaSpecs); err != nil {
+			return fmt.Errorf("failed to unmarshal media_specs: %w", err)
 		}
+		c.MediaSpecs = mediaSpecs
 	}
 
-	// Handle stdin field (absence means no stdin)
-	if stdin, ok := raw["stdin"].(string); ok {
-		c.Stdin = &stdin
-	}
-
-	// Handle arguments and output if present
-	if args, ok := raw["arguments"]; ok {
-		argsBytes, _ := json.Marshal(args)
-		var arguments CapArguments
-		if err := json.Unmarshal(argsBytes, &arguments); err == nil {
-			c.Arguments = &arguments
+	// Handle args
+	if argsRaw, ok := raw["args"]; ok {
+		argsBytes, _ := json.Marshal(argsRaw)
+		var args []CapArg
+		if err := json.Unmarshal(argsBytes, &args); err != nil {
+			return fmt.Errorf("failed to unmarshal args: %w", err)
 		}
+		c.Args = args
 	}
 
+	// Handle output
 	if output, ok := raw["output"]; ok {
 		outputBytes, _ := json.Marshal(output)
 		var capOutput CapOutput
-		if err := json.Unmarshal(outputBytes, &capOutput); err == nil {
-			c.Output = &capOutput
+		if err := json.Unmarshal(outputBytes, &capOutput); err != nil {
+			return fmt.Errorf("failed to unmarshal output: %w", err)
 		}
+		c.Output = &capOutput
 	}
 
 	if metadataJSON, ok := raw["metadata_json"]; ok {
 		c.MetadataJSON = metadataJSON
+	}
+
+	if registeredByRaw, ok := raw["registered_by"]; ok {
+		registeredByBytes, _ := json.Marshal(registeredByRaw)
+		var registeredBy RegisteredBy
+		if err := json.Unmarshal(registeredByBytes, &registeredBy); err != nil {
+			return fmt.Errorf("failed to unmarshal registered_by: %w", err)
+		}
+		c.RegisteredBy = &registeredBy
 	}
 
 	return nil

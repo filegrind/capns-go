@@ -33,14 +33,13 @@ func (e *CacheEntry) isExpired() bool {
 
 // RegistryCapResponse represents the response format from capns.org registry
 type RegistryCapResponse struct {
-	Urn          interface{} `json:"urn"`          // Can be string or object with tags
-	Version      string      `json:"version"`
-	CapDescription  *string     `json:"cap_description,omitempty"`
-	Metadata     map[string]string `json:"metadata"`
-	Command      string      `json:"command"`
-	Arguments    CapArguments `json:"arguments"`
-	Output       *CapOutput  `json:"output,omitempty"`
-	Stdin        *string     `json:"stdin,omitempty"` // Media URN for stdin, nil means no stdin
+	Urn            interface{}         `json:"urn"`          // Can be string or object with tags
+	Version        string              `json:"version"`
+	CapDescription *string             `json:"cap_description,omitempty"`
+	Metadata       map[string]string   `json:"metadata"`
+	Command        string              `json:"command"`
+	Args           []CapArg            `json:"args,omitempty"`
+	Output         *CapOutput          `json:"output,omitempty"`
 }
 
 // ToCap converts a registry response to a standard Cap
@@ -85,9 +84,8 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 	if r.Metadata != nil {
 		cap.Metadata = r.Metadata
 	}
-	cap.Arguments = &r.Arguments
+	cap.Args = r.Args
 	cap.Output = r.Output
-	cap.Stdin = r.Stdin
 
 	return cap, nil
 }
@@ -176,20 +174,22 @@ func (r *CapRegistry) ValidateCap(cap *Cap) error {
 		return fmt.Errorf("command mismatch. Local: %s, Canonical: %s", cap.Command, canonicalCap.Command)
 	}
 
-	// Compare stdin (nil means no stdin)
-	if (cap.Stdin == nil) != (canonicalCap.Stdin == nil) {
+	// Compare stdin (from args with stdin sources)
+	localStdinUrn := cap.GetStdinMediaUrn()
+	canonicalStdinUrn := canonicalCap.GetStdinMediaUrn()
+	if (localStdinUrn == nil) != (canonicalStdinUrn == nil) {
 		localStdin := "<none>"
 		canonicalStdin := "<none>"
-		if cap.Stdin != nil {
-			localStdin = *cap.Stdin
+		if localStdinUrn != nil {
+			localStdin = *localStdinUrn
 		}
-		if canonicalCap.Stdin != nil {
-			canonicalStdin = *canonicalCap.Stdin
+		if canonicalStdinUrn != nil {
+			canonicalStdin = *canonicalStdinUrn
 		}
 		return fmt.Errorf("stdin mismatch. Local: %s, Canonical: %s", localStdin, canonicalStdin)
 	}
-	if cap.Stdin != nil && *cap.Stdin != *canonicalCap.Stdin {
-		return fmt.Errorf("stdin mismatch. Local: %s, Canonical: %s", *cap.Stdin, *canonicalCap.Stdin)
+	if localStdinUrn != nil && *localStdinUrn != *canonicalStdinUrn {
+		return fmt.Errorf("stdin mismatch. Local: %s, Canonical: %s", *localStdinUrn, *canonicalStdinUrn)
 	}
 
 	return nil

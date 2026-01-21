@@ -75,11 +75,11 @@ func NewSchemaValidatorWithResolver(resolver SchemaResolver) *SchemaValidator {
 
 // ValidateArgumentWithSchema validates an argument value against a provided schema
 // The schema comes from the resolved media spec
-func (sv *SchemaValidator) ValidateArgumentWithSchema(arg *CapArgument, schema interface{}, value interface{}) error {
+func (sv *SchemaValidator) ValidateArgumentWithSchema(arg *CapArg, schema interface{}, value interface{}) error {
 	if schema == nil {
 		return nil // No schema to validate against
 	}
-	return sv.validateValueAgainstSchema(arg.Name, value, schema, "argument")
+	return sv.validateValueAgainstSchema(arg.MediaUrn, value, schema, "argument")
 }
 
 // ValidateOutputWithSchema validates output value against a provided schema
@@ -93,21 +93,25 @@ func (sv *SchemaValidator) ValidateOutputWithSchema(output *CapOutput, schema in
 
 // ValidateArguments validates all arguments for a capability using media specs
 func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, namedArgs map[string]interface{}) error {
-	if cap.Arguments == nil {
+	args := cap.GetArgs()
+	if len(args) == 0 {
 		return nil
 	}
 
 	mediaSpecs := cap.GetMediaSpecs()
+	requiredArgs := cap.GetRequiredArgs()
+	optionalArgs := cap.GetOptionalArgs()
 
 	// Validate positional required arguments
-	for i, argDef := range cap.Arguments.Required {
+	for i, argDef := range requiredArgs {
 		var value interface{}
 		var found bool
 
 		// Check if this argument has a position
-		if argDef.Position != nil {
-			if *argDef.Position < len(arguments) {
-				value = arguments[*argDef.Position]
+		pos := argDef.GetPosition()
+		if pos != nil {
+			if *pos < len(arguments) {
+				value = arguments[*pos]
 				found = true
 			}
 		} else if i < len(arguments) {
@@ -116,9 +120,9 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 			found = true
 		}
 
-		// Also check named arguments
+		// Also check named arguments (by media_urn)
 		if namedArgs != nil {
-			if namedValue, exists := namedArgs[argDef.Name]; exists {
+			if namedValue, exists := namedArgs[argDef.MediaUrn]; exists {
 				value = namedValue
 				found = true
 			}
@@ -130,7 +134,7 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 			if err != nil {
 				return &SchemaValidationError{
 					Type:     "UnresolvableMediaUrn",
-					Argument: argDef.Name,
+					Argument: argDef.MediaUrn,
 					Details:  fmt.Sprintf("Could not resolve media URN '%s'", argDef.MediaUrn),
 				}
 			}
@@ -145,22 +149,23 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 	}
 
 	// Validate optional arguments if provided
-	for _, argDef := range cap.Arguments.Optional {
+	for _, argDef := range optionalArgs {
 		var value interface{}
 		var found bool
 
-		// Check named arguments first for optional args
+		// Check named arguments first for optional args (by media_urn)
 		if namedArgs != nil {
-			if namedValue, exists := namedArgs[argDef.Name]; exists {
+			if namedValue, exists := namedArgs[argDef.MediaUrn]; exists {
 				value = namedValue
 				found = true
 			}
 		}
 
 		// Check positional if not found in named args
-		if !found && argDef.Position != nil {
-			if *argDef.Position < len(arguments) {
-				value = arguments[*argDef.Position]
+		pos := argDef.GetPosition()
+		if !found && pos != nil {
+			if *pos < len(arguments) {
+				value = arguments[*pos]
 				found = true
 			}
 		}
@@ -171,7 +176,7 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 			if err != nil {
 				return &SchemaValidationError{
 					Type:     "UnresolvableMediaUrn",
-					Argument: argDef.Name,
+					Argument: argDef.MediaUrn,
 					Details:  fmt.Sprintf("Could not resolve media URN '%s'", argDef.MediaUrn),
 				}
 			}

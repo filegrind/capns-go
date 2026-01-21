@@ -111,19 +111,23 @@ func TestCapStdin(t *testing.T) {
 
 	// By default, caps should not accept stdin
 	assert.False(t, cap.AcceptsStdin())
-	assert.Nil(t, cap.Stdin)
-	assert.Nil(t, cap.StdinMediaType())
+	assert.Nil(t, cap.GetStdinMediaUrn())
 
-	// Enable stdin support with a media URN
-	cap.SetStdin("media:type=text;v=1;textable")
+	// Enable stdin support by adding an arg with stdin source
+	stdinUrn := "media:type=text;v=1;textable"
+	cap.AddArg(CapArg{
+		MediaUrn: MediaString,
+		Required: true,
+		Sources:  []ArgSource{{Stdin: &stdinUrn}},
+	})
 	assert.True(t, cap.AcceptsStdin())
-	assert.Equal(t, "media:type=text;v=1;textable", *cap.StdinMediaType())
+	assert.Equal(t, stdinUrn, *cap.GetStdinMediaUrn())
 
 	// Test JSON serialization/deserialization preserves the field
 	jsonData, err := json.Marshal(cap)
 	require.NoError(t, err)
 
-	// Verify JSON contains stdin field
+	// Verify JSON contains args with stdin source
 	assert.Contains(t, string(jsonData), `"stdin":"media:type=text;v=1;textable"`)
 
 	var deserialized Cap
@@ -131,7 +135,7 @@ func TestCapStdin(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, deserialized.AcceptsStdin())
-	assert.Equal(t, *cap.Stdin, *deserialized.Stdin)
+	assert.Equal(t, *cap.GetStdinMediaUrn(), *deserialized.GetStdinMediaUrn())
 }
 
 func TestCapWithMediaSpecs(t *testing.T) {
@@ -153,14 +157,23 @@ func TestCapWithMediaSpecs(t *testing.T) {
 		},
 	))
 
-	// Add an argument using the built-in media URN
-	cap.AddRequiredArgument(NewCapArgument("query", MediaString, "The query string", "--query"))
+	// Add an argument using the built-in media URN with new architecture
+	cliFlag := "--query"
+	pos := 0
+	cap.AddArg(CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "The query string",
+	})
 
 	// Add output
 	cap.SetOutput(NewCapOutput("media:type=result;v=1", "Query result"))
 
 	// Resolve the argument spec
-	arg := cap.Arguments.Required[0]
+	args := cap.GetArgs()
+	require.Len(t, args, 1)
+	arg := args[0]
 	resolved, err := arg.Resolve(cap.GetMediaSpecs())
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
@@ -178,7 +191,14 @@ func TestCapJSONRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Test Cap", "test-cmd")
-	cap.AddRequiredArgument(NewCapArgument("input", MediaString, "Input text", "--input"))
+	cliFlag := "--input"
+	pos := 0
+	cap.AddArg(CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Input text",
+	})
 	cap.SetOutput(NewCapOutput(MediaObject, "Output object"))
 
 	// Serialize to JSON
@@ -193,7 +213,7 @@ func TestCapJSONRoundTrip(t *testing.T) {
 	// Verify key fields
 	assert.Equal(t, cap.Title, deserialized.Title)
 	assert.Equal(t, cap.Command, deserialized.Command)
-	assert.Equal(t, len(cap.Arguments.Required), len(deserialized.Arguments.Required))
-	assert.Equal(t, cap.Arguments.Required[0].MediaUrn, deserialized.Arguments.Required[0].MediaUrn)
+	assert.Equal(t, len(cap.GetArgs()), len(deserialized.GetArgs()))
+	assert.Equal(t, cap.GetArgs()[0].MediaUrn, deserialized.GetArgs()[0].MediaUrn)
 	assert.Equal(t, cap.Output.MediaUrn, deserialized.Output.MediaUrn)
 }

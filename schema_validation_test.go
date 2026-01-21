@@ -42,8 +42,15 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 		"required": []interface{}{"name"},
 	}
 
-	// Create an argument
-	arg := NewCapArgument("user_data", "media:type=test-obj;v=1;textable;keyed", "User data", "--user")
+	// Create an argument using new architecture
+	cliFlag := "--user"
+	pos := 0
+	arg := CapArg{
+		MediaUrn:       "media:type=test-obj;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "User data",
+	}
 
 	// Test valid data
 	validData := map[string]interface{}{
@@ -73,8 +80,15 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 		"required": []interface{}{"name"},
 	}
 
-	// Create an argument
-	arg := NewCapArgument("user_data", "media:type=test-obj;v=1;textable;keyed", "User data", "--user")
+	// Create an argument using new architecture
+	cliFlag := "--user"
+	pos := 0
+	arg := CapArg{
+		MediaUrn:       "media:type=test-obj;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "User data",
+	}
 
 	// Test invalid data (missing required field)
 	invalidData := map[string]interface{}{
@@ -87,15 +101,22 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 	schemaErr, ok := err.(*SchemaValidationError)
 	require.True(t, ok)
 	assert.Equal(t, "ArgumentValidation", schemaErr.Type)
-	assert.Equal(t, "user_data", schemaErr.Argument)
+	assert.Equal(t, "media:type=test-obj;v=1;textable;keyed", schemaErr.Argument)
 	assert.Contains(t, schemaErr.Details, "name")
 }
 
 func TestSchemaValidator_ValidateArgumentWithSchema_NilSchema(t *testing.T) {
 	validator := NewSchemaValidator()
 
-	// Create argument
-	arg := NewCapArgument("simple_string", MediaString, "Simple string", "--string")
+	// Create argument using new architecture
+	cliFlag := "--string"
+	pos := 0
+	arg := CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Simple string",
+	}
 
 	// Nil schema should not validate
 	err := validator.ValidateArgumentWithSchema(&arg, nil, "any string value")
@@ -189,9 +210,15 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 		userSchema,
 	))
 
-	// Add argument referencing the custom spec
-	userArg := NewCapArgument("user", "media:type=user;v=1;textable;keyed", "User data", "--user")
-	cap.AddRequiredArgument(userArg)
+	// Add argument referencing the custom spec using new architecture
+	cliFlag := "--user"
+	pos := 0
+	cap.AddArg(CapArg{
+		MediaUrn:       "media:type=user;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "User data",
+	})
 
 	// Test valid arguments
 	validUser := map[string]interface{}{
@@ -200,7 +227,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 	}
 
 	namedArgs := map[string]interface{}{
-		"user": validUser,
+		"media:type=user;v=1;textable;keyed": validUser,
 	}
 
 	err = validator.ValidateArguments(cap, []interface{}{}, namedArgs)
@@ -212,7 +239,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 	}
 
 	namedArgs = map[string]interface{}{
-		"user": invalidUser,
+		"media:type=user;v=1;textable;keyed": invalidUser,
 	}
 
 	err = validator.ValidateArguments(cap, []interface{}{}, namedArgs)
@@ -236,8 +263,15 @@ func TestSchemaValidator_ArraySchemaValidation(t *testing.T) {
 		"minItems": 1,
 	}
 
-	// Create an argument
-	arg := NewCapArgument("items", "media:type=items;v=1;textable;keyed", "List of items", "--items")
+	// Create an argument using new architecture
+	cliFlag := "--items"
+	pos := 0
+	arg := CapArg{
+		MediaUrn:       "media:type=items;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "List of items",
+	}
 
 	// Test valid array data
 	validData := []interface{}{
@@ -287,8 +321,14 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 		schema,
 	))
 
-	arg := NewCapArgument("config", "media:type=config;v=1;textable;keyed", "Configuration", "--config")
-	cap.AddRequiredArgument(arg)
+	cliFlag := "--config"
+	pos := 0
+	cap.AddArg(CapArg{
+		MediaUrn:       "media:type=config;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Configuration",
+	})
 
 	// Test valid input
 	validConfig := map[string]interface{}{
@@ -392,8 +432,14 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		inputSchema,
 	))
 
-	queryArg := NewCapArgument("query_params", "media:type=query-params;v=1;textable;keyed", "Query parameters", "--query")
-	cap.AddRequiredArgument(queryArg)
+	cliFlag := "--query"
+	pos := 0
+	cap.AddArg(CapArg{
+		MediaUrn:       "media:type=query-params;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Query parameters",
+	})
 
 	// Add output with schema
 	outputSchema := map[string]interface{}{
@@ -521,7 +567,14 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 		"required": []interface{}{"user"},
 	}
 
-	arg := NewCapArgument("user_data", "media:type=user-data;v=1;textable;keyed", "Complex user data", "--user-data")
+	cliFlag := "--user-data"
+	pos := 0
+	arg := CapArg{
+		MediaUrn:       "media:type=user-data;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Complex user data",
+	}
 
 	// Test valid complex data
 	validData := map[string]interface{}{

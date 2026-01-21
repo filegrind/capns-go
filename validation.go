@@ -142,26 +142,25 @@ func NewInputValidatorWithSchemaResolver(resolver SchemaResolver) *InputValidato
 // ValidateArguments validates arguments against a cap's input schema
 func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) error {
 	capUrn := cap.UrnString()
-	args := cap.Arguments
-
-	if args == nil {
-		args = NewCapArguments()
-	}
+	args := cap.GetArgs()
 
 	// Check if too many arguments provided
-	maxArgs := len(args.Required) + len(args.Optional)
-	if len(arguments) > maxArgs {
+	if len(arguments) > len(args) {
 		return &ValidationError{
 			Type:    "TooManyArguments",
 			CapUrn:  capUrn,
-			Message: fmt.Sprintf("Cap '%s' expects at most %d arguments but received %d", capUrn, maxArgs, len(arguments)),
+			Message: fmt.Sprintf("Cap '%s' expects at most %d arguments but received %d", capUrn, len(args), len(arguments)),
 		}
 	}
 
+	// Get required and optional args
+	requiredArgs := cap.GetRequiredArgs()
+	optionalArgs := cap.GetOptionalArgs()
+
 	// Validate required arguments
-	for index, reqArg := range args.Required {
+	for index, reqArg := range requiredArgs {
 		if index >= len(arguments) {
-			return NewMissingRequiredArgumentError(capUrn, reqArg.Name)
+			return NewMissingRequiredArgumentError(capUrn, reqArg.MediaUrn)
 		}
 
 		if err := iv.validateSingleArgument(cap, &reqArg, arguments[index]); err != nil {
@@ -170,8 +169,8 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 	}
 
 	// Validate optional arguments if provided
-	requiredCount := len(args.Required)
-	for index, optArg := range args.Optional {
+	requiredCount := len(requiredArgs)
+	for index, optArg := range optionalArgs {
 		argIndex := requiredCount + index
 		if argIndex < len(arguments) {
 			if err := iv.validateSingleArgument(cap, &optArg, arguments[argIndex]); err != nil {
@@ -186,16 +185,12 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 // ValidateNamedArguments validates named arguments against a cap's input schema
 func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[string]interface{}) error {
 	capUrn := cap.UrnString()
-	args := cap.Arguments
+	args := cap.GetArgs()
 
-	if args == nil {
-		args = NewCapArguments()
-	}
-
-	// Extract named argument values into a map
+	// Extract named argument values into a map (using media_urn as key)
 	providedArgs := make(map[string]interface{})
 	for _, arg := range namedArgs {
-		if name, hasName := arg["name"].(string); hasName {
+		if name, hasName := arg["media_urn"].(string); hasName {
 			if value, hasValue := arg["value"]; hasValue {
 				providedArgs[name] = value
 			}
@@ -203,21 +198,23 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 	}
 
 	// Check that all required arguments are provided as named arguments
-	for _, reqArg := range args.Required {
-		if _, provided := providedArgs[reqArg.Name]; !provided {
-			return NewMissingRequiredArgumentError(capUrn, fmt.Sprintf("%s (expected as named argument)", reqArg.Name))
+	requiredArgs := cap.GetRequiredArgs()
+	for _, reqArg := range requiredArgs {
+		if _, provided := providedArgs[reqArg.MediaUrn]; !provided {
+			return NewMissingRequiredArgumentError(capUrn, fmt.Sprintf("%s (expected as named argument)", reqArg.MediaUrn))
 		}
 
 		// Validate the provided argument value
-		providedValue := providedArgs[reqArg.Name]
+		providedValue := providedArgs[reqArg.MediaUrn]
 		if err := iv.validateSingleArgument(cap, &reqArg, providedValue); err != nil {
 			return err
 		}
 	}
 
 	// Validate optional arguments if provided
-	for _, optArg := range args.Optional {
-		if providedValue, provided := providedArgs[optArg.Name]; provided {
+	optionalArgs := cap.GetOptionalArgs()
+	for _, optArg := range optionalArgs {
+		if providedValue, provided := providedArgs[optArg.MediaUrn]; provided {
 			if err := iv.validateSingleArgument(cap, &optArg, providedValue); err != nil {
 				return err
 			}
@@ -225,28 +222,25 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 	}
 
 	// Check for unknown arguments
-	knownArgNames := make(map[string]bool)
-	for _, reqArg := range args.Required {
-		knownArgNames[reqArg.Name] = true
-	}
-	for _, optArg := range args.Optional {
-		knownArgNames[optArg.Name] = true
+	knownArgUrns := make(map[string]bool)
+	for _, arg := range args {
+		knownArgUrns[arg.MediaUrn] = true
 	}
 
-	for providedName := range providedArgs {
-		if !knownArgNames[providedName] {
-			return NewUnknownArgumentError(capUrn, providedName)
+	for providedUrn := range providedArgs {
+		if !knownArgUrns[providedUrn] {
+			return NewUnknownArgumentError(capUrn, providedUrn)
 		}
 	}
 
 	return nil
 }
 
-func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, value interface{}) error {
+func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArg, value interface{}) error {
 	// Resolve the media URN to determine the expected type
 	resolved, err := argDef.Resolve(cap.GetMediaSpecs())
 	if err != nil {
-		return NewUnresolvableMediaUrnErrorForValidation(cap.UrnString(), argDef.Name, argDef.MediaUrn)
+		return NewUnresolvableMediaUrnErrorForValidation(cap.UrnString(), argDef.MediaUrn, argDef.MediaUrn)
 	}
 
 	// Type validation based on resolved media spec
@@ -268,7 +262,7 @@ func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArgument, 
 }
 
 // validateArgumentSchema validates argument against JSON schema
-func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArgument, resolved *ResolvedMediaSpec, value interface{}) error {
+func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArg, resolved *ResolvedMediaSpec, value interface{}) error {
 	// Only validate structured types (JSON) that have schemas
 	if !resolved.IsJSON() {
 		return nil
@@ -282,7 +276,7 @@ func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArgument, 
 
 	if err := iv.schemaValidator.ValidateArgumentWithSchema(argDef, schema, value); err != nil {
 		if schemaErr, ok := err.(*SchemaValidationError); ok {
-			return NewSchemaValidationFailedError(cap.UrnString(), argDef.Name, schemaErr.Details, value)
+			return NewSchemaValidationFailedError(cap.UrnString(), argDef.MediaUrn, schemaErr.Details, value)
 		}
 		return err
 	}
@@ -290,7 +284,7 @@ func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArgument, 
 	return nil
 }
 
-func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, resolved *ResolvedMediaSpec, value interface{}) error {
+func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArg, resolved *ResolvedMediaSpec, value interface{}) error {
 	capUrn := cap.UrnString()
 	actualType := getValueTypeName(value)
 
@@ -328,7 +322,7 @@ func (iv *InputValidator) validateArgumentType(cap *Cap, argDef *CapArgument, re
 	}
 
 	if !typeMatches {
-		return NewInvalidArgumentTypeErrorFromMediaUrn(capUrn, argDef.Name, argDef.MediaUrn, expectedType, actualType, value)
+		return NewInvalidArgumentTypeErrorFromMediaUrn(capUrn, argDef.MediaUrn, argDef.MediaUrn, expectedType, actualType, value)
 	}
 
 	return nil
@@ -375,7 +369,7 @@ func getExpectedTypeFromMediaUrn(mediaUrn string, resolved *ResolvedMediaSpec) s
 	return "unknown"
 }
 
-func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, value interface{}) error {
+func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArg, value interface{}) error {
 	capUrn := cap.UrnString()
 	validation := argDef.Validation
 
@@ -387,7 +381,7 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 	if validation.Min != nil {
 		if num, ok := getNumericValue(value); ok {
 			if num < *validation.Min {
-				return NewArgumentValidationFailedError(capUrn, argDef.Name, fmt.Sprintf("minimum value %v", *validation.Min), value)
+				return NewArgumentValidationFailedError(capUrn, argDef.MediaUrn, fmt.Sprintf("minimum value %v", *validation.Min), value)
 			}
 		}
 	}
@@ -395,7 +389,7 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 	if validation.Max != nil {
 		if num, ok := getNumericValue(value); ok {
 			if num > *validation.Max {
-				return NewArgumentValidationFailedError(capUrn, argDef.Name, fmt.Sprintf("maximum value %v", *validation.Max), value)
+				return NewArgumentValidationFailedError(capUrn, argDef.MediaUrn, fmt.Sprintf("maximum value %v", *validation.Max), value)
 			}
 		}
 	}
@@ -404,7 +398,7 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 	if validation.MinLength != nil {
 		if s, ok := value.(string); ok {
 			if len(s) < *validation.MinLength {
-				return NewArgumentValidationFailedError(capUrn, argDef.Name, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
+				return NewArgumentValidationFailedError(capUrn, argDef.MediaUrn, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
 			}
 		}
 	}
@@ -412,7 +406,7 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 	if validation.MaxLength != nil {
 		if s, ok := value.(string); ok {
 			if len(s) > *validation.MaxLength {
-				return NewArgumentValidationFailedError(capUrn, argDef.Name, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
+				return NewArgumentValidationFailedError(capUrn, argDef.MediaUrn, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
 			}
 		}
 	}
@@ -422,7 +416,7 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 		if s, ok := value.(string); ok {
 			if regex, err := regexp.Compile(*validation.Pattern); err == nil {
 				if !regex.MatchString(s) {
-					return NewArgumentValidationFailedError(capUrn, argDef.Name, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
+					return NewArgumentValidationFailedError(capUrn, argDef.MediaUrn, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
 				}
 			}
 		}
@@ -439,7 +433,7 @@ func (iv *InputValidator) validateArgumentRules(cap *Cap, argDef *CapArgument, v
 				}
 			}
 			if !allowed {
-				return NewArgumentValidationFailedError(capUrn, argDef.Name, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
+				return NewArgumentValidationFailedError(capUrn, argDef.MediaUrn, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
 			}
 		}
 	}
@@ -701,40 +695,45 @@ func (cvc *CapValidationCoordinator) ValidateOutput(capUrn string, output interf
 // ValidateCapSchema validates a cap definition itself
 func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 	capUrn := cap.UrnString()
+	args := cap.GetArgs()
 
-	if cap.Arguments == nil {
+	if len(args) == 0 {
+		// Validate output media URN if present
+		if cap.Output != nil {
+			if _, err := cap.Output.Resolve(cap.GetMediaSpecs()); err != nil {
+				return &ValidationError{
+					Type:    "InvalidCapSchema",
+					CapUrn:  capUrn,
+					Message: fmt.Sprintf("Cap '%s' output has unresolvable media URN '%s'", capUrn, cap.Output.MediaUrn),
+				}
+			}
+		}
 		return nil
 	}
 
 	// Validate that required arguments don't have default values
-	for _, arg := range cap.Arguments.Required {
-		if arg.DefaultValue != nil {
+	for _, arg := range args {
+		if arg.Required && arg.DefaultValue != nil {
 			return &ValidationError{
 				Type:    "InvalidCapSchema",
 				CapUrn:  capUrn,
-				Message: fmt.Sprintf("Cap '%s' required argument '%s' cannot have a default value", capUrn, arg.Name),
+				Message: fmt.Sprintf("Cap '%s' required argument '%s' cannot have a default value", capUrn, arg.MediaUrn),
 			}
 		}
 	}
 
 	// Validate that all argument media URNs can be resolved
-	for _, arg := range cap.Arguments.Required {
+	for _, arg := range args {
 		if _, err := arg.Resolve(cap.GetMediaSpecs()); err != nil {
-			return &ValidationError{
-				Type:         "InvalidCapSchema",
-				CapUrn:       capUrn,
-				ArgumentName: arg.Name,
-				Message:      fmt.Sprintf("Cap '%s' required argument '%s' has unresolvable media URN '%s'", capUrn, arg.Name, arg.MediaUrn),
+			argType := "optional"
+			if arg.Required {
+				argType = "required"
 			}
-		}
-	}
-	for _, arg := range cap.Arguments.Optional {
-		if _, err := arg.Resolve(cap.GetMediaSpecs()); err != nil {
 			return &ValidationError{
 				Type:         "InvalidCapSchema",
 				CapUrn:       capUrn,
-				ArgumentName: arg.Name,
-				Message:      fmt.Sprintf("Cap '%s' optional argument '%s' has unresolvable media URN '%s'", capUrn, arg.Name, arg.MediaUrn),
+				ArgumentName: arg.MediaUrn,
+				Message:      fmt.Sprintf("Cap '%s' %s argument '%s' has unresolvable media URN", capUrn, argType, arg.MediaUrn),
 			}
 		}
 	}
@@ -752,55 +751,33 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 
 	// Validate argument position uniqueness
 	positions := make(map[int]string)
-	for _, arg := range cap.Arguments.Required {
-		if arg.Position != nil {
-			if existing, exists := positions[*arg.Position]; exists {
+	for _, arg := range args {
+		pos := arg.GetPosition()
+		if pos != nil {
+			if existing, exists := positions[*pos]; exists {
 				return &ValidationError{
 					Type:    "InvalidCapSchema",
 					CapUrn:  capUrn,
-					Message: fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
+					Message: fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *pos, existing, arg.MediaUrn),
 				}
 			}
-			positions[*arg.Position] = arg.Name
-		}
-	}
-	for _, arg := range cap.Arguments.Optional {
-		if arg.Position != nil {
-			if existing, exists := positions[*arg.Position]; exists {
-				return &ValidationError{
-					Type:    "InvalidCapSchema",
-					CapUrn:  capUrn,
-					Message: fmt.Sprintf("Cap '%s' duplicate argument position %d for arguments '%s' and '%s'", capUrn, *arg.Position, existing, arg.Name),
-				}
-			}
-			positions[*arg.Position] = arg.Name
+			positions[*pos] = arg.MediaUrn
 		}
 	}
 
 	// Validate CLI flag uniqueness
 	cliFlags := make(map[string]string)
-	for _, arg := range cap.Arguments.Required {
-		if arg.CliFlag != "" {
-			if existing, exists := cliFlags[arg.CliFlag]; exists {
+	for _, arg := range args {
+		cliFlag := arg.GetCliFlag()
+		if cliFlag != nil && *cliFlag != "" {
+			if existing, exists := cliFlags[*cliFlag]; exists {
 				return &ValidationError{
 					Type:    "InvalidCapSchema",
 					CapUrn:  capUrn,
-					Message: fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
+					Message: fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, *cliFlag, existing, arg.MediaUrn),
 				}
 			}
-			cliFlags[arg.CliFlag] = arg.Name
-		}
-	}
-	for _, arg := range cap.Arguments.Optional {
-		if arg.CliFlag != "" {
-			if existing, exists := cliFlags[arg.CliFlag]; exists {
-				return &ValidationError{
-					Type:    "InvalidCapSchema",
-					CapUrn:  capUrn,
-					Message: fmt.Sprintf("Cap '%s' duplicate CLI flag '%s' for arguments '%s' and '%s'", capUrn, arg.CliFlag, existing, arg.Name),
-				}
-			}
-			cliFlags[arg.CliFlag] = arg.Name
+			cliFlags[*cliFlag] = arg.MediaUrn
 		}
 	}
 

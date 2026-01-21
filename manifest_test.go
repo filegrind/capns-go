@@ -58,7 +58,13 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
-	cap.SetStdin("media:type=pdf;v=1;binary")
+	// Add an argument with stdin source using new architecture
+	stdinUrn := "media:type=pdf;v=1;binary"
+	cap.AddArg(CapArg{
+		MediaUrn: MediaBinary,
+		Required: true,
+		Sources:  []ArgSource{{Stdin: &stdinUrn}},
+	})
 
 	manifest := NewCapManifest(
 		"TestComponent",
@@ -87,7 +93,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	assert.Equal(t, manifest.Description, deserialized.Description)
 	assert.Equal(t, manifest.Author, deserialized.Author)
 	assert.Len(t, deserialized.Caps, len(manifest.Caps))
-	assert.Equal(t, *manifest.Caps[0].Stdin, *deserialized.Caps[0].Stdin)
+	assert.Equal(t, *manifest.Caps[0].GetStdinMediaUrn(), *deserialized.Caps[0].GetStdinMediaUrn())
 }
 
 func TestCapManifestRequiredFields(t *testing.T) {
@@ -228,7 +234,13 @@ func TestCapManifestValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
-	cap.SetStdin("media:type=pdf;v=1;binary")
+	// Add an argument with stdin source using new architecture
+	stdinUrn := "media:type=pdf;v=1;binary"
+	cap.AddArg(CapArg{
+		MediaUrn: MediaBinary,
+		Required: true,
+		Sources:  []ArgSource{{Stdin: &stdinUrn}},
+	})
 
 	manifest := NewCapManifest(
 		"ValidComponent",

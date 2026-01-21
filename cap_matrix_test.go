@@ -45,7 +45,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 		CapDescription: stringPtr("Test capability"),
 		Metadata:       make(map[string]string),
 		Command:        "test",
-		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
+		Args:           []CapArg{},
 		Output:         nil,
 	}
 
@@ -90,7 +90,7 @@ func TestBestCapSetSelection(t *testing.T) {
 		CapDescription: stringPtr("General generation"),
 		Metadata:       make(map[string]string),
 		Command:        "generate",
-		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
+		Args:           []CapArg{},
 		Output:         nil,
 	}
 
@@ -102,7 +102,7 @@ func TestBestCapSetSelection(t *testing.T) {
 		CapDescription: stringPtr("Specific text generation"),
 		Metadata:       make(map[string]string),
 		Command:        "generate",
-		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
+		Args:           []CapArg{},
 		Output:         nil,
 	}
 
@@ -165,7 +165,7 @@ func TestCanHandle(t *testing.T) {
 		CapDescription: stringPtr("Test"),
 		Metadata:       make(map[string]string),
 		Command:        "test",
-		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
+		Args:           []CapArg{},
 		Output:         nil,
 	}
 
@@ -200,7 +200,7 @@ func makeCap(urn string, title string) *Cap {
 		CapDescription: stringPtr(title),
 		Metadata:       make(map[string]string),
 		Command:        "test",
-		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
+		Args:           []CapArg{},
 		Output:         nil,
 	}
 }
@@ -493,7 +493,7 @@ func makeGraphCap(inSpec, outSpec, title string) *Cap {
 		CapDescription: stringPtr(title),
 		Metadata:       make(map[string]string),
 		Command:        "convert",
-		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
+		Args:           []CapArg{},
 		Output:         nil,
 	}
 }
@@ -724,7 +724,7 @@ func TestCapGraphGetDirectEdges(t *testing.T) {
 		CapDescription: stringPtr("PDF Binary to String"),
 		Metadata:       make(map[string]string),
 		Command:        "convert",
-		Arguments:      &CapArguments{Required: []CapArgument{}, Optional: []CapArgument{}},
+		Args:           []CapArg{},
 		Output:         nil,
 	}
 

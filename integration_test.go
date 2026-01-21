@@ -96,9 +96,15 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
 	capDef.SetOutput(NewCapOutput(MediaObject, "Extracted metadata"))
 
-	// Add required argument
-	arg := NewCapArgument("input", MediaString, "Input file path", "--input")
-	capDef.AddRequiredArgument(arg)
+	// Add required argument using new architecture
+	cliFlag := "--input"
+	pos := 0
+	capDef.AddArg(CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Input file path",
+	})
 
 	// Mock host that returns JSON
 	mockHost := &MockCapSet{
@@ -182,9 +188,15 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 	capDef := NewCap(urn, "Text Formatter", "format-text")
 	capDef.SetOutput(NewCapOutput(MediaString, "Formatted text"))
 
-	// Add required argument
-	arg := NewCapArgument("input", MediaString, "Input text", "--input")
-	capDef.AddRequiredArgument(arg)
+	// Add required argument using new architecture
+	cliFlag := "--input"
+	pos := 0
+	capDef.AddArg(CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Input text",
+	})
 
 	// Mock host that returns text
 	mockHost := &MockCapSet{
@@ -271,12 +283,25 @@ func TestIntegrationCapValidation(t *testing.T) {
 
 	capDef := NewCap(urn, "Data Processor", "process-data")
 
-	// Add required string argument
-	capDef.AddRequiredArgument(NewCapArgument("input", MediaString, "Input path", "--input"))
+	// Add required string argument using new architecture
+	cliFlag1 := "--input"
+	pos1 := 0
+	capDef.AddArg(CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag1}, {Position: &pos1}},
+		ArgDescription: "Input path",
+	})
 
-	// Add optional integer argument
-	optArg := NewCapArgument("count", MediaInteger, "Count limit", "--count")
-	capDef.AddOptionalArgument(optArg)
+	// Add optional integer argument using new architecture
+	cliFlag2 := "--count"
+	pos2 := 1
+	capDef.AddArg(CapArg{
+		MediaUrn:       MediaInteger,
+		Required:       false,
+		Sources:        []ArgSource{{CliFlag: &cliFlag2}, {Position: &pos2}},
+		ArgDescription: "Count limit",
+	})
 
 	// Set output
 	capDef.SetOutput(NewCapOutput(MediaObject, "Processing result"))

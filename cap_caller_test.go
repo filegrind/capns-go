@@ -150,7 +150,14 @@ func TestCapCallerWithArguments(t *testing.T) {
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
-	capDef.AddRequiredArgument(NewCapArgument("input", MediaString, "Input file", "--input"))
+	cliFlag := "--input"
+	pos := 0
+	capDef.AddArg(CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Input file",
+	})
 	capDef.SetOutput(NewCapOutput(MediaObject, "Process output"))
 
 	mockHost := &MockCapSet{

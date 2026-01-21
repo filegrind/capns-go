@@ -1,18 +1,18 @@
-// Example demonstrating plugin SDK integration with schema validation
+// Example demonstrating schema validation with caps
 package main
 
 import (
 	"fmt"
 
-	sdk "github.com/jowharshamshiri/fgnd-plugin-sdk-go"
+	capns "github.com/fgnd/cap-sdk-go"
 )
 
 func main() {
-	fmt.Println("=== Plugin SDK Schema Integration Example ===")
+	fmt.Println("=== Schema Integration Example ===")
 
-	// Create a capability using the plugin SDK
-	urn, _ := sdk.NewCapUrnFromString("cap:op=query;target=structured;")
-	cap := sdk.NewCap(urn, "Plugin Query Command", "plugin-query-command")
+	// Create a capability
+	urn, _ := capns.NewCapUrnFromString(`cap:in="media:type=void;v=1";op=query;out="media:type=object;v=1;textable;keyed";target=structured`)
+	cap := capns.NewCap(urn, "Query Command", "query-command")
 
 	// Define a comprehensive schema for document query parameters
 	querySchema := map[string]interface{}{
@@ -56,9 +56,22 @@ func main() {
 		"required": []interface{}{"search_terms"},
 	}
 
-	// Add schema-enabled argument using plugin SDK constructor
-	queryArg := sdk.NewCapArgumentWithSchema("query_params", sdk.ArgumentTypeObject, "Document query parameters", "--query", querySchema)
-	cap.AddRequiredArgument(queryArg)
+	// Add a custom media spec with the schema
+	cap.AddMediaSpec("media:type=query-params;v=1;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/query-params",
+		querySchema,
+	))
+
+	// Add schema-enabled argument using new CapArg architecture
+	cliFlag := "--query"
+	pos := 0
+	cap.AddArg(capns.CapArg{
+		MediaUrn:       "media:type=query-params;v=1;textable;keyed",
+		Required:       true,
+		Sources:        []capns.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Document query parameters",
+	})
 
 	// Define output schema
 	resultSchema := map[string]interface{}{
@@ -69,9 +82,9 @@ func main() {
 				"items": map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
-						"id":       map[string]interface{}{"type": "string"},
-						"title":    map[string]interface{}{"type": "string"},
-						"path":     map[string]interface{}{"type": "string"},
+						"id":        map[string]interface{}{"type": "string"},
+						"title":     map[string]interface{}{"type": "string"},
+						"path":      map[string]interface{}{"type": "string"},
 						"relevance": map[string]interface{}{"type": "number", "minimum": 0, "maximum": 1},
 						"metadata": map[string]interface{}{
 							"type": "object",
@@ -91,8 +104,8 @@ func main() {
 			"pagination": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"page":       map[string]interface{}{"type": "integer", "minimum": 1},
-					"page_size":  map[string]interface{}{"type": "integer", "minimum": 1},
+					"page":        map[string]interface{}{"type": "integer", "minimum": 1},
+					"page_size":   map[string]interface{}{"type": "integer", "minimum": 1},
 					"total_pages": map[string]interface{}{"type": "integer", "minimum": 0},
 				},
 			},
@@ -100,12 +113,18 @@ func main() {
 		"required": []interface{}{"documents", "total_found", "query_time"},
 	}
 
-	// Set output with embedded schema using plugin SDK
-	output := sdk.NewCapOutputWithEmbeddedSchema(sdk.OutputTypeObject, "Document search results", resultSchema)
-	cap.SetOutput(output)
+	// Add custom media spec for output with schema
+	cap.AddMediaSpec("media:type=query-results;v=1;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+		"application/json",
+		"https://example.com/schema/query-results",
+		resultSchema,
+	))
 
-	// Create validation coordinator using plugin SDK
-	coordinator := sdk.NewCapValidationCoordinator()
+	// Set output
+	cap.SetOutput(capns.NewCapOutput("media:type=query-results;v=1;textable;keyed", "Document search results"))
+
+	// Create validation coordinator
+	coordinator := capns.NewCapValidationCoordinator()
 	coordinator.RegisterCap(cap)
 
 	// Test with valid input
@@ -147,9 +166,9 @@ func main() {
 	validResult := map[string]interface{}{
 		"documents": []interface{}{
 			map[string]interface{}{
-				"id":       "doc_123",
-				"title":    "Introduction to Machine Learning",
-				"path":     "/documents/ml_intro.pdf",
+				"id":        "doc_123",
+				"title":     "Introduction to Machine Learning",
+				"path":      "/documents/ml_intro.pdf",
 				"relevance": 0.95,
 				"metadata": map[string]interface{}{
 					"file_type":   "pdf",
@@ -159,9 +178,9 @@ func main() {
 				},
 			},
 			map[string]interface{}{
-				"id":       "doc_456",
-				"title":    "Neural Network Fundamentals",
-				"path":     "/documents/nn_fundamentals.docx",
+				"id":        "doc_456",
+				"title":     "Neural Network Fundamentals",
+				"path":      "/documents/nn_fundamentals.docx",
 				"relevance": 0.87,
 				"metadata": map[string]interface{}{
 					"file_type":   "docx",
@@ -192,13 +211,13 @@ func main() {
 	invalidResult := map[string]interface{}{
 		"documents": []interface{}{
 			map[string]interface{}{
-				"id":       "doc_123",
-				"title":    "Introduction to Machine Learning",
+				"id":    "doc_123",
+				"title": "Introduction to Machine Learning",
 				// Missing required "path" and "relevance" fields
 			},
 		},
-		"total_found": -5,    // Negative value violates minimum constraint
-		"query_time":  -0.1,  // Negative value violates minimum constraint
+		"total_found": -5,   // Negative value violates minimum constraint
+		"query_time":  -0.1, // Negative value violates minimum constraint
 		// Missing required fields
 	}
 
@@ -211,21 +230,14 @@ func main() {
 
 	// Demonstrate schema resolver functionality
 	fmt.Println("\n--- Testing Schema Resolver ---")
-	resolver := sdk.NewFileSchemaResolver("/schema/base/path")
-	coordinatorWithResolver := sdk.NewCapValidationCoordinatorWithSchemaResolver(resolver)
+	resolver := capns.NewFileSchemaResolver("/schema/base/path")
+	coordinatorWithResolver := capns.NewCapValidationCoordinatorWithSchemaResolver(resolver)
 
-	// Create argument with schema reference
-	schemaRefArg := sdk.NewCapArgumentWithSchemaRef("external_config", sdk.ArgumentTypeObject, "External configuration", "--config", "config.schema.json")
+	// Register the cap with resolver
+	coordinatorWithResolver.RegisterCap(cap)
 
-	// Since we don't have an actual file, this will fail as expected
-	coordinatorWithResolver.RegisterCap(cap) // This doesn't return an error
-	validator := sdk.NewSchemaValidatorWithResolver(resolver)
-	err = validator.ValidateArgument(&schemaRefArg, map[string]interface{}{"test": "data"})
-	if err != nil {
-		fmt.Printf("OK Schema reference resolution failed as expected (no file): %v\n", err)
-	} else {
-		fmt.Printf("ERR Schema reference should have failed\n")
-	}
+	// Since we don't have an actual file, this demonstrates the resolver pattern
+	fmt.Println("Schema resolver configured with base path: /schema/base/path")
 
-	fmt.Println("\n=== Plugin SDK schema integration examples completed! ===")
+	fmt.Println("\n=== Schema integration examples completed! ===")
 }
