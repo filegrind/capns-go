@@ -335,21 +335,21 @@ func getExpectedTypeFromMediaUrn(mediaUrn string, resolved *ResolvedMediaSpec) s
 
 	// Try built-in media URN types based on base type
 	switch baseType {
-	case "string;v=1":
+	case "string":
 		return "string"
-	case "integer;v=1":
+	case "integer":
 		return "integer"
-	case "number;v=1":
+	case "number":
 		return "number"
-	case "boolean;v=1":
+	case "boolean":
 		return "boolean"
-	case "object;v=1":
+	case "object":
 		return "object"
-	case "string-array;v=1", "integer-array;v=1", "number-array;v=1", "boolean-array;v=1", "object-array;v=1":
+	case "string-array", "integer-array", "number-array", "boolean-array", "object-array":
 		return "array"
-	case "binary;v=1":
+	case "binary":
 		return "binary"
-	case "void;v=1":
+	case "void":
 		return "void"
 	}
 

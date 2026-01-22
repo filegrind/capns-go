@@ -21,11 +21,11 @@ import (
 // fields specify the input and output media URNs respectively.
 //
 // Examples:
-// - cap:in="media:type=binary;v=1";op=generate;out="media:type=binary;v=1";target=thumbnail
-// - cap:in="media:type=void;v=1";op=dimensions;out="media:type=integer;v=1"
-// - cap:in="media:type=string;v=1";key="Value With Spaces";out="media:type=object;v=1"
+// - cap:in="media:binary";op=generate;out="media:binary";target=thumbnail
+// - cap:in="media:void";op=dimensions;out="media:integer"
+// - cap:in="media:string";key="Value With Spaces";out="media:object"
 type CapUrn struct {
-	// inSpec is the input media URN - required (use media:type=void;v=1 for caps with no input)
+	// inSpec is the input media URN - required (use media:void for caps with no input)
 	inSpec string
 	// outSpec is the output media URN - required
 	outSpec string
@@ -144,7 +144,7 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 	if !hasIn || inSpec == "" {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:type=void;v=1 for no input)",
+			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:void for no input)",
 		}
 	}
 
@@ -199,7 +199,7 @@ func NewCapUrnFromTags(tags map[string]string) (*CapUrn, error) {
 	if !hasIn {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:type=void;v=1 for no input)",
+			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:void for no input)",
 		}
 	}
 	delete(result, "in")
@@ -705,7 +705,7 @@ func (b *CapUrnBuilder) Build() (*CapUrn, error) {
 	if b.inSpec == nil {
 		return nil, &CapUrnError{
 			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' spec - caps must declare their input type (use media:type=void;v=1 for no input)",
+			Message: "cap URN is missing required 'in' spec - caps must declare their input type (use media:void for no input)",
 		}
 	}
 

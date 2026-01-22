@@ -25,9 +25,9 @@ func (m *MockCapSetForRegistry) ExecuteCap(
 // Test helper for matrix tests
 func matrixTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
+		return `cap:in="media:void";out="media:object"`
 	}
-	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
+	return `cap:in="media:void";out="media:object";` + tags
 }
 
 func TestRegisterAndFindCapSet(t *testing.T) {
@@ -35,7 +35,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 
 	host := &MockCapSetForRegistry{name: "test-host"}
 
-	capUrn, err := NewCapUrnFromString(matrixTestUrn("op=test;type=basic"))
+	capUrn, err := NewCapUrnFromString(matrixTestUrn("op=test;basic"))
 	if err != nil {
 		t.Fatalf("Failed to create CapUrn: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 	}
 
 	// Test exact match
-	sets, err := registry.FindCapSets(matrixTestUrn("op=test;type=basic"))
+	sets, err := registry.FindCapSets(matrixTestUrn("op=test;basic"))
 	if err != nil {
 		t.Fatalf("Failed to find cap sets: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 	}
 
 	// Test subset match (request has more specific requirements)
-	sets, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;type=basic"))
+	sets, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
 	if err != nil {
 		t.Fatalf("Failed to find cap sets for subset match: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 	}
 
 	// Test no match (different direction specs)
-	_, err = registry.FindCapSets(`cap:in="media:type=binary;v=1";op=different;out="media:type=object;v=1"`)
+	_, err = registry.FindCapSets(`cap:in="media:binary";op=different;out="media:object"`)
 	if err == nil {
 		t.Error("Expected error for non-matching capability, got nil")
 	}
@@ -96,7 +96,7 @@ func TestBestCapSetSelection(t *testing.T) {
 
 	// Register specific host
 	specificHost := &MockCapSetForRegistry{name: "specific"}
-	specificCapUrn, _ := NewCapUrnFromString(matrixTestUrn("model=gpt-4;op=generate;type=text"))
+	specificCapUrn, _ := NewCapUrnFromString(matrixTestUrn("model=gpt-4;op=generate;text"))
 	specificCap := &Cap{
 		Urn:            specificCapUrn,
 		CapDescription: stringPtr("Specific text generation"),
@@ -110,7 +110,7 @@ func TestBestCapSetSelection(t *testing.T) {
 	registry.RegisterCapSet("specific", specificHost, []*Cap{specificCap})
 
 	// Request should match the more specific host
-	bestHost, bestCap, err := registry.FindBestCapSet(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;type=text"))
+	bestHost, bestCap, err := registry.FindBestCapSet(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;text"))
 	if err != nil {
 		t.Fatalf("Failed to find best cap host: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestBestCapSetSelection(t *testing.T) {
 	}
 
 	// Both sets should match
-	allHosts, err := registry.FindCapSets(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;type=text"))
+	allHosts, err := registry.FindCapSets(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;text"))
 	if err != nil {
 		t.Fatalf("Failed to find all matching sets: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	// Provider: less specific cap (no ext tag)
 	providerHost := &MockCapSetForRegistry{name: "provider"}
 	providerCap := makeCap(
-		`cap:in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
+		`cap:in="media:binary";op=generate_thumbnail;out="media:binary"`,
 		"Provider Thumbnail Generator (generic)",
 	)
 	providerRegistry.RegisterCapSet("provider", providerHost, []*Cap{providerCap})
@@ -223,7 +223,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	// Plugin: more specific cap (has ext=pdf)
 	pluginHost := &MockCapSetForRegistry{name: "plugin"}
 	pluginCap := makeCap(
-		`cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
+		`cap:ext=pdf;in="media:binary";op=generate_thumbnail;out="media:binary"`,
 		"Plugin PDF Thumbnail Generator (specific)",
 	)
 	pluginRegistry.RegisterCapSet("plugin", pluginHost, []*Cap{pluginCap})
@@ -234,7 +234,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	composite.AddRegistry("plugins", pluginRegistry)
 
 	// Request for PDF thumbnails - plugin's more specific cap should win
-	request := `cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`
+	request := `cap:ext=pdf;in="media:binary";op=generate_thumbnail;out="media:binary"`
 	best, err := composite.FindBestCapSet(request)
 	if err != nil {
 		t.Fatalf("Failed to find best cap set: %v", err)
@@ -357,7 +357,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	// Provider with generic fallback (can handle any file type)
 	providerHost := &MockCapSetForRegistry{name: "provider_fallback"}
 	providerCap := makeCap(
-		`cap:in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
+		`cap:in="media:binary";op=generate_thumbnail;out="media:binary"`,
 		"Generic Thumbnail Provider",
 	)
 	providerRegistry.RegisterCapSet("provider_fallback", providerHost, []*Cap{providerCap})
@@ -365,7 +365,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	// Plugin with PDF-specific handler
 	pluginHost := &MockCapSetForRegistry{name: "pdf_plugin"}
 	pluginCap := makeCap(
-		`cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`,
+		`cap:ext=pdf;in="media:binary";op=generate_thumbnail;out="media:binary"`,
 		"PDF Thumbnail Plugin",
 	)
 	pluginRegistry.RegisterCapSet("pdf_plugin", pluginHost, []*Cap{pluginCap})
@@ -376,7 +376,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	composite.AddRegistry("plugins", pluginRegistry)
 
 	// Request for PDF thumbnail
-	request := `cap:ext=pdf;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`
+	request := `cap:ext=pdf;in="media:binary";op=generate_thumbnail;out="media:binary"`
 	best, err := composite.FindBestCapSet(request)
 	if err != nil {
 		t.Fatalf("Failed to find best cap set: %v", err)
@@ -394,7 +394,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	}
 
 	// Also test that for a different file type, provider wins
-	requestWav := `cap:ext=wav;in="media:type=binary;v=1";op=generate_thumbnail;out="media:type=binary;v=1"`
+	requestWav := `cap:ext=wav;in="media:binary";op=generate_thumbnail;out="media:binary"`
 	bestWav, err := composite.FindBestCapSet(requestWav)
 	if err != nil {
 		t.Fatalf("Failed to find best cap set for wav: %v", err)
@@ -610,7 +610,7 @@ func TestCapGraphCanConvert(t *testing.T) {
 	if graph.CanConvert(MediaObject, MediaBinary) {
 		t.Error("Should not be able to convert obj to binary (no reverse edge)")
 	}
-	if graph.CanConvert("media:type=nonexistent;v=1", MediaString) {
+	if graph.CanConvert("media:nonexistent", MediaString) {
 		t.Error("Should not be able to convert non-existent spec")
 	}
 }
@@ -762,7 +762,7 @@ func TestCapGraphStats(t *testing.T) {
 	//         \-> json
 	cap1 := makeGraphCap(MediaBinary, MediaString, "Binary to String")
 	cap2 := makeGraphCap(MediaString, MediaObject, "String to Object")
-	cap3 := makeGraphCap(MediaBinary, "media:type=json;v=1", "Binary to JSON")
+	cap3 := makeGraphCap(MediaBinary, "media:json", "Binary to JSON")
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2, cap3})
 

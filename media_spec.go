@@ -1,11 +1,11 @@
 // Package capns provides MediaSpec parsing and media URN resolution
 //
 // Media URNs reference media type definitions in the media_specs table.
-// Format: `media:type=<type>;v=<version>` with optional profile tag.
+// Format: `media:<type>;v=<version>` with optional profile tag.
 //
 // Examples:
-// - `media:type=string;v=1`
-// - `media:type=object;v=1;profile="https://example.com/schema.json"`
+// - `media:string`
+// - `media:object;profile="https://example.com/schema.json"`
 //
 // NO LEGACY SUPPORT: The old `std:xxx.v1` format is NOT supported and will fail hard.
 package capns
@@ -21,35 +21,35 @@ import (
 
 // Built-in media URN constants with coercion tags
 const (
-	MediaVoid         = "media:type=void;v=1"
-	MediaString       = "media:type=string;v=1;textable;scalar"
-	MediaInteger      = "media:type=integer;v=1;textable;numeric;scalar"
-	MediaNumber       = "media:type=number;v=1;textable;numeric;scalar"
-	MediaBoolean      = "media:type=boolean;v=1;textable;scalar"
-	MediaObject       = "media:type=object;v=1;textable;keyed"
-	MediaBinary       = "media:type=raw;v=1;binary"
-	MediaStringArray  = "media:type=string-array;v=1;textable;sequence"
-	MediaIntegerArray = "media:type=integer-array;v=1;textable;numeric;sequence"
-	MediaNumberArray  = "media:type=number-array;v=1;textable;numeric;sequence"
-	MediaBooleanArray = "media:type=boolean-array;v=1;textable;sequence"
-	MediaObjectArray  = "media:type=object-array;v=1;textable;keyed;sequence"
+	MediaVoid         = "media:void"
+	MediaString       = "media:string;textable;scalar"
+	MediaInteger      = "media:integer;textable;numeric;scalar"
+	MediaNumber       = "media:number;textable;numeric;scalar"
+	MediaBoolean      = "media:boolean;textable;scalar"
+	MediaObject       = "media:object;textable;keyed"
+	MediaBinary       = "media:raw;binary"
+	MediaStringArray  = "media:string-array;textable;sequence"
+	MediaIntegerArray = "media:integer-array;textable;numeric;sequence"
+	MediaNumberArray  = "media:number-array;textable;numeric;sequence"
+	MediaBooleanArray = "media:boolean-array;textable;sequence"
+	MediaObjectArray  = "media:object-array;textable;keyed;sequence"
 	// Semantic content types
-	MediaImage = "media:type=png;v=1;binary"
-	MediaAudio = "media:type=wav;audio;binary;v=1;"
-	MediaVideo = "media:type=video;v=1;binary"
-	MediaText  = "media:type=text;v=1;textable"
+	MediaImage = "media:png;binary"
+	MediaAudio = "media:wav;audio;binary;"
+	MediaVideo = "media:video;binary"
+	MediaText  = "media:text;textable"
 	// Document types (PRIMARY naming - type IS the format)
-	MediaPdf  = "media:type=pdf;v=1;binary"
-	MediaEpub = "media:type=epub;v=1;binary"
+	MediaPdf  = "media:pdf;binary"
+	MediaEpub = "media:epub;binary"
 	// Text format types (PRIMARY naming - type IS the format)
-	MediaMd   = "media:type=md;v=1;textable"
-	MediaTxt  = "media:type=txt;v=1;textable"
-	MediaRst  = "media:type=rst;v=1;textable"
-	MediaLog  = "media:type=log;v=1;textable"
-	MediaHtml = "media:type=html;v=1;textable"
-	MediaXml  = "media:type=xml;v=1;textable"
-	MediaJson = "media:type=json;v=1;textable;keyed"
-	MediaYaml = "media:type=yaml;v=1;textable;keyed"
+	MediaMd   = "media:md;textable"
+	MediaTxt  = "media:txt;textable"
+	MediaRst  = "media:rst;textable"
+	MediaLog  = "media:log;textable"
+	MediaHtml = "media:html;textable"
+	MediaXml  = "media:xml;textable"
+	MediaJson = "media:json;textable;keyed"
+	MediaYaml = "media:yaml;textable;keyed"
 )
 
 // Profile URL constants
@@ -310,7 +310,7 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 }
 
 // extractBaseType extracts the base type identifier from a media URN
-// e.g., "media:type=string;v=1;textable;scalar" -> "string;v=1"
+// e.g., "media:string;textable;scalar" -> "string"
 func extractBaseType(mediaUrn string) string {
 	if !strings.HasPrefix(mediaUrn, "media:") {
 		return ""
@@ -533,7 +533,7 @@ func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs map[string]MediaSpecDef) (*R
 }
 
 // extractMediaUrnTag extracts a tag value from a media URN string
-// e.g., extractMediaUrnTag("media:type=image;ext=png;v=1", "type") returns "image"
+// e.g., extractMediaUrnTag("media:image;ext=png", "type") returns "image"
 func extractMediaUrnTag(mediaUrn, tagName string) string {
 	prefix := tagName + "="
 	pos := strings.Index(mediaUrn, prefix)

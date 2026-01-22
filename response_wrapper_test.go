@@ -11,9 +11,9 @@ import (
 // Test helper for response wrapper tests - use proper media URNs with tags
 func respTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed"`
+		return `cap:in="media:void";out="media:object;textable;keyed"`
 	}
-	return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed";` + tags
+	return `cap:in="media:void";out="media:object;textable;keyed";` + tags
 }
 
 func TestResponseWrapperFromJSON(t *testing.T) {
@@ -153,17 +153,17 @@ func TestResponseWrapperGetContentType(t *testing.T) {
 
 func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	// Setup cap definitions with media URNs - all need in/out with proper tags
-	stringCapUrn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=test;out="media:type=string;v=1;textable;scalar"`)
+	stringCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:string;textable;scalar"`)
 	require.NoError(t, err)
 	stringCap := NewCap(stringCapUrn, "String Test", "test")
 	stringCap.SetOutput(NewCapOutput(MediaString, "String output"))
 
-	binaryCapUrn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=test;out="media:type=raw;v=1;binary"`)
+	binaryCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:raw;binary"`)
 	require.NoError(t, err)
 	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
 	binaryCap.SetOutput(NewCapOutput(MediaBinary, "Binary output"))
 
-	jsonCapUrn, err := NewCapUrnFromString(`cap:in="media:type=void;v=1";op=test;out="media:type=object;v=1;textable;keyed"`)
+	jsonCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:object;textable;keyed"`)
 	require.NoError(t, err)
 	jsonCap := NewCap(jsonCapUrn, "JSON Test", "test")
 	jsonCap.SetOutput(NewCapOutput(MediaObject, "JSON output"))
@@ -216,7 +216,7 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	badSpecCapUrn, err := NewCapUrnFromString(respTestUrn("op=test"))
 	require.NoError(t, err)
 	badSpecCap := NewCap(badSpecCapUrn, "Bad Spec Test", "test")
-	badSpecCap.SetOutput(NewCapOutput("media:type=unknown;v=1", "Unknown output"))
+	badSpecCap.SetOutput(NewCapOutput("media:unknown", "Unknown output"))
 	_, err = textResponse.MatchesOutputType(badSpecCap)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to resolve output media URN")
@@ -229,7 +229,7 @@ func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 	cap := NewCap(capUrn, "Test Cap", "test")
 
 	// Add custom spec with schema - needs keyed tag for JSON
-	cap.AddMediaSpec("media:type=result;v=1;textable;keyed", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:result;textable;keyed", NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{
@@ -241,7 +241,7 @@ func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 		},
 	))
 
-	cap.SetOutput(NewCapOutput("media:type=result;v=1;textable;keyed", "Result output"))
+	cap.SetOutput(NewCapOutput("media:result;textable;keyed", "Result output"))
 
 	// Valid JSON response
 	validResponse := NewResponseWrapperFromJSON([]byte(`{"status": "ok"}`))

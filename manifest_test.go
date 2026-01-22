@@ -11,9 +11,9 @@ import (
 // Test helper for manifest tests - use proper media URNs with tags
 func manifestTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed"`
+		return `cap:in="media:void";out="media:object;textable;keyed"`
 	}
-	return `cap:in="media:type=void;v=1";out="media:type=object;v=1;textable;keyed";` + tags
+	return `cap:in="media:void";out="media:object;textable;keyed";` + tags
 }
 
 func TestCapManifestCreation(t *testing.T) {
@@ -59,7 +59,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
-	stdinUrn := "media:type=pdf;v=1;binary"
+	stdinUrn := "media:pdf;binary"
 	cap.AddArg(CapArg{
 		MediaUrn: MediaBinary,
 		Required: true,
@@ -81,7 +81,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	assert.Contains(t, jsonStr, `"name":"TestComponent"`)
 	assert.Contains(t, jsonStr, `"version":"0.1.0"`)
 	assert.Contains(t, jsonStr, `"author":"Test Author"`)
-	assert.Contains(t, jsonStr, `"stdin":"media:type=pdf;v=1;binary"`)
+	assert.Contains(t, jsonStr, `"stdin":"media:pdf;binary"`)
 
 	// Test deserialization
 	var deserialized CapManifest
@@ -163,7 +163,7 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 }
 
 func TestCapManifestOptionalAuthorField(t *testing.T) {
-	id, err := NewCapUrnFromString(manifestTestUrn("op=validate;type=file"))
+	id, err := NewCapUrnFromString(manifestTestUrn("op=validate;file"))
 	require.NoError(t, err)
 	cap := NewCap(id, "File Validator", "validate")
 
@@ -210,7 +210,7 @@ func (tc *testComponent) Caps() []Cap {
 
 func TestComponentMetadataInterface(t *testing.T) {
 
-	id, err := NewCapUrnFromString(manifestTestUrn("op=test;type=component"))
+	id, err := NewCapUrnFromString(manifestTestUrn("op=test;component"))
 	require.NoError(t, err)
 	cap := NewCap(id, "Test Component", "test")
 
@@ -235,7 +235,7 @@ func TestCapManifestValidation(t *testing.T) {
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
-	stdinUrn := "media:type=pdf;v=1;binary"
+	stdinUrn := "media:pdf;binary"
 	cap.AddArg(CapArg{
 		MediaUrn: MediaBinary,
 		Required: true,

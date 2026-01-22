@@ -13,9 +13,9 @@ import (
 // Test helper for registry tests
 func regTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:type=void;v=1";out="media:type=object;v=1"`
+		return `cap:in="media:void";out="media:object"`
 	}
-	return `cap:in="media:type=void;v=1";out="media:type=object;v=1";` + tags
+	return `cap:in="media:void";out="media:object";` + tags
 }
 
 func TestRegistryCreation(t *testing.T) {
@@ -84,7 +84,7 @@ func buildRegistryURL(urn string) string {
 
 // TestURLKeepsCapPrefixLiteral tests that "cap:" is NOT URL-encoded
 func TestURLKeepsCapPrefixLiteral(t *testing.T) {
-	urn := `cap:in="media:type=string;v=1";op=test;out="media:type=object;v=1"`
+	urn := `cap:in="media:string";op=test;out="media:object"`
 	registryURL := buildRegistryURL(urn)
 
 	// URL must contain literal "/cap:" not encoded
@@ -95,7 +95,7 @@ func TestURLKeepsCapPrefixLiteral(t *testing.T) {
 
 // TestURLEncodesQuotedMediaUrns tests that quoted values are properly URL-encoded
 func TestURLEncodesQuotedMediaUrns(t *testing.T) {
-	urn := `cap:in="media:type=listing-id;v=1";op=use_grinder;out="media:type=task-id;v=1"`
+	urn := `cap:in="media:listing-id";op=use_grinder;out="media:task-id"`
 	registryURL := buildRegistryURL(urn)
 
 	// Quotes must be encoded as %22 (this is the critical encoding for media URNs)
@@ -106,7 +106,7 @@ func TestURLEncodesQuotedMediaUrns(t *testing.T) {
 
 // TestURLFormatIsValid tests the URL format is valid and can be parsed
 func TestURLFormatIsValid(t *testing.T) {
-	urn := `cap:in="media:type=listing-id;v=1";op=use_grinder;out="media:type=task-id;v=1"`
+	urn := `cap:in="media:listing-id";op=use_grinder;out="media:task-id"`
 	registryURL := buildRegistryURL(urn)
 
 	// URL should be parseable
@@ -125,8 +125,8 @@ func TestURLFormatIsValid(t *testing.T) {
 
 // TestNormalizeHandlesDifferentTagOrders tests that different tag orders normalize to the same URL
 func TestNormalizeHandlesDifferentTagOrders(t *testing.T) {
-	urn1 := `cap:op=test;in="media:type=string;v=1";out="media:type=object;v=1"`
-	urn2 := `cap:in="media:type=string;v=1";out="media:type=object;v=1";op=test`
+	urn1 := `cap:op=test;in="media:string";out="media:object"`
+	urn2 := `cap:in="media:string";out="media:object";op=test`
 
 	url1 := buildRegistryURL(urn1)
 	url2 := buildRegistryURL(urn2)
