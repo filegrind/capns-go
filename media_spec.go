@@ -87,11 +87,12 @@ const (
 
 // MediaSpecDefObject represents the rich object form of a media spec definition
 type MediaSpecDefObject struct {
-	MediaType   string      `json:"media_type"`
-	ProfileURI  string      `json:"profile_uri"`
-	Schema      interface{} `json:"schema,omitempty"`
-	Title       string      `json:"title,omitempty"`
-	Description string      `json:"description,omitempty"`
+	MediaType   string               `json:"media_type"`
+	ProfileURI  string               `json:"profile_uri"`
+	Schema      interface{}          `json:"schema,omitempty"`
+	Title       string               `json:"title,omitempty"`
+	Description string               `json:"description,omitempty"`
+	Validation  *ArgumentValidation  `json:"validation,omitempty"`
 }
 
 // MediaSpecDef represents a media spec definition - can be string (compact) or object (rich)
@@ -174,6 +175,7 @@ type ResolvedMediaSpec struct {
 	Schema      interface{}
 	Title       string
 	Description string
+	Validation  *ArgumentValidation
 }
 
 // IsBinary returns true if the "binary" marker tag is present in the source media URN.
@@ -306,6 +308,7 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 		Schema:      def.ObjectValue.Schema,
 		Title:       def.ObjectValue.Title,
 		Description: def.ObjectValue.Description,
+		Validation:  def.ObjectValue.Validation,
 	}, nil
 }
 

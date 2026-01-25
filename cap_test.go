@@ -23,7 +23,8 @@ func TestCapCreation(t *testing.T) {
 	cap := NewCap(id, "Transform JSON Data", "test-command")
 
 	// Canonical form includes in/out in alphabetical order
-	assert.Equal(t, `cap:format=json;in="media:void";op=transform;out="media:object";data_processing`, cap.UrnString())
+	// Values without semicolons (like media:void, media:object) don't need quotes
+	assert.Equal(t, `cap:data_processing;format=json;in=media:void;op=transform;out=media:object`, cap.UrnString())
 	assert.Equal(t, "Transform JSON Data", cap.Title)
 	assert.Equal(t, "test-command", cap.Command)
 	assert.Nil(t, cap.CapDescription)
@@ -54,13 +55,14 @@ func TestCapWithMetadata(t *testing.T) {
 }
 
 func TestCapMatching(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=transform;format=json;data_processing"))
+	// Use key=value pairs instead of flags for proper matching tests
+	id, err := NewCapUrnFromString(capTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Transform JSON Data", "test-command")
 
-	assert.True(t, cap.MatchesRequest(capTestUrn("op=transform;format=json;data_processing")))
-	assert.True(t, cap.MatchesRequest(capTestUrn("op=transform;format=*;data_processing"))) // Request wants any format
+	assert.True(t, cap.MatchesRequest(capTestUrn("op=transform;format=json;type=data_processing")))
+	assert.True(t, cap.MatchesRequest(capTestUrn("op=transform;format=*;type=data_processing"))) // Request wants any format
 	assert.True(t, cap.MatchesRequest(capTestUrn("type=data_processing")))
 	assert.False(t, cap.MatchesRequest(capTestUrn("type=compute")))
 }

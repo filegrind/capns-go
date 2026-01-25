@@ -86,6 +86,18 @@ func NewArgumentValidationFailedError(capUrn, argumentName, rule string, actualV
 	}
 }
 
+// NewMediaSpecValidationFailedError creates an error for media spec validation failures (inherent to semantic type)
+func NewMediaSpecValidationFailedError(capUrn, argumentName, mediaUrn, rule string, actualValue interface{}) *ValidationError {
+	return &ValidationError{
+		Type:         "MediaSpecValidationFailed",
+		CapUrn:       capUrn,
+		ArgumentName: argumentName,
+		Rule:         rule,
+		ActualValue:  actualValue,
+		Message:      fmt.Sprintf("Cap '%s' argument '%s' failed media spec '%s' validation rule '%s' with value: %v", capUrn, argumentName, mediaUrn, rule, actualValue),
+	}
+}
+
 // NewInvalidOutputTypeErrorFromMediaUrn creates an error for invalid output types using media URNs
 func NewInvalidOutputTypeErrorFromMediaUrn(capUrn, mediaUrn, expectedType, actualType string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
@@ -106,6 +118,17 @@ func NewOutputValidationFailedError(capUrn, rule string, actualValue interface{}
 		Rule:        rule,
 		ActualValue: actualValue,
 		Message:     fmt.Sprintf("Cap '%s' output failed validation rule '%s' with value: %v", capUrn, rule, actualValue),
+	}
+}
+
+// NewOutputMediaSpecValidationFailedError creates an error for output media spec validation failures
+func NewOutputMediaSpecValidationFailedError(capUrn, mediaUrn, rule string, actualValue interface{}) *ValidationError {
+	return &ValidationError{
+		Type:        "OutputMediaSpecValidationFailed",
+		CapUrn:      capUrn,
+		Rule:        rule,
+		ActualValue: actualValue,
+		Message:     fmt.Sprintf("Cap '%s' output failed media spec '%s' validation rule '%s' with value: %v", capUrn, mediaUrn, rule, actualValue),
 	}
 }
 
@@ -248,7 +271,14 @@ func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArg, value
 		return err
 	}
 
-	// Validation rules
+	// FIRST PASS: Media spec validation rules (inherent to the semantic type)
+	if resolved.Validation != nil {
+		if err := iv.validateMediaSpecRules(cap, argDef, resolved, value); err != nil {
+			return err
+		}
+	}
+
+	// SECOND PASS: Arg-level validation rules (context-specific)
 	if err := iv.validateArgumentRules(cap, argDef, value); err != nil {
 		return err
 	}
@@ -256,6 +286,82 @@ func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArg, value
 	// Schema validation for object/array types
 	if err := iv.validateArgumentSchema(cap, argDef, resolved, value); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validateMediaSpecRules validates value against media spec's inherent validation rules (first pass)
+func (iv *InputValidator) validateMediaSpecRules(cap *Cap, argDef *CapArg, resolved *ResolvedMediaSpec, value interface{}) error {
+	capUrn := cap.UrnString()
+	validation := resolved.Validation
+	mediaUrn := resolved.SpecID
+
+	// Numeric validation
+	if validation.Min != nil {
+		if num, ok := getNumericValue(value); ok {
+			if num < *validation.Min {
+				return NewMediaSpecValidationFailedError(capUrn, argDef.MediaUrn, mediaUrn, fmt.Sprintf("minimum value %v", *validation.Min), value)
+			}
+		}
+	}
+
+	if validation.Max != nil {
+		if num, ok := getNumericValue(value); ok {
+			if num > *validation.Max {
+				return NewMediaSpecValidationFailedError(capUrn, argDef.MediaUrn, mediaUrn, fmt.Sprintf("maximum value %v", *validation.Max), value)
+			}
+		}
+	}
+
+	// String length validation
+	if validation.MinLength != nil {
+		if s, ok := value.(string); ok {
+			if len(s) < *validation.MinLength {
+				return NewMediaSpecValidationFailedError(capUrn, argDef.MediaUrn, mediaUrn, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
+			}
+		}
+	}
+
+	if validation.MaxLength != nil {
+		if s, ok := value.(string); ok {
+			if len(s) > *validation.MaxLength {
+				return NewMediaSpecValidationFailedError(capUrn, argDef.MediaUrn, mediaUrn, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
+			}
+		}
+	}
+
+	// Pattern validation
+	if validation.Pattern != nil {
+		if s, ok := value.(string); ok {
+			regex, err := regexp.Compile(*validation.Pattern)
+			if err != nil {
+				return &ValidationError{
+					Type:    "InvalidCapSchema",
+					CapUrn:  capUrn,
+					Message: fmt.Sprintf("Invalid regex pattern '%s' in media spec '%s': %v", *validation.Pattern, mediaUrn, err),
+				}
+			}
+			if !regex.MatchString(s) {
+				return NewMediaSpecValidationFailedError(capUrn, argDef.MediaUrn, mediaUrn, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
+			}
+		}
+	}
+
+	// Allowed values validation
+	if len(validation.AllowedValues) > 0 {
+		if s, ok := value.(string); ok {
+			allowed := false
+			for _, allowedValue := range validation.AllowedValues {
+				if s == allowedValue {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return NewMediaSpecValidationFailedError(capUrn, argDef.MediaUrn, mediaUrn, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
+			}
+		}
 	}
 
 	return nil
@@ -461,6 +567,9 @@ func NewOutputValidatorWithSchemaResolver(resolver SchemaResolver) *OutputValida
 }
 
 // ValidateOutput validates output against a cap's output schema
+// Two-pass validation:
+// 1. Type validation + media spec validation rules (inherent to semantic type)
+// 2. Output-level validation rules (context-specific)
 func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 	capUrn := cap.UrnString()
 
@@ -488,7 +597,14 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 		return err
 	}
 
-	// Validation rules
+	// FIRST PASS: Media spec validation rules (inherent to the semantic type)
+	if resolved.Validation != nil {
+		if err := ov.validateOutputMediaSpecRules(cap, resolved, output); err != nil {
+			return err
+		}
+	}
+
+	// SECOND PASS: Output-level validation rules (context-specific)
 	if err := ov.validateOutputRules(cap, outputDef, output); err != nil {
 		return err
 	}
@@ -496,6 +612,82 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 	// Schema validation for structured outputs
 	if err := ov.validateOutputSchema(cap, outputDef, resolved, output); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validateOutputMediaSpecRules validates output against media spec's inherent validation rules (first pass)
+func (ov *OutputValidator) validateOutputMediaSpecRules(cap *Cap, resolved *ResolvedMediaSpec, value interface{}) error {
+	capUrn := cap.UrnString()
+	validation := resolved.Validation
+	mediaUrn := resolved.SpecID
+
+	// Numeric validation
+	if validation.Min != nil {
+		if num, ok := getNumericValue(value); ok {
+			if num < *validation.Min {
+				return NewOutputMediaSpecValidationFailedError(capUrn, mediaUrn, fmt.Sprintf("minimum value %v", *validation.Min), value)
+			}
+		}
+	}
+
+	if validation.Max != nil {
+		if num, ok := getNumericValue(value); ok {
+			if num > *validation.Max {
+				return NewOutputMediaSpecValidationFailedError(capUrn, mediaUrn, fmt.Sprintf("maximum value %v", *validation.Max), value)
+			}
+		}
+	}
+
+	// String length validation
+	if validation.MinLength != nil {
+		if s, ok := value.(string); ok {
+			if len(s) < *validation.MinLength {
+				return NewOutputMediaSpecValidationFailedError(capUrn, mediaUrn, fmt.Sprintf("minimum length %d", *validation.MinLength), value)
+			}
+		}
+	}
+
+	if validation.MaxLength != nil {
+		if s, ok := value.(string); ok {
+			if len(s) > *validation.MaxLength {
+				return NewOutputMediaSpecValidationFailedError(capUrn, mediaUrn, fmt.Sprintf("maximum length %d", *validation.MaxLength), value)
+			}
+		}
+	}
+
+	// Pattern validation
+	if validation.Pattern != nil {
+		if s, ok := value.(string); ok {
+			regex, err := regexp.Compile(*validation.Pattern)
+			if err != nil {
+				return &ValidationError{
+					Type:    "InvalidCapSchema",
+					CapUrn:  capUrn,
+					Message: fmt.Sprintf("Invalid regex pattern '%s' in media spec '%s': %v", *validation.Pattern, mediaUrn, err),
+				}
+			}
+			if !regex.MatchString(s) {
+				return NewOutputMediaSpecValidationFailedError(capUrn, mediaUrn, fmt.Sprintf("pattern '%s'", *validation.Pattern), value)
+			}
+		}
+	}
+
+	// Allowed values validation
+	if len(validation.AllowedValues) > 0 {
+		if s, ok := value.(string); ok {
+			allowed := false
+			for _, allowedValue := range validation.AllowedValues {
+				if s == allowedValue {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				return NewOutputMediaSpecValidationFailedError(capUrn, mediaUrn, fmt.Sprintf("allowed values: %v", validation.AllowedValues), value)
+			}
+		}
 	}
 
 	return nil

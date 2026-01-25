@@ -93,20 +93,22 @@ func TestURLKeepsCapPrefixLiteral(t *testing.T) {
 	assert.NotContains(t, registryURL, "cap%3A", "URL must not encode 'cap:' as 'cap%3A'")
 }
 
-// TestURLEncodesQuotedMediaUrns tests that quoted values are properly URL-encoded
-func TestURLEncodesQuotedMediaUrns(t *testing.T) {
-	urn := `cap:in="media:listing-id";op=use_grinder;out="media:task-id"`
+// TestURLEncodesMediaUrns tests that media URN values are properly handled in URLs
+func TestURLEncodesMediaUrns(t *testing.T) {
+	// Colons don't need quoting, so the canonical form won't have quotes
+	urn := `cap:in=media:listing-id;op=use_grinder;out=media:task-id`
 	registryURL := buildRegistryURL(urn)
 
-	// Quotes must be encoded as %22 (this is the critical encoding for media URNs)
-	assert.Contains(t, registryURL, "%22", "Quotes must be URL-encoded as %22")
+	// URL should contain the media URN values
+	assert.Contains(t, registryURL, "media:listing-id", "URL should contain media URN")
 	// Note: url.PathEscape doesn't encode =, :, or ; as they're valid in paths
 	// The key requirement is that the URL is valid and the Netlify function can decode it
 }
 
 // TestURLFormatIsValid tests the URL format is valid and can be parsed
 func TestURLFormatIsValid(t *testing.T) {
-	urn := `cap:in="media:listing-id";op=use_grinder;out="media:task-id"`
+	// Colons don't need quoting, so the canonical form won't have quotes
+	urn := `cap:in=media:listing-id;op=use_grinder;out=media:task-id`
 	registryURL := buildRegistryURL(urn)
 
 	// URL should be parseable
@@ -115,9 +117,6 @@ func TestURLFormatIsValid(t *testing.T) {
 
 	// Host should be capns.org
 	assert.Equal(t, "capns.org", parsed.Host, "Host must be capns.org")
-
-	// Raw URL string should contain encoded quotes
-	assert.Contains(t, registryURL, "%22", "URL must contain encoded quotes")
 
 	// Raw URL string should start with the correct base
 	assert.True(t, strings.HasPrefix(registryURL, RegistryBaseURL+"/cap:"), "URL must start with base URL and /cap:")

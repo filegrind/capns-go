@@ -27,7 +27,8 @@ func testUrnWithIO(inSpec, outSpec, tags string) string {
 }
 
 func TestCapUrnCreation(t *testing.T) {
-	capUrn, err := NewCapUrnFromString(testUrn("op=transform;format=json;data_processing"))
+	// Use key=value pairs instead of flags
+	capUrn, err := NewCapUrnFromString(testUrn("op=transform;format=json;type=data_processing"))
 
 	assert.NoError(t, err)
 	assert.NotNil(t, capUrn)
@@ -95,9 +96,9 @@ func TestCanonicalStringFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should be sorted alphabetically with in/out in their sorted positions
-	// Media URNs in in/out are quoted because they contain semicolons
+	// Media URNs with semicolons (like MediaObject) need quoting, but simple ones (like MediaVoid) don't
 	// Alphabetical order: ext < in < op < out < target
-	assert.Equal(t, `cap:ext=pdf;in="`+MediaVoid+`";op=generate;out="`+MediaObject+`";target=thumbnail`, capUrn.ToString())
+	assert.Equal(t, `cap:ext=pdf;in=`+MediaVoid+`;op=generate;out="`+MediaObject+`";target=thumbnail`, capUrn.ToString())
 }
 
 func TestCapPrefixRequired(t *testing.T) {
@@ -642,14 +643,14 @@ func TestInvalidEscapeSequenceError(t *testing.T) {
 
 func TestSerializationSmartQuoting(t *testing.T) {
 	// Simple lowercase value - no quoting needed (but media URNs in in/out are quoted)
-	// MediaVoid has no coercion tags, MediaObject has ;textable;keyed
+	// MediaVoid has no coercion tags (no quotes needed), MediaObject has ;textable;keyed (quotes needed)
 	cap, err := NewCapUrnBuilder().
 		InSpec(MediaVoid).
 		OutSpec(MediaObject).
 		Tag("key", "simple").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in="media:void";key=simple;out="media:object;textable;keyed"`, cap.ToString())
+	assert.Equal(t, `cap:in=media:void;key=simple;out="`+MediaObject+`"`, cap.ToString())
 
 	// Value with spaces - needs quoting
 	cap2, err := NewCapUrnBuilder().
@@ -658,7 +659,7 @@ func TestSerializationSmartQuoting(t *testing.T) {
 		Tag("key", "has spaces").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in="media:void";key="has spaces";out="media:object;textable;keyed"`, cap2.ToString())
+	assert.Equal(t, `cap:in=media:void;key="has spaces";out="`+MediaObject+`"`, cap2.ToString())
 
 	// Value with uppercase - needs quoting to preserve
 	cap4, err := NewCapUrnBuilder().
@@ -667,7 +668,7 @@ func TestSerializationSmartQuoting(t *testing.T) {
 		Tag("key", "HasUpper").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in="media:void";key="HasUpper";out="media:object;textable;keyed"`, cap4.ToString())
+	assert.Equal(t, `cap:in=media:void;key="HasUpper";out="`+MediaObject+`"`, cap4.ToString())
 }
 
 func TestRoundTripSimple(t *testing.T) {

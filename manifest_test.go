@@ -209,8 +209,8 @@ func (tc *testComponent) Caps() []Cap {
 }
 
 func TestComponentMetadataInterface(t *testing.T) {
-
-	id, err := NewCapUrnFromString(manifestTestUrn("op=test;component"))
+	// Use type=component key=value instead of component flag
+	id, err := NewCapUrnFromString(manifestTestUrn("op=test;type=component"))
 	require.NoError(t, err)
 	cap := NewCap(id, "Test Component", "test")
 
