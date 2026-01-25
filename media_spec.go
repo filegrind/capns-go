@@ -119,6 +119,7 @@ type MediaSpecDefObject struct {
 	Title       string               `json:"title,omitempty"`
 	Description string               `json:"description,omitempty"`
 	Validation  *ArgumentValidation  `json:"validation,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // MediaSpecDef represents a media spec definition - can be string (compact) or object (rich)
