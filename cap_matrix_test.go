@@ -63,13 +63,11 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 		t.Errorf("Expected 1 host, got %d", len(sets))
 	}
 
-	// Test subset match (request has more specific requirements)
-	sets, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
-	if err != nil {
-		t.Fatalf("Failed to find cap sets for subset match: %v", err)
-	}
-	if len(sets) != 1 {
-		t.Errorf("Expected 1 host for subset match, got %d", len(sets))
+	// Test that request with extra tags doesn't match (new semantics)
+	// Under new semantics: pattern has model=gpt-4, instance lacks model -> NO MATCH
+	_, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
+	if err == nil {
+		t.Error("Expected no match when pattern has extra exact values not in instance")
 	}
 
 	// Test no match (different direction specs)
@@ -82,9 +80,9 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 func TestBestCapSetSelection(t *testing.T) {
 	registry := NewCapMatrix()
 
-	// Register general host
+	// Register general host with explicit wildcards for flexibility
 	generalHost := &MockCapSetForRegistry{name: "general"}
-	generalCapUrn, _ := NewCapUrnFromString(matrixTestUrn("op=generate"))
+	generalCapUrn, _ := NewCapUrnFromString(matrixTestUrn("model=*;op=generate;text=*"))
 	generalCap := &Cap{
 		Urn:            generalCapUrn,
 		CapDescription: stringPtr("General generation"),
@@ -109,8 +107,10 @@ func TestBestCapSetSelection(t *testing.T) {
 	registry.RegisterCapSet("general", generalHost, []*Cap{generalCap})
 	registry.RegisterCapSet("specific", specificHost, []*Cap{specificCap})
 
-	// Request should match the more specific host
-	bestHost, bestCap, err := registry.FindBestCapSet(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;text"))
+	// Request for specific model - both match but specific wins due to higher specificity
+	// General: model=* (2), op=generate (3), text=* (2) = 7 + in/out (6) = 13
+	// Specific: model=gpt-4 (3), op=generate (3), text (2) = 8 + in/out (6) = 14
+	bestHost, bestCap, err := registry.FindBestCapSet(matrixTestUrn("model=gpt-4;op=generate;text"))
 	if err != nil {
 		t.Fatalf("Failed to find best cap host: %v", err)
 	}
@@ -123,8 +123,8 @@ func TestBestCapSetSelection(t *testing.T) {
 		t.Error("Expected a cap definition, got nil")
 	}
 
-	// Both sets should match
-	allHosts, err := registry.FindCapSets(matrixTestUrn("model=gpt-4;op=generate;temperature=0.7;text"))
+	// Both sets should match the request
+	allHosts, err := registry.FindCapSets(matrixTestUrn("model=gpt-4;op=generate;text"))
 	if err != nil {
 		t.Fatalf("Failed to find all matching sets: %v", err)
 	}
@@ -174,8 +174,10 @@ func TestCanHandle(t *testing.T) {
 	if !registry.CanHandle(matrixTestUrn("op=test")) {
 		t.Error("Registry should handle registered capability")
 	}
-	if !registry.CanHandle(matrixTestUrn("extra=param;op=test")) {
-		t.Error("Registry should handle capability with extra parameters")
+	// Under new semantics: extra=param in pattern requires instance to have it
+	// Instance doesn't have extra, so NO MATCH
+	if registry.CanHandle(matrixTestUrn("extra=param;op=test")) {
+		t.Error("Registry should NOT handle capability when pattern has extra exact values")
 	}
 	if registry.CanHandle(matrixTestUrn("op=different")) {
 		t.Error("Registry should not handle unregistered capability")
@@ -240,14 +242,14 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 		t.Fatalf("Failed to find best cap set: %v", err)
 	}
 
-	// Plugin registry has specificity 4 (in, op, out, ext)
-	// Provider registry has specificity 3 (in, op, out)
+	// Plugin registry has specificity 12 (4 exact values * 3 points each)
+	// Provider registry has specificity 9 (3 exact values * 3 points each)
 	// Plugin should win even though providers were added first
 	if best.RegistryName != "plugins" {
 		t.Errorf("Expected plugins registry to win, got %s", best.RegistryName)
 	}
-	if best.Specificity != 4 {
-		t.Errorf("Expected specificity 4, got %d", best.Specificity)
+	if best.Specificity != 12 {
+		t.Errorf("Expected specificity 12, got %d", best.Specificity)
 	}
 	if best.Cap.Title != "Plugin PDF Thumbnail Generator (specific)" {
 		t.Errorf("Expected plugin cap title, got %s", best.Cap.Title)
@@ -346,7 +348,7 @@ func TestCapCubeNoMatch(t *testing.T) {
 
 func TestCapCubeFallbackScenario(t *testing.T) {
 	// Test the exact scenario from the user's issue:
-	// Provider: generic fallback (can handle any file type)
+	// Provider: generic fallback with ext=* (can handle any file type)
 	// Plugin:   PDF-specific handler
 	// Request:  PDF thumbnail
 	// Expected: Plugin wins (more specific)
@@ -354,10 +356,10 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	providerRegistry := NewCapMatrix()
 	pluginRegistry := NewCapMatrix()
 
-	// Provider with generic fallback (can handle any file type)
+	// Provider with generic fallback - uses ext=* to accept any extension
 	providerHost := &MockCapSetForRegistry{name: "provider_fallback"}
 	providerCap := makeCap(
-		`cap:in="media:binary";op=generate_thumbnail;out="media:binary"`,
+		`cap:ext=*;in="media:binary";op=generate_thumbnail;out="media:binary"`,
 		"Generic Thumbnail Provider",
 	)
 	providerRegistry.RegisterCapSet("provider_fallback", providerHost, []*Cap{providerCap})
@@ -382,25 +384,26 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 		t.Fatalf("Failed to find best cap set: %v", err)
 	}
 
-	// Plugin (specificity 4) should beat provider (specificity 3)
+	// Plugin (specificity 12: 4 exact * 3) should beat provider (specificity 11: 3 exact * 3 + 1 wildcard * 2)
 	if best.RegistryName != "plugins" {
 		t.Errorf("Expected plugins to win, got %s", best.RegistryName)
 	}
 	if best.Cap.Title != "PDF Thumbnail Plugin" {
 		t.Errorf("Expected PDF Thumbnail Plugin, got %s", best.Cap.Title)
 	}
-	if best.Specificity != 4 {
-		t.Errorf("Expected specificity 4, got %d", best.Specificity)
+	if best.Specificity != 12 {
+		t.Errorf("Expected specificity 12, got %d", best.Specificity)
 	}
 
-	// Also test that for a different file type, provider wins
+	// Also test that for a different file type, provider wins (since plugin doesn't match ext=wav)
 	requestWav := `cap:ext=wav;in="media:binary";op=generate_thumbnail;out="media:binary"`
 	bestWav, err := composite.FindBestCapSet(requestWav)
 	if err != nil {
 		t.Fatalf("Failed to find best cap set for wav: %v", err)
 	}
 
-	// Only provider matches (plugin doesn't match ext=wav)
+	// Only provider matches (plugin has ext=pdf which doesn't match ext=wav)
+	// Provider has ext=* which matches any ext value
 	if bestWav.RegistryName != "providers" {
 		t.Errorf("Expected providers for wav request, got %s", bestWav.RegistryName)
 	}

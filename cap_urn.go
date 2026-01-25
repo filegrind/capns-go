@@ -1,6 +1,13 @@
 // Package capns provides the fundamental cap URN system used across
 // all FGND plugins and providers. It defines the formal structure for cap
-// identifiers with flat tag-based naming, wildcard support, and specificity comparison.
+// identifiers with flat tag-based naming, pattern matching, and graded specificity.
+//
+// Special pattern values (from tagged-urn):
+//   - K=v: Must have key K with exact value v
+//   - K=*: Must have key K with any value (presence required)
+//   - K=!: Must NOT have key K (absence required)
+//   - K=?: No constraint on key K
+//   - (missing): Same as K=? - no constraint
 //
 // Uses TaggedUrn for parsing to ensure consistency across implementations.
 package capns
@@ -343,56 +350,103 @@ func (c *CapUrn) WithoutTag(key string) *CapUrn {
 	return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
 }
 
-// Matches checks if this cap matches another based on tag compatibility
+// Matches checks if this cap (instance) matches a pattern based on tag compatibility
 //
-// Direction (in/out) is ALWAYS part of matching - they must match exactly or with wildcards.
-// For other tags:
-// - For each tag in the request: cap has same value, wildcard (*), or missing tag
-// - For each tag in the cap: if request is missing that tag, that's fine (cap is more specific)
-// Missing tags (except in/out) are treated as wildcards (less specific, can handle any value).
+// Per-tag matching semantics:
+//   - (missing) or K=?: no constraint - matches anything
+//   - K=!: must-not-have - instance must NOT have this key
+//   - K=*: must-have-any - instance must have this key with any value
+//   - K=v: must-have-exact - instance must have this key with exact value v
+//
+// Direction specs (in/out) follow the same matching rules.
+// Special values work symmetrically on both instance and pattern sides.
 func (c *CapUrn) Matches(request *CapUrn) bool {
 	if request == nil {
 		return true
 	}
 
-	// Direction specs must match (wildcards allowed)
-	// Check inSpec
-	if c.inSpec != "*" && request.inSpec != "*" && c.inSpec != request.inSpec {
+	// Check direction specs using valuesMatch
+	if !valuesMatch(&c.inSpec, &request.inSpec) {
+		return false
+	}
+	if !valuesMatch(&c.outSpec, &request.outSpec) {
 		return false
 	}
 
-	// Check outSpec
-	if c.outSpec != "*" && request.outSpec != "*" && c.outSpec != request.outSpec {
-		return false
+	// Collect all tag keys from both instance and pattern
+	allKeys := make(map[string]bool)
+	for key := range c.tags {
+		allKeys[key] = true
+	}
+	for key := range request.tags {
+		allKeys[key] = true
 	}
 
-	// Check all other tags that the request specifies
-	for requestKey, requestValue := range request.tags {
-		capValue, exists := c.tags[requestKey]
-		if !exists {
-			// Missing tag in cap is treated as wildcard - can handle any value
-			continue
+	// Check each tag using the valuesMatch logic
+	for key := range allKeys {
+		instVal, instExists := c.tags[key]
+		pattVal, pattExists := request.tags[key]
+
+		var inst, patt *string
+		if instExists {
+			inst = &instVal
+		}
+		if pattExists {
+			patt = &pattVal
 		}
 
-		if capValue == "*" {
-			// Cap has wildcard - can handle any value
-			continue
-		}
-
-		if requestValue == "*" {
-			// Request accepts any value - cap's specific value matches
-			continue
-		}
-
-		if capValue != requestValue {
-			// Cap has specific value that doesn't match request's specific value
+		if !valuesMatch(inst, patt) {
 			return false
 		}
 	}
-
-	// If cap has additional specific tags that request doesn't specify, that's fine
-	// The cap is just more specific than needed
 	return true
+}
+
+// valuesMatch checks if instance value matches pattern constraint
+// Uses the same semantics as tagged-urn matching
+func valuesMatch(inst, patt *string) bool {
+	// Pattern has no constraint (no entry or explicit ?)
+	if patt == nil || *patt == "?" {
+		return true
+	}
+
+	// Instance doesn't care (explicit ?)
+	if inst != nil && *inst == "?" {
+		return true
+	}
+
+	// Pattern: must-not-have (!)
+	if *patt == "!" {
+		if inst == nil {
+			return true // Instance absent, pattern wants absent
+		}
+		if *inst == "!" {
+			return true // Both say absent
+		}
+		return false // Instance has value, pattern wants absent
+	}
+
+	// Instance: must-not-have conflicts with pattern wanting value
+	if inst != nil && *inst == "!" {
+		return false // Conflict: absent vs value or present
+	}
+
+	// Pattern: must-have-any (*)
+	if *patt == "*" {
+		if inst == nil {
+			return false // Instance missing, pattern wants present
+		}
+		return true // Instance has value, pattern wants any
+	}
+
+	// Pattern: exact value
+	if inst == nil {
+		return false // Instance missing, pattern wants value
+	}
+	if *inst == "*" {
+		return true // Instance accepts any, pattern's value is fine
+	}
+	return *inst == *patt // Both have values, must match exactly
 }
 
 // CanHandle checks if this cap can handle a request
@@ -400,25 +454,38 @@ func (c *CapUrn) CanHandle(request *CapUrn) bool {
 	return c.Matches(request)
 }
 
-// Specificity returns the specificity score for cap matching
-// More specific caps have higher scores and are preferred
-// Includes direction specs (in/out) in the count
+// Specificity returns the specificity score for cap matching using graded scoring.
+// More specific caps have higher scores and are preferred.
+//
+// Graded scoring:
+//   - Exact value (K=v): 3 points (most specific)
+//   - Must-have-any (K=*): 2 points
+//   - Must-not-have (K=!): 1 point
+//   - Unspecified (K=?) or missing: 0 points (least specific)
 func (c *CapUrn) Specificity() int {
-	// Count non-wildcard direction specs
-	count := 0
-	if c.inSpec != "*" {
-		count++
-	}
-	if c.outSpec != "*" {
-		count++
-	}
-	// Count non-wildcard tags
+	score := 0
+	// Score direction specs
+	score += valueScore(c.inSpec)
+	score += valueScore(c.outSpec)
+	// Score other tags
 	for _, value := range c.tags {
-		if value != "*" {
-			count++
-		}
+		score += valueScore(value)
 	}
-	return count
+	return score
+}
+
+// valueScore returns the graded specificity score for a single value
+func valueScore(value string) int {
+	switch value {
+	case "?":
+		return 0
+	case "!":
+		return 1
+	case "*":
+		return 2
+	default:
+		return 3 // exact value
+	}
 }
 
 // IsMoreSpecificThan checks if this cap is more specific than another
