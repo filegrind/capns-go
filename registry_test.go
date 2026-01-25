@@ -79,7 +79,7 @@ func buildRegistryURL(urn string) string {
 	}
 	tagsPart := strings.TrimPrefix(normalizedUrn, "cap:")
 	encodedTags := url.PathEscape(tagsPart)
-	return fmt.Sprintf("%s/cap:%s", RegistryBaseURL, encodedTags)
+	return fmt.Sprintf("%s/cap:%s", DefaultRegistryBaseURL, encodedTags)
 }
 
 // TestURLKeepsCapPrefixLiteral tests that "cap:" is NOT URL-encoded
@@ -119,7 +119,7 @@ func TestURLFormatIsValid(t *testing.T) {
 	assert.Equal(t, "capns.org", parsed.Host, "Host must be capns.org")
 
 	// Raw URL string should start with the correct base
-	assert.True(t, strings.HasPrefix(registryURL, RegistryBaseURL+"/cap:"), "URL must start with base URL and /cap:")
+	assert.True(t, strings.HasPrefix(registryURL, DefaultRegistryBaseURL+"/cap:"), "URL must start with base URL and /cap:")
 }
 
 // TestNormalizeHandlesDifferentTagOrders tests that different tag orders normalize to the same URL

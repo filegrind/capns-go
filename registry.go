@@ -15,10 +15,59 @@ import (
 )
 
 const (
-	RegistryBaseURL       = "https://capns.org"
-	CacheDurationHours    = 24
-	HTTPTimeoutSeconds    = 10
+	DefaultRegistryBaseURL = "https://capns.org"
+	CacheDurationHours     = 24
+	HTTPTimeoutSeconds     = 10
 )
+
+// RegistryConfig holds configuration for the registry client
+type RegistryConfig struct {
+	RegistryBaseURL string
+	SchemaBaseURL   string
+}
+
+// DefaultRegistryConfig returns config from environment variables or defaults
+//
+// Environment variables:
+//   - CAPNS_REGISTRY_URL: Base URL for the registry (default: https://capns.org)
+//   - CAPNS_SCHEMA_BASE_URL: Base URL for schemas (default: {registry_url}/schema)
+func DefaultRegistryConfig() RegistryConfig {
+	registryBase := os.Getenv("CAPNS_REGISTRY_URL")
+	if registryBase == "" {
+		registryBase = DefaultRegistryBaseURL
+	}
+
+	schemaBase := os.Getenv("CAPNS_SCHEMA_BASE_URL")
+	if schemaBase == "" {
+		schemaBase = registryBase + "/schema"
+	}
+
+	return RegistryConfig{
+		RegistryBaseURL: registryBase,
+		SchemaBaseURL:   schemaBase,
+	}
+}
+
+// RegistryOption is a functional option for configuring the registry
+type RegistryOption func(*RegistryConfig)
+
+// WithRegistryURL sets a custom registry URL
+func WithRegistryURL(url string) RegistryOption {
+	return func(c *RegistryConfig) {
+		// If schema URL was derived from the old registry URL, update it
+		if c.SchemaBaseURL == c.RegistryBaseURL+"/schema" {
+			c.SchemaBaseURL = url + "/schema"
+		}
+		c.RegistryBaseURL = url
+	}
+}
+
+// WithSchemaURL sets a custom schema base URL
+func WithSchemaURL(url string) RegistryOption {
+	return func(c *RegistryConfig) {
+		c.SchemaBaseURL = url
+	}
+}
 
 // CacheEntry represents a cached cap definition
 type CacheEntry struct {
@@ -96,10 +145,24 @@ type CapRegistry struct {
 	cacheDir   string
 	cachedCaps map[string]*Cap
 	mutex      sync.RWMutex
+	config     RegistryConfig
 }
 
 // NewCapRegistry creates a new registry client
-func NewCapRegistry() (*CapRegistry, error) {
+//
+// Accepts optional RegistryOption functions to configure the registry.
+// Without options, uses environment variables or defaults.
+//
+// Example:
+//
+//	registry, err := NewCapRegistry()  // Uses env vars or defaults
+//	registry, err := NewCapRegistry(WithRegistryURL("https://my-registry.com"))
+func NewCapRegistry(opts ...RegistryOption) (*CapRegistry, error) {
+	config := DefaultRegistryConfig()
+	for _, opt := range opts {
+		opt(&config)
+	}
+
 	cacheDir, err := getCacheDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine cache directory: %w", err)
@@ -123,7 +186,13 @@ func NewCapRegistry() (*CapRegistry, error) {
 		client:     client,
 		cacheDir:   cacheDir,
 		cachedCaps: cachedCaps,
+		config:     config,
 	}, nil
+}
+
+// Config returns the current registry configuration
+func (r *CapRegistry) Config() RegistryConfig {
+	return r.config
 }
 
 // GetCap gets a cap from in-memory cache or fetch from registry
@@ -325,7 +394,7 @@ func (r *CapRegistry) fetchFromRegistry(urn string) (*Cap, error) {
 	// URL-encode only the tags part (after "cap:") while keeping "cap:" literal
 	tagsPart := strings.TrimPrefix(normalizedUrn, "cap:")
 	encodedTags := url.PathEscape(tagsPart)
-	registryURL := fmt.Sprintf("%s/cap:%s", RegistryBaseURL, encodedTags)
+	registryURL := fmt.Sprintf("%s/cap:%s", r.config.RegistryBaseURL, encodedTags)
 	resp, err := r.client.Get(registryURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from registry: %w", err)

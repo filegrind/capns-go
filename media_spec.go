@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	taggedurn "github.com/fgrnd/tagged-urn-go"
@@ -52,7 +53,7 @@ const (
 	MediaYaml = "media:yaml;textable;keyed"
 )
 
-// Profile URL constants
+// Profile URL constants (defaults, use GetSchemaBase() for configurable version)
 const (
 	SchemaBase       = "https://capns.org/schema"
 	ProfileStr       = "https://capns.org/schema/str"
@@ -84,6 +85,31 @@ const (
 	ProfileJson = "https://capns.org/schema/json"
 	ProfileYaml = "https://capns.org/schema/yaml"
 )
+
+// GetSchemaBase returns the schema base URL from environment variables or default
+//
+// Checks in order:
+//  1. CAPNS_SCHEMA_BASE_URL environment variable
+//  2. CAPNS_REGISTRY_URL environment variable + "/schema"
+//  3. Default: "https://capns.org/schema"
+func GetSchemaBase() string {
+	if schemaURL := os.Getenv("CAPNS_SCHEMA_BASE_URL"); schemaURL != "" {
+		return schemaURL
+	}
+	if registryURL := os.Getenv("CAPNS_REGISTRY_URL"); registryURL != "" {
+		return registryURL + "/schema"
+	}
+	return SchemaBase
+}
+
+// GetProfileURL returns a profile URL for the given profile name
+//
+// Example:
+//
+//	url := GetProfileURL("str") // Returns "{schema_base}/str"
+func GetProfileURL(profileName string) string {
+	return GetSchemaBase() + "/" + profileName
+}
 
 // MediaSpecDefObject represents the rich object form of a media spec definition
 type MediaSpecDefObject struct {
