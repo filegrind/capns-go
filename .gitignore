@@ -51,3 +51,4 @@ temp/
 # Generated files (optional)
 # *.pb.go
 # bindata.go
+.ws/
