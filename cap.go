@@ -54,13 +54,12 @@ func (s *ArgSource) IsCliFlag() bool {
 
 // CapArg represents an argument definition with sources
 type CapArg struct {
-	MediaUrn       string              `json:"media_urn"`
-	Required       bool                `json:"required"`
-	Sources        []ArgSource         `json:"sources"`
-	ArgDescription string              `json:"arg_description,omitempty"`
-	Validation     *ArgumentValidation `json:"validation,omitempty"`
-	DefaultValue   any                 `json:"default_value,omitempty"`
-	Metadata       any                 `json:"metadata,omitempty"`
+	MediaUrn       string      `json:"media_urn"`
+	Required       bool        `json:"required"`
+	Sources        []ArgSource `json:"sources"`
+	ArgDescription string      `json:"arg_description,omitempty"`
+	DefaultValue   any         `json:"default_value,omitempty"`
+	Metadata       any         `json:"metadata,omitempty"`
 }
 
 // NewCapArg creates a new cap argument
@@ -176,10 +175,9 @@ func (a *CapArg) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error
 
 // CapOutput represents the output definition for a cap
 type CapOutput struct {
-	MediaUrn          string              `json:"media_urn"`
-	OutputDescription string              `json:"output_description"`
-	Validation        *ArgumentValidation `json:"validation,omitempty"`
-	Metadata          any                 `json:"metadata,omitempty"`
+	MediaUrn          string `json:"media_urn"`
+	OutputDescription string `json:"output_description"`
+	Metadata          any    `json:"metadata,omitempty"`
 }
 
 // Resolve resolves the output's media URN to a ResolvedMediaSpec
