@@ -100,7 +100,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 
 	schemaErr, ok := err.(*SchemaValidationError)
 	require.True(t, ok)
-	assert.Equal(t, "ArgumentValidation", schemaErr.Type)
+	assert.Equal(t, "MediaValidation", schemaErr.Type)
 	assert.Equal(t, "media:test-obj;textable;keyed", schemaErr.Argument)
 	assert.Contains(t, schemaErr.Details, "name")
 }

@@ -6,8 +6,8 @@ import (
 	"reflect"
 )
 
-// ArgumentValidation represents validation rules for cap arguments
-type ArgumentValidation struct {
+// MediaValidation represents validation rules for cap arguments
+type MediaValidation struct {
 	Min           *float64 `json:"min,omitempty"`
 	Max           *float64 `json:"max,omitempty"`
 	MinLength     *int     `json:"min_length,omitempty"`
@@ -244,32 +244,32 @@ func NewRegisteredBy(username string, registeredAt string) RegisteredBy {
 	}
 }
 
-// NewArgumentValidationNumericRange creates validation with numeric constraints
-func NewArgumentValidationNumericRange(min, max *float64) *ArgumentValidation {
-	return &ArgumentValidation{
+// NewMediaValidationNumericRange creates validation with numeric constraints
+func NewMediaValidationNumericRange(min, max *float64) *MediaValidation {
+	return &MediaValidation{
 		Min: min,
 		Max: max,
 	}
 }
 
-// NewArgumentValidationStringLength creates validation with string length constraints
-func NewArgumentValidationStringLength(minLength, maxLength *int) *ArgumentValidation {
-	return &ArgumentValidation{
+// NewMediaValidationStringLength creates validation with string length constraints
+func NewMediaValidationStringLength(minLength, maxLength *int) *MediaValidation {
+	return &MediaValidation{
 		MinLength: minLength,
 		MaxLength: maxLength,
 	}
 }
 
-// NewArgumentValidationPattern creates validation with pattern
-func NewArgumentValidationPattern(pattern string) *ArgumentValidation {
-	return &ArgumentValidation{
+// NewMediaValidationPattern creates validation with pattern
+func NewMediaValidationPattern(pattern string) *MediaValidation {
+	return &MediaValidation{
 		Pattern: &pattern,
 	}
 }
 
-// NewArgumentValidationAllowedValues creates validation with allowed values
-func NewArgumentValidationAllowedValues(values []string) *ArgumentValidation {
-	return &ArgumentValidation{
+// NewMediaValidationAllowedValues creates validation with allowed values
+func NewMediaValidationAllowedValues(values []string) *MediaValidation {
+	return &MediaValidation{
 		AllowedValues: values,
 	}
 }

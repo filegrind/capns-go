@@ -74,10 +74,10 @@ func NewUnresolvableMediaUrnErrorForValidation(capUrn, argumentName, mediaUrn st
 	}
 }
 
-// NewArgumentValidationFailedError creates an error for argument validation failures
-func NewArgumentValidationFailedError(capUrn, argumentName, rule string, actualValue interface{}) *ValidationError {
+// NewMediaValidationFailedError creates an error for media validation failures
+func NewMediaValidationFailedError(capUrn, argumentName, rule string, actualValue interface{}) *ValidationError {
 	return &ValidationError{
-		Type:         "ArgumentValidationFailed",
+		Type:         "MediaValidationFailed",
 		CapUrn:       capUrn,
 		ArgumentName: argumentName,
 		Rule:         rule,

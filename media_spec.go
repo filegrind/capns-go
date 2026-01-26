@@ -118,7 +118,7 @@ type MediaSpecDefObject struct {
 	Schema      interface{}          `json:"schema,omitempty"`
 	Title       string               `json:"title,omitempty"`
 	Description string               `json:"description,omitempty"`
-	Validation  *ArgumentValidation  `json:"validation,omitempty"`
+	Validation  *MediaValidation  `json:"validation,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -202,7 +202,7 @@ type ResolvedMediaSpec struct {
 	Schema      interface{}
 	Title       string
 	Description string
-	Validation  *ArgumentValidation
+	Validation  *MediaValidation
 	// Metadata contains arbitrary key-value pairs for display/categorization
 	Metadata    map[string]interface{}
 }

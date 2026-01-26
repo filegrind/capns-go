@@ -69,7 +69,7 @@ func TestMetadataWithValidation(t *testing.T) {
 				ProfileURI:  "https://example.com/schema",
 				Title:       "Bounded Number",
 				Description: "",
-				Validation: &ArgumentValidation{
+				Validation: &MediaValidation{
 					Min: &minVal,
 					Max: &maxVal,
 				},

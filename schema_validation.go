@@ -239,7 +239,7 @@ func (sv *SchemaValidator) validateValueAgainstSchema(name string, value interfa
 
 		if context == "argument" {
 			return &SchemaValidationError{
-				Type:     "ArgumentValidation",
+				Type:     "MediaValidation",
 				Argument: name,
 				Details:  strings.Join(errorDetails, "\n"),
 				Value:    value,
