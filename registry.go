@@ -346,17 +346,23 @@ func loadAllCachedCaps(cacheDir string) (map[string]*Cap, error) {
 		filePath := filepath.Join(cacheDir, file.Name())
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read cache file %s: %w", filePath, err)
+			fmt.Fprintf(os.Stderr, "[WARN] Failed to read cache file %s: %v\n", filePath, err)
+			continue
 		}
 
 		var entry CacheEntry
 		if err := json.Unmarshal(data, &entry); err != nil {
-			return nil, fmt.Errorf("failed to parse cache file %s: %w", filePath, err)
+			fmt.Fprintf(os.Stderr, "[WARN] Failed to parse cache file %s: %v\n", filePath, err)
+			// Try to remove the invalid cache file
+			os.Remove(filePath)
+			continue
 		}
 
 		if entry.isExpired() {
 			// Remove expired cache file
-			os.Remove(filePath)
+			if err := os.Remove(filePath); err != nil {
+				fmt.Fprintf(os.Stderr, "[WARN] Failed to remove expired cache file %s: %v\n", filePath, err)
+			}
 			continue
 		}
 
