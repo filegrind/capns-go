@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/fgrnd/tagged-urn-go"
+	"github.com/filegrind/tagged-urn-go"
 )
 
 // CapUrn represents a cap URN using flat, ordered tags with required direction specifiers

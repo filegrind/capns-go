@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
 // CapMatrixError represents errors that can occur during capability host operations
@@ -512,14 +514,25 @@ func (g *CapGraph) GetEdges() []CapGraphEdge {
 }
 
 // GetOutgoing returns all edges where the provided spec satisfies the edge's input requirement.
-// Uses satisfies-based matching: checks if spec can satisfy each edge's FromSpec requirement.
+// Uses TaggedUrn matching: checks if spec can satisfy each edge's FromSpec requirement.
 func (g *CapGraph) GetOutgoing(spec string) []*CapGraphEdge {
 	var edges []*CapGraphEdge
+
+	// Parse the provided spec
+	providedUrn, err := taggedurn.NewTaggedUrnFromString(spec)
+	if err != nil {
+		return edges // Invalid URN, return empty
+	}
 
 	// Iterate all edges and check which ones the provided spec satisfies
 	for i := range g.edges {
 		edge := &g.edges[i]
-		if MediaUrnSatisfies(spec, edge.FromSpec) {
+		requirementUrn, err := taggedurn.NewTaggedUrnFromString(edge.FromSpec)
+		if err != nil {
+			continue // Invalid requirement URN, skip
+		}
+		matches, err := providedUrn.Matches(requirementUrn)
+		if err == nil && matches {
 			edges = append(edges, edge)
 		}
 	}

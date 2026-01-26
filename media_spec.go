@@ -17,7 +17,7 @@ import (
 	"os"
 	"strings"
 
-	taggedurn "github.com/fgrnd/tagged-urn-go"
+	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
 // Built-in media URN constants with coercion tags
@@ -203,6 +203,8 @@ type ResolvedMediaSpec struct {
 	Title       string
 	Description string
 	Validation  *ArgumentValidation
+	// Metadata contains arbitrary key-value pairs for display/categorization
+	Metadata    map[string]interface{}
 }
 
 // IsBinary returns true if the "binary" marker tag is present in the source media URN.
@@ -315,12 +317,14 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 			return nil, err
 		}
 		return &ResolvedMediaSpec{
-			SpecID:     specID,
-			MediaType:  parsed.MediaType,
-			ProfileURI: parsed.ProfileURI,
-			Schema:     nil,
-			Title:      "",
+			SpecID:      specID,
+			MediaType:   parsed.MediaType,
+			ProfileURI:  parsed.ProfileURI,
+			Schema:      nil,
+			Title:       "",
 			Description: "",
+			Validation:  nil,      // String form has no validation
+			Metadata:    nil,      // String form has no metadata
 		}, nil
 	}
 
@@ -336,6 +340,7 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 		Title:       def.ObjectValue.Title,
 		Description: def.ObjectValue.Description,
 		Validation:  def.ObjectValue.Validation,
+		Metadata:    def.ObjectValue.Metadata,    // Propagate metadata
 	}, nil
 }
 
@@ -561,69 +566,3 @@ func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs map[string]MediaSpecDef) (*R
 	}
 	return ResolveMediaUrn(outUrn, mediaSpecs)
 }
-
-// extractMediaUrnTag extracts a tag value from a media URN string
-// e.g., extractMediaUrnTag("media:image;ext=png", "type") returns "image"
-func extractMediaUrnTag(mediaUrn, tagName string) string {
-	prefix := tagName + "="
-	pos := strings.Index(mediaUrn, prefix)
-	if pos == -1 {
-		return ""
-	}
-
-	start := pos + len(prefix)
-	rest := mediaUrn[start:]
-	semicolonPos := strings.Index(rest, ";")
-	if semicolonPos == -1 {
-		return rest
-	}
-	return rest[:semicolonPos]
-}
-
-// MediaUrnSatisfies checks if a provided media URN satisfies another media URN's requirements.
-// Used for cap matching - checks if a provided media type can satisfy a cap's input requirement.
-//
-// Matching rules:
-// - Type must match (e.g., "image" != "binary")
-// - Extension must match if specified in requirement
-// - Version must match if specified in requirement
-func MediaUrnSatisfies(providedUrn, requirementUrn string) bool {
-	if providedUrn == "" || requirementUrn == "" {
-		return false
-	}
-
-	// Extract type from both URNs
-	providedType := extractMediaUrnTag(providedUrn, "type")
-	requiredType := extractMediaUrnTag(requirementUrn, "type")
-
-	// Type must match if required
-	if requiredType != "" {
-		if providedType == "" || providedType != requiredType {
-			return false
-		}
-	}
-
-	// Extension must match if specified in requirement
-	requiredExt := extractMediaUrnTag(requirementUrn, "ext")
-	if requiredExt != "" {
-		providedExt := extractMediaUrnTag(providedUrn, "ext")
-		if providedExt == "" || providedExt != requiredExt {
-			return false
-		}
-	}
-
-	// Version must match if specified in requirement
-	requiredVersion := extractMediaUrnTag(requirementUrn, "v")
-	if requiredVersion != "" {
-		providedVersion := extractMediaUrnTag(providedUrn, "v")
-		if providedVersion == "" || providedVersion != requiredVersion {
-			return false
-		}
-	}
-
-	return true
-}
-
-// Legacy compatibility shim - REMOVED
-// The old MediaSpec type that required content-type: prefix is gone.
-// Use ParsedMediaSpec and ResolvedMediaSpec instead.

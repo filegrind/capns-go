@@ -2,12 +2,12 @@ module schema-example
 
 go 1.21
 
-replace github.com/fgrnd/cap-sdk-go => ../
+replace github.com/filegrind/cap-sdk-go => ../
 
 replace github.com/jowharshamshiri/fgrnd-plugin-sdk-go => ../../fgrnd-plugin-sdk-go
 
 require (
-	github.com/fgrnd/cap-sdk-go v0.0.0-00010101000000-000000000000
+	github.com/filegrind/cap-sdk-go v0.0.0-00010101000000-000000000000
 	github.com/jowharshamshiri/fgrnd-plugin-sdk-go v0.0.0-00010101000000-000000000000
 )
 

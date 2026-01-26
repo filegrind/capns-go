@@ -1,14 +1,14 @@
-module github.com/fgrnd/cap-sdk-go
+module github.com/filegrind/cap-sdk-go
 
 go 1.21
 
 require (
-	github.com/fgrnd/tagged-urn-go v0.0.0
+	github.com/filegrind/tagged-urn-go v0.0.0
 	github.com/stretchr/testify v1.8.4
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 
-replace github.com/fgrnd/tagged-urn-go => ../tagged-urn-go
+replace github.com/filegrind/tagged-urn-go => ../tagged-urn-go
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
