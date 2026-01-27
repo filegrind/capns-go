@@ -39,6 +39,13 @@ const (
 	MediaAudio = "media:wav;audio;binary;"
 	MediaVideo = "media:video;binary"
 	MediaText  = "media:text;textable"
+	// Semantic AI input types
+	MediaImageVisualEmbedding = "media:image;png;binary;visual-embedding-source"
+	MediaImageCaptioning      = "media:image;png;binary;captioning-source"
+	MediaImageVisionQuery     = "media:image;png;binary;vision-query-source"
+	MediaAudioSpeech          = "media:audio;wav;binary;speech"
+	MediaTextEmbedding        = "media:text;textable;scalar;embedding-source"
+	MediaImageThumbnail       = "media:image;png;binary;thumbnail"
 	// Document types (PRIMARY naming - type IS the format)
 	MediaPdf  = "media:pdf;binary"
 	MediaEpub = "media:epub;binary"
