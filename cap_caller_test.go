@@ -68,11 +68,19 @@ func TestCapCallerConvertToString(t *testing.T) {
 func TestCapCallerResolveOutputSpec(t *testing.T) {
 	mockHost := &MockCapSet{}
 
+	// Common mediaSpecs for resolution
+	mediaSpecs := map[string]MediaSpecDef{
+		"media:bytes":                 NewMediaSpecDefString("application/octet-stream"),
+		"media:textable;form=scalar":  NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+		MediaObject:                   NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+	}
+
 	// Test binary cap using the 'out' tag with media URN - use proper binary tag
 	binaryCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes"`)
 	require.NoError(t, err)
 
 	capDef := NewCap(binaryCapUrn, "Test Capability", "test-command")
+	capDef.SetMediaSpecs(mediaSpecs)
 	caller := NewCapCaller(`cap:in="media:void";op=generate;out="media:bytes"`, mockHost, capDef)
 
 	resolved, err := caller.resolveOutputSpec()
@@ -84,6 +92,7 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	require.NoError(t, err)
 
 	capDef2 := NewCap(textCapUrn, "Test Capability", "test-command")
+	capDef2.SetMediaSpecs(mediaSpecs)
 	caller2 := NewCapCaller(`cap:in="media:void";op=generate;out="media:textable;form=scalar"`, mockHost, capDef2)
 
 	resolved2, err := caller2.resolveOutputSpec()
@@ -96,17 +105,19 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	require.NoError(t, err)
 
 	capDef3 := NewCap(mapCapUrn, "Test Capability", "test-command")
+	capDef3.SetMediaSpecs(mediaSpecs)
 	caller3 := NewCapCaller(`cap:in="media:void";op=generate;out="`+MediaObject+`"`, mockHost, capDef3)
 
 	resolved3, err := caller3.resolveOutputSpec()
 	require.NoError(t, err)
 	assert.True(t, resolved3.IsMap())
 
-	// Test cap with unresolvable media URN - MUST FAIL
+	// Test cap with unresolvable media URN - MUST FAIL (no mediaSpecs entry)
 	badSpecCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:unknown"`)
 	require.NoError(t, err)
 
 	capDef5 := NewCap(badSpecCapUrn, "Test Capability", "test-command")
+	capDef5.SetMediaSpecs(mediaSpecs) // mediaSpecs provided but doesn't contain "media:unknown"
 	caller5 := NewCapCaller(`cap:in="media:void";op=generate;out="media:unknown"`, mockHost, capDef5)
 
 	_, err = caller5.resolveOutputSpec()
@@ -120,8 +131,15 @@ func TestCapCallerCall(t *testing.T) {
 	capUrn, err := NewCapUrnFromString(capUrnStr)
 	require.NoError(t, err)
 
+	// mediaSpecs for resolution
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+		MediaVoid:   NewMediaSpecDefString("application/x-void; profile=" + ProfileVoid),
+	}
+
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
 	capDef.SetOutput(NewCapOutput(MediaString, "Test output"))
+	capDef.SetMediaSpecs(mediaSpecs)
 
 	mockHost := &MockCapSet{
 		expectedCapUrn: capUrnStr,
@@ -149,7 +167,14 @@ func TestCapCallerWithArguments(t *testing.T) {
 	capUrn, err := NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable"`)
 	require.NoError(t, err)
 
+	// mediaSpecs for resolution - MediaObject = "media:form=map;textable"
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	}
+
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
+	capDef.SetMediaSpecs(mediaSpecs)
 	cliFlag := "--input"
 	pos := 0
 	capDef.AddArg(CapArg{
@@ -182,7 +207,13 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 	capUrn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes"`)
 	require.NoError(t, err)
 
+	// mediaSpecs for resolution - MediaBinary = "media:bytes"
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaBinary: NewMediaSpecDefString("application/octet-stream"),
+	}
+
 	capDef := NewCap(capUrn, "Generate Capability", "generate-command")
+	capDef.SetMediaSpecs(mediaSpecs)
 	capDef.SetOutput(NewCapOutput(MediaBinary, "Binary output"))
 
 	pngHeader := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
@@ -279,7 +310,13 @@ func TestCapCallerWithStdinSourceData(t *testing.T) {
 	capUrn, err := NewCapUrnFromString(capUrnStr)
 	require.NoError(t, err)
 
+	// mediaSpecs for resolution
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	}
+
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
+	capDef.SetMediaSpecs(mediaSpecs)
 	capDef.SetOutput(NewCapOutput(MediaString, "Process output"))
 
 	stdinData := []byte("test stdin content")
@@ -305,7 +342,13 @@ func TestCapCallerWithStdinSourceFileReference(t *testing.T) {
 	capUrn, err := NewCapUrnFromString(capUrnStr)
 	require.NoError(t, err)
 
+	// mediaSpecs for resolution
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	}
+
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
+	capDef.SetMediaSpecs(mediaSpecs)
 	capDef.SetOutput(NewCapOutput(MediaString, "Process output"))
 
 	mockHost := &MockCapSetWithStdinVerification{

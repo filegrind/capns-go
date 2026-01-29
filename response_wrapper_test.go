@@ -152,21 +152,33 @@ func TestResponseWrapperGetContentType(t *testing.T) {
 }
 
 func TestResponseWrapperMatchesOutputType(t *testing.T) {
+	// Common mediaSpecs for all caps - resolution requires this table
+	// Use the constant values directly since the cap URNs reference these specific media URN strings
+	mediaSpecs := map[string]MediaSpecDef{
+		"media:textable;form=scalar": NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+		"media:bytes":                NewMediaSpecDefString("application/octet-stream"),
+		"media:form=map;textable":    NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+		"media:void":                 NewMediaSpecDefString("application/x-void; profile=" + ProfileVoid),
+	}
+
 	// Setup cap definitions with media URNs - all need in/out with proper tags
 	stringCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable;form=scalar"`)
 	require.NoError(t, err)
 	stringCap := NewCap(stringCapUrn, "String Test", "test")
 	stringCap.SetOutput(NewCapOutput(MediaString, "String output"))
+	stringCap.SetMediaSpecs(mediaSpecs)
 
 	binaryCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:bytes"`)
 	require.NoError(t, err)
 	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
 	binaryCap.SetOutput(NewCapOutput(MediaBinary, "Binary output"))
+	binaryCap.SetMediaSpecs(mediaSpecs)
 
 	jsonCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
 	require.NoError(t, err)
 	jsonCap := NewCap(jsonCapUrn, "JSON Test", "test")
 	jsonCap.SetOutput(NewCapOutput(MediaObject, "JSON output"))
+	jsonCap.SetMediaSpecs(mediaSpecs)
 
 	// Test text response with string output type
 	textResponse := NewResponseWrapperFromText([]byte("test"))

@@ -147,6 +147,9 @@ func TestCapWithMediaSpecs(t *testing.T) {
 
 	cap := NewCap(id, "Query Structured Data", "query-cmd")
 
+	// Add media spec for MediaString (required for resolution)
+	cap.AddMediaSpec(MediaString, NewMediaSpecDefString("text/plain; profile="+ProfileStr))
+
 	// Add a custom media spec for the result type
 	cap.AddMediaSpec("media:result", NewMediaSpecDefObjectWithSchema(
 		"application/json",
@@ -159,7 +162,7 @@ func TestCapWithMediaSpecs(t *testing.T) {
 		},
 	))
 
-	// Add an argument using the built-in media URN with new architecture
+	// Add an argument using the media URN with new architecture
 	cliFlag := "--query"
 	pos := 0
 	cap.AddArg(CapArg{

@@ -100,6 +100,12 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
 	capDef.SetOutput(NewCapOutput(MediaObject, "Extracted metadata"))
 
+	// Add mediaSpecs for resolution
+	capDef.SetMediaSpecs(map[string]MediaSpecDef{
+		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	})
+
 	// Add required argument using new architecture
 	cliFlag := "--input"
 	pos := 0
@@ -156,6 +162,11 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 	capDef := NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
 	capDef.SetOutput(NewCapOutput(MediaBinary, "Generated thumbnail"))
 
+	// Add mediaSpecs for resolution
+	capDef.SetMediaSpecs(map[string]MediaSpecDef{
+		MediaBinary: NewMediaSpecDefString("application/octet-stream"),
+	})
+
 	// Mock host that returns binary data
 	pngHeader := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 	mockHost := &MockCapSet{
@@ -191,6 +202,11 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 
 	capDef := NewCap(urn, "Text Formatter", "format-text")
 	capDef.SetOutput(NewCapOutput(MediaString, "Formatted text"))
+
+	// Add mediaSpecs for resolution
+	capDef.SetMediaSpecs(map[string]MediaSpecDef{
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	})
 
 	// Add required argument using new architecture
 	cliFlag := "--input"
@@ -287,6 +303,12 @@ func TestIntegrationCapValidation(t *testing.T) {
 
 	capDef := NewCap(urn, "Data Processor", "process-data")
 
+	// Add mediaSpecs for resolution
+	capDef.SetMediaSpecs(map[string]MediaSpecDef{
+		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	})
+
 	// Add required string argument using new architecture
 	cliFlag1 := "--input"
 	pos1 := 0
@@ -314,8 +336,15 @@ func TestIntegrationCapValidation(t *testing.T) {
 
 // TestIntegrationMediaUrnResolution verifies media URN resolution
 func TestIntegrationMediaUrnResolution(t *testing.T) {
-	// Test built-in media URN resolution
-	resolved, err := ResolveMediaUrn(MediaString, nil)
+	// mediaSpecs for resolution - no built-in resolution, must provide specs
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+		MediaBinary: NewMediaSpecDefString("application/octet-stream"),
+	}
+
+	// Test string media URN resolution
+	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileStr, resolved.ProfileURI)
@@ -324,15 +353,15 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.True(t, resolved.IsText())
 
 	// Test object media URN - note: MediaObject is form=map, not explicit json tag
-	resolved, err = ResolveMediaUrn(MediaObject, nil)
+	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
-	assert.True(t, resolved.IsMap())       // form=map
+	assert.True(t, resolved.IsMap())        // form=map
 	assert.True(t, resolved.IsStructured()) // is_map || is_list
-	assert.False(t, resolved.IsJSON())     // no explicit json tag
+	assert.False(t, resolved.IsJSON())      // no explicit json tag
 
 	// Test binary media URN
-	resolved, err = ResolveMediaUrn(MediaBinary, nil)
+	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs)
 	require.NoError(t, err)
 	assert.True(t, resolved.IsBinary())
 

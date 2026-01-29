@@ -610,27 +610,39 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestBuiltinMediaUrnResolution(t *testing.T) {
-	// Test that built-in media URNs can be resolved
-	resolved, err := ResolveMediaUrn(MediaString, nil)
+func TestMediaUrnResolutionWithMediaSpecs(t *testing.T) {
+	// Media URN resolution requires a mediaSpecs table - no built-in fallback
+	// Test resolution with provided mediaSpecs
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaString:  NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+		MediaInteger: NewMediaSpecDefString("text/plain; profile=" + ProfileInt),
+		MediaObject:  NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+		MediaBinary:  NewMediaSpecDefString("application/octet-stream"),
+	}
+
+	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileStr, resolved.ProfileURI)
 
-	resolved, err = ResolveMediaUrn(MediaInteger, nil)
+	resolved, err = ResolveMediaUrn(MediaInteger, mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileInt, resolved.ProfileURI)
 
-	resolved, err = ResolveMediaUrn(MediaObject, nil)
+	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.Equal(t, ProfileObj, resolved.ProfileURI)
 
-	resolved, err = ResolveMediaUrn(MediaBinary, nil)
+	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "application/octet-stream", resolved.MediaType)
 	assert.True(t, resolved.IsBinary())
+
+	// Resolution fails without mediaSpecs
+	_, err = ResolveMediaUrn(MediaString, nil)
+	require.Error(t, err, "Resolution should fail without mediaSpecs")
 }
 
 func TestCustomMediaUrnResolution(t *testing.T) {
@@ -667,7 +679,7 @@ func TestCustomMediaUrnResolution(t *testing.T) {
 
 // TEST054: XV5 - Test inline media spec redefinition of existing registry spec is detected and rejected
 func TestXV5InlineSpecRedefinitionDetected(t *testing.T) {
-	// Try to redefine MediaString which is a built-in spec
+	// Try to redefine a media URN that exists in the registry
 	mediaSpecs := map[string]any{
 		MediaString: map[string]any{
 			"media_type": "text/plain",
@@ -675,16 +687,21 @@ func TestXV5InlineSpecRedefinitionDetected(t *testing.T) {
 		},
 	}
 
-	result := ValidateNoInlineMediaSpecRedefinition(mediaSpecs)
+	// Mock registry lookup that returns true for MediaString (it exists in registry)
+	mockRegistryLookup := func(mediaUrn string) bool {
+		return mediaUrn == MediaString
+	}
 
-	assert.False(t, result.Valid, "Should fail validation when redefining built-in spec")
+	result := ValidateNoInlineMediaSpecRedefinition(mediaSpecs, mockRegistryLookup)
+
+	assert.False(t, result.Valid, "Should fail validation when redefining registry spec")
 	assert.Contains(t, result.Error, "XV5", "Error should mention XV5")
 	assert.Contains(t, result.Redefines, MediaString, "Should identify MediaString as redefined")
 }
 
 // TEST055: XV5 - Test new inline media spec (not in registry) is allowed
 func TestXV5NewInlineSpecAllowed(t *testing.T) {
-	// Define a completely new media spec that doesn't exist in built-ins
+	// Define a completely new media spec that doesn't exist in registry
 	mediaSpecs := map[string]any{
 		"media:my-unique-custom-type-xyz123": map[string]any{
 			"media_type": "application/json",
@@ -692,19 +709,33 @@ func TestXV5NewInlineSpecAllowed(t *testing.T) {
 		},
 	}
 
-	result := ValidateNoInlineMediaSpecRedefinition(mediaSpecs)
+	// Mock registry lookup that returns false (spec not in registry)
+	mockRegistryLookup := func(mediaUrn string) bool {
+		return false
+	}
 
-	assert.True(t, result.Valid, "Should pass validation for new spec not in built-ins")
+	result := ValidateNoInlineMediaSpecRedefinition(mediaSpecs, mockRegistryLookup)
+
+	assert.True(t, result.Valid, "Should pass validation for new spec not in registry")
 	assert.Empty(t, result.Error, "Should not have error message")
 }
 
 // TEST056: XV5 - Test empty media_specs (no inline specs) passes XV5 validation
 func TestXV5EmptyMediaSpecsAllowed(t *testing.T) {
-	// Empty media_specs should pass
-	result := ValidateNoInlineMediaSpecRedefinition(map[string]any{})
+	// Empty media_specs should pass (with or without registry lookup)
+	result := ValidateNoInlineMediaSpecRedefinition(map[string]any{}, nil)
 	assert.True(t, result.Valid, "Empty map should pass validation")
 
 	// Nil media_specs should pass
-	result = ValidateNoInlineMediaSpecRedefinition(nil)
+	result = ValidateNoInlineMediaSpecRedefinition(nil, nil)
 	assert.True(t, result.Valid, "Nil should pass validation")
+
+	// Graceful degradation: nil lookup function should allow
+	mediaSpecs := map[string]any{
+		MediaString: map[string]any{
+			"media_type": "text/plain",
+		},
+	}
+	result = ValidateNoInlineMediaSpecRedefinition(mediaSpecs, nil)
+	assert.True(t, result.Valid, "Should pass when registry lookup not available (graceful degradation)")
 }

@@ -902,17 +902,27 @@ func NewInlineMediaSpecRedefinesRegistryError(mediaUrn string) *ValidationError 
 	}
 }
 
-// ValidateNoInlineMediaSpecRedefinition checks that inline media_specs don't redefine built-in specs (XV5)
-// This is the synchronous version that only checks against built-in specs
-func ValidateNoInlineMediaSpecRedefinition(mediaSpecs map[string]any) XV5ValidationResult {
+// MediaUrnExistsInRegistryFunc is a function that checks if a media URN exists in the registry
+// Returns true if the media URN exists in registry (cache or online), false otherwise
+// If the check fails (network error, etc.), should return false to allow graceful degradation
+type MediaUrnExistsInRegistryFunc func(mediaUrn string) bool
+
+// ValidateNoInlineMediaSpecRedefinition checks that inline media_specs don't redefine existing registry specs (XV5)
+// If existsInRegistry is nil, validation passes (graceful degradation - can't check)
+func ValidateNoInlineMediaSpecRedefinition(mediaSpecs map[string]any, existsInRegistry MediaUrnExistsInRegistryFunc) XV5ValidationResult {
 	if len(mediaSpecs) == 0 {
+		return XV5ValidationResult{Valid: true}
+	}
+
+	// If no registry check provided, degrade gracefully and allow
+	if existsInRegistry == nil {
 		return XV5ValidationResult{Valid: true}
 	}
 
 	var redefines []string
 	for mediaUrn := range mediaSpecs {
-		// Check if this media URN is a built-in spec
-		if IsBuiltinMediaUrn(mediaUrn) {
+		// Check if this media URN already exists in the registry
+		if existsInRegistry(mediaUrn) {
 			redefines = append(redefines, mediaUrn)
 		}
 	}
@@ -920,7 +930,7 @@ func ValidateNoInlineMediaSpecRedefinition(mediaSpecs map[string]any) XV5Validat
 	if len(redefines) > 0 {
 		return XV5ValidationResult{
 			Valid:     false,
-			Error:     fmt.Sprintf("XV5: Inline media specs redefine existing built-in specs: %v", redefines),
+			Error:     fmt.Sprintf("XV5: Inline media specs redefine existing registry specs: %v", redefines),
 			Redefines: redefines,
 		}
 	}

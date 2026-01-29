@@ -326,32 +326,24 @@ var (
 // NewUnresolvableMediaUrnError creates an error for unresolvable media URNs
 func NewUnresolvableMediaUrnError(mediaUrn string) error {
 	return &MediaSpecError{
-		Message: fmt.Sprintf("media URN '%s' cannot be resolved - not found in media_specs and not a built-in", mediaUrn),
+		Message: fmt.Sprintf("media URN '%s' cannot be resolved - not found in media_specs", mediaUrn),
 	}
 }
 
 // ResolveMediaUrn resolves a media URN to a ResolvedMediaSpec
-// Resolution order:
-// 1. Look up in provided media_specs map
-// 2. Check if it's a built-in primitive
-// 3. FAIL HARD if not found - no fallbacks
+// Resolution: Look up in provided media_specs map, FAIL HARD if not found
 func ResolveMediaUrn(mediaUrn string, mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
 	// Validate it's a media URN
 	if !strings.HasPrefix(mediaUrn, "media:") {
 		return nil, ErrInvalidMediaUrn
 	}
 
-	// First, try to look up in the provided media_specs
+	// Look up in the provided media_specs
 	if def, exists := mediaSpecs[mediaUrn]; exists {
 		return resolveMediaSpecDef(mediaUrn, &def)
 	}
 
-	// Second, check if it's a built-in primitive
-	if resolved := resolveBuiltin(mediaUrn); resolved != nil {
-		return resolved, nil
-	}
-
-	// FAIL HARD - no fallbacks
+	// FAIL HARD - media URN must be in media_specs
 	return nil, NewUnresolvableMediaUrnError(mediaUrn)
 }
 
@@ -416,74 +408,6 @@ func extractBaseType(mediaUrn string) string {
 		return typeVal
 	}
 	return ""
-}
-
-// resolveBuiltin resolves built-in media URNs by exact match against constants
-// Mirrors the Rust reference implementation exactly
-func resolveBuiltin(mediaUrn string) *ResolvedMediaSpec {
-	switch mediaUrn {
-	// Standard primitives
-	case MediaString:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileStr}
-	case MediaInteger:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileInt}
-	case MediaNumber:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileNum}
-	case MediaBoolean:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileBool}
-	case MediaObject:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObj}
-	case MediaStringArray:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileStrArray}
-	case MediaIntegerArray:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileIntArray}
-	case MediaNumberArray:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileNumArray}
-	case MediaBooleanArray:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileBoolArray}
-	case MediaObjectArray:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileObjArray}
-	case MediaBinary:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/octet-stream", ProfileURI: ""}
-	case MediaVoid:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-void", ProfileURI: ProfileVoid}
-	// Semantic content types
-	case MediaImage:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "image/png", ProfileURI: ProfileImage}
-	case MediaAudio:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "audio/wav", ProfileURI: ProfileAudio}
-	case MediaVideo:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "video/mp4", ProfileURI: ProfileVideo}
-	// Document types (PRIMARY naming)
-	case MediaPdf:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/pdf", ProfileURI: ProfilePdf}
-	case MediaEpub:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/epub+zip", ProfileURI: ProfileEpub}
-	// Text format types (PRIMARY naming)
-	case MediaMd:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/markdown", ProfileURI: ProfileMd}
-	case MediaTxt:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileTxt}
-	case MediaRst:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/x-rst", ProfileURI: ProfileRst}
-	case MediaLog:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileLog}
-	case MediaHtml:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/html", ProfileURI: ProfileHtml}
-	case MediaXml:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/xml", ProfileURI: ProfileXml}
-	case MediaJson:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/json", ProfileURI: ProfileJson}
-	case MediaYaml:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/x-yaml", ProfileURI: ProfileYaml}
-	default:
-		return nil
-	}
-}
-
-// IsBuiltinMediaUrn checks if a media URN is a built-in
-func IsBuiltinMediaUrn(mediaUrn string) bool {
-	return resolveBuiltin(mediaUrn) != nil
 }
 
 // ParsedMediaSpec represents a parsed media spec string (canonical form)
@@ -559,33 +483,54 @@ func parseProfile(params string) (string, error) {
 
 // GetTypeFromMediaUrn returns the base type (string, integer, number, boolean, object, binary, etc.) from a media URN
 // This is useful for validation to determine what Go type to expect
+// Determines type based on media URN tags: bytes->binary, form=map->object, form=list->array, etc.
 func GetTypeFromMediaUrn(mediaUrn string) string {
-	resolved := resolveBuiltin(mediaUrn)
-	if resolved == nil {
-		// For non-builtin media URNs, we need to resolve and check media type
+	// Parse the media URN to check tags
+	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
+	if err != nil {
 		return "unknown"
 	}
 
-	switch mediaUrn {
-	case MediaString:
-		return "string"
-	case MediaInteger:
-		return "integer"
-	case MediaNumber:
-		return "number"
-	case MediaBoolean:
-		return "boolean"
-	case MediaObject:
-		return "object"
-	case MediaStringArray, MediaIntegerArray, MediaNumberArray, MediaBooleanArray, MediaObjectArray:
-		return "array"
-	case MediaBinary:
+	// Check for binary (has "bytes" tag)
+	if _, ok := parsed.GetTag("bytes"); ok {
 		return "binary"
-	case MediaVoid:
-		return "void"
-	default:
-		return "unknown"
 	}
+
+	// Check for void
+	if _, ok := parsed.GetTag("void"); ok {
+		return "void"
+	}
+
+	// Check form tag for structure type
+	if form, ok := parsed.GetTag("form"); ok {
+		switch form {
+		case "map":
+			return "object"
+		case "list":
+			return "array"
+		case "scalar":
+			// Explicit scalar - check specific type tags below
+		}
+	}
+
+	// Check specific type tags (works regardless of whether form is specified)
+	if _, ok := parsed.GetTag("integer"); ok {
+		return "integer"
+	}
+	if _, ok := parsed.GetTag("numeric"); ok {
+		return "number"
+	}
+	if _, ok := parsed.GetTag("number"); ok {
+		return "number"
+	}
+	if _, ok := parsed.GetTag("bool"); ok {
+		return "boolean"
+	}
+	if _, ok := parsed.GetTag("textable"); ok {
+		return "string"
+	}
+
+	return "unknown"
 }
 
 // GetTypeFromResolvedMediaSpec determines the type from a resolved media spec

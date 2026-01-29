@@ -49,9 +49,11 @@ func TestMetadataNoneForStringDef(t *testing.T) {
 	assert.Nil(t, resolved.Metadata)
 }
 
-func TestMetadataNoneForBuiltin(t *testing.T) {
-	// Built-in media URNs should have no metadata
-	mediaSpecs := map[string]MediaSpecDef{}
+func TestMetadataNoneByDefault(t *testing.T) {
+	// Media URNs with simple string definitions should have no metadata
+	mediaSpecs := map[string]MediaSpecDef{
+		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	}
 	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs)
 	require.NoError(t, err)
 	assert.Nil(t, resolved.Metadata)

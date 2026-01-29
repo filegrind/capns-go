@@ -213,7 +213,7 @@ func (cc *CapCaller) capToCommand(cap string) string {
 // resolveOutputSpec resolves the output media URN from the cap URN's out spec.
 // This method fails hard if:
 // - The cap URN is invalid
-// - The media URN cannot be resolved (not in media_specs and not a built-in)
+// - The media URN cannot be resolved (not in media_specs)
 func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
 	capUrn, err := NewCapUrnFromString(cc.cap)
 	if err != nil {
@@ -226,7 +226,7 @@ func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
 	// Resolve the media URN using the cap definition's media_specs
 	resolved, err := ResolveMediaUrn(mediaUrn, cc.capDefinition.GetMediaSpecs())
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve output media URN '%s' for cap '%s': %w - check that media_specs contains this media URN or it is a built-in", mediaUrn, cc.cap, err)
+		return nil, fmt.Errorf("failed to resolve output media URN '%s' for cap '%s': %w - ensure media_specs contains this media URN", mediaUrn, cc.cap, err)
 	}
 	return resolved, nil
 }
