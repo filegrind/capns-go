@@ -23,32 +23,32 @@ import (
 // Built-in media URN constants with coercion tags
 const (
 	MediaVoid         = "media:void"
-	MediaString       = "media:string;textable;scalar"
-	MediaInteger      = "media:integer;textable;numeric;scalar"
-	MediaNumber       = "media:number;textable;numeric;scalar"
-	MediaBoolean      = "media:boolean;textable;scalar"
-	MediaObject       = "media:object;textable;keyed"
-	MediaBinary       = "media:raw;binary"
-	MediaStringArray  = "media:string-array;textable;sequence"
-	MediaIntegerArray = "media:integer-array;textable;numeric;sequence"
-	MediaNumberArray  = "media:number-array;textable;numeric;sequence"
-	MediaBooleanArray = "media:boolean-array;textable;sequence"
-	MediaObjectArray  = "media:object-array;textable;keyed;sequence"
+	MediaString       = "media:textable;form=scalar"
+	MediaInteger      = "media:integer;textable;numeric;form=scalar"
+	MediaNumber       = "media:number;textable;numeric;form=scalar"
+	MediaBoolean      = "media:boolean;textable;form=scalar"
+	MediaObject       = "media:object;textable;form=map"
+	MediaBinary       = "media:bytes"
+	MediaStringArray  = "media:string-array;textable;form=list"
+	MediaIntegerArray = "media:integer-array;textable;numeric;form=list"
+	MediaNumberArray  = "media:number-array;textable;numeric;form=list"
+	MediaBooleanArray = "media:boolean-array;textable;form=list"
+	MediaObjectArray  = "media:object-array;textable;form=list"
 	// Semantic content types
-	MediaImage = "media:png;binary"
-	MediaAudio = "media:wav;audio;binary;"
-	MediaVideo = "media:video;binary"
-	MediaText  = "media:text;textable"
+	MediaImage = "media:png;bytes"
+	MediaAudio = "media:wav;audio;bytes;"
+	MediaVideo = "media:video;bytes"
+	MediaText  = "media:textable"
 	// Semantic AI input types
-	MediaImageVisualEmbedding = "media:image;png;binary;visual-embedding-source"
-	MediaImageCaptioning      = "media:image;png;binary;captioning-source"
-	MediaImageVisionQuery     = "media:image;png;binary;vision-query-source"
-	MediaAudioSpeech          = "media:audio;wav;binary;speech"
-	MediaTextEmbedding        = "media:text;textable;scalar;embedding-source"
-	MediaImageThumbnail       = "media:image;png;binary;thumbnail"
+	MediaImageVisualEmbedding = "media:image;png;bytes"
+	MediaImageCaptioning      = "media:image;png;bytes"
+	MediaImageVisionQuery     = "media:image;png;bytes"
+	MediaAudioSpeech          = "media:audio;wav;bytes;speech"
+	MediaTextEmbedding        = "media:image;png;bytes"
+	MediaImageThumbnail       = "media:image;png;bytes;thumbnail"
 	// Document types (PRIMARY naming - type IS the format)
-	MediaPdf  = "media:pdf;binary"
-	MediaEpub = "media:epub;binary"
+	MediaPdf  = "media:pdf;bytes"
+	MediaEpub = "media:epub;bytes"
 	// Text format types (PRIMARY naming - type IS the format)
 	MediaMd   = "media:md;textable"
 	MediaTxt  = "media:txt;textable"
@@ -56,8 +56,8 @@ const (
 	MediaLog  = "media:log;textable"
 	MediaHtml = "media:html;textable"
 	MediaXml  = "media:xml;textable"
-	MediaJson = "media:json;textable;keyed"
-	MediaYaml = "media:yaml;textable;keyed"
+	MediaJson = "media:json;textable;form=map"
+	MediaYaml = "media:yaml;textable;form=map"
 )
 
 // Profile URL constants (defaults, use GetSchemaBase() for configurable version)
@@ -219,9 +219,9 @@ func (r *ResolvedMediaSpec) IsBinary() bool {
 	return HasMediaUrnTag(r.SpecID, "binary")
 }
 
-// IsJSON returns true if the "keyed" marker tag is present in the source media URN.
+// IsJSON returns true if the "form=map" marker tag is present in the source media URN.
 func (r *ResolvedMediaSpec) IsJSON() bool {
-	return HasMediaUrnTag(r.SpecID, "keyed")
+	return HasMediaUrnTag(r.SpecID, "form=map")
 }
 
 // IsText returns true if the "textable" marker tag is present in the source media URN.
@@ -229,7 +229,7 @@ func (r *ResolvedMediaSpec) IsText() bool {
 	return HasMediaUrnTag(r.SpecID, "textable")
 }
 
-// HasMediaUrnTag checks if a media URN has a marker tag (e.g., binary, keyed, textable).
+// HasMediaUrnTag checks if a media URN has a marker tag (e.g., binary, form=map, textable).
 // Uses tagged-urn parsing for proper tag detection.
 func HasMediaUrnTag(mediaUrn, tagName string) bool {
 	if mediaUrn == "" {
@@ -352,7 +352,7 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 }
 
 // extractBaseType extracts the base type identifier from a media URN
-// e.g., "media:string;textable;scalar" -> "string"
+// e.g., "media:textable;form=scalar" -> "string"
 func extractBaseType(mediaUrn string) string {
 	if !strings.HasPrefix(mediaUrn, "media:") {
 		return ""

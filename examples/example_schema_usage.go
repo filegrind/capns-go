@@ -12,7 +12,7 @@ func main() {
 	// Example 1: Create capability with embedded schema
 	fmt.Println("=== Example 1: Basic Schema Validation ===")
 
-	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:object;textable;keyed";target=structured`)
+	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:textable;form=map";target=structured`)
 	cap := capns.NewCap(urn, "Query Command", "query-command")
 
 	// Define JSON schema for user data
@@ -37,7 +37,7 @@ func main() {
 	}
 
 	// Add custom media spec with schema
-	cap.AddMediaSpec("media:user;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:user;textable;form=map", capns.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/user",
 		userSchema,
@@ -47,7 +47,7 @@ func main() {
 	cliFlag := "--user"
 	pos := 0
 	userArg := capns.CapArg{
-		MediaUrn:       "media:user;textable;keyed",
+		MediaUrn:       "media:user;textable;form=map",
 		Required:       true,
 		Sources:        []capns.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "User data",
@@ -125,13 +125,13 @@ func main() {
 	}
 
 	// Add custom media spec for output with schema
-	cap.AddMediaSpec("media:query-result;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:query-result;textable;form=map", capns.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-result",
 		outputSchema,
 	))
 
-	output := capns.NewCapOutput("media:query-result;textable;keyed", "Query results")
+	output := capns.NewCapOutput("media:query-result;textable;form=map", "Query results")
 	cap.SetOutput(output)
 
 	// Valid output
@@ -198,7 +198,7 @@ func main() {
 	}
 
 	// Add custom media spec for array with schema
-	cap.AddMediaSpec("media:items;textable;keyed", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:items;textable;form=map", capns.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/items",
 		arraySchema,
@@ -207,7 +207,7 @@ func main() {
 	cliFlag2 := "--items"
 	pos2 := 1
 	itemsArg := capns.CapArg{
-		MediaUrn:       "media:items;textable;keyed",
+		MediaUrn:       "media:items;textable;form=map",
 		Required:       false,
 		Sources:        []capns.ArgSource{{CliFlag: &cliFlag2}, {Position: &pos2}},
 		ArgDescription: "List of items",

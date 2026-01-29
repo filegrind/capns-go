@@ -13,9 +13,9 @@ import (
 // Use proper tags for is_binary/is_json/is_text detection
 func testUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:object;textable;keyed"`
+		return `cap:in="media:void";out="media:textable;form=map"`
 	}
-	return `cap:in="media:void";out="media:object;textable;keyed";` + tags
+	return `cap:in="media:void";out="media:textable;form=map";` + tags
 }
 
 func testUrnWithIO(inSpec, outSpec, tags string) string {
@@ -659,7 +659,7 @@ func TestInvalidEscapeSequenceError(t *testing.T) {
 
 func TestSerializationSmartQuoting(t *testing.T) {
 	// Simple lowercase value - no quoting needed (but media URNs in in/out are quoted)
-	// MediaVoid has no coercion tags (no quotes needed), MediaObject has ;textable;keyed (quotes needed)
+	// MediaVoid has no coercion tags (no quotes needed), MediaObject has ;textable;form=map (quotes needed)
 	cap, err := NewCapUrnBuilder().
 		InSpec(MediaVoid).
 		OutSpec(MediaObject).

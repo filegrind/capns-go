@@ -241,11 +241,11 @@ func (rw *ResponseWrapper) MatchesOutputType(cap *Cap) (bool, error) {
 
 	switch rw.contentType {
 	case ResponseContentTypeJSON:
-		// JSON response matches JSON/keyed media types
+		// JSON response matches JSON/map media types
 		return resolved.IsJSON(), nil
 	case ResponseContentTypeText:
-		// Text response matches textable outputs that are NOT JSON (keyed)
-		// e.g., MediaString (textable;scalar) matches, but MediaObject (textable;keyed) does not
+		// Text response matches textable outputs that are NOT JSON (map)
+		// e.g., MediaString (textable;form=scalar) matches, but MediaObject (textable;form=map) does not
 		return resolved.IsText() && !resolved.IsJSON(), nil
 	case ResponseContentTypeBinary:
 		// Binary response matches binary media types

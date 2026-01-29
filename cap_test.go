@@ -116,7 +116,7 @@ func TestCapStdin(t *testing.T) {
 	assert.Nil(t, cap.GetStdinMediaUrn())
 
 	// Enable stdin support by adding an arg with stdin source
-	stdinUrn := "media:text;textable"
+	stdinUrn := "media:textable"
 	cap.AddArg(CapArg{
 		MediaUrn: MediaString,
 		Required: true,
@@ -130,7 +130,7 @@ func TestCapStdin(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify JSON contains args with stdin source
-	assert.Contains(t, string(jsonData), `"stdin":"media:text;textable"`)
+	assert.Contains(t, string(jsonData), `"stdin":"media:textable"`)
 
 	var deserialized Cap
 	err = json.Unmarshal(jsonData, &deserialized)

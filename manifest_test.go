@@ -11,9 +11,9 @@ import (
 // Test helper for manifest tests - use proper media URNs with tags
 func manifestTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:object;textable;keyed"`
+		return `cap:in="media:void";out="media:textable;form=map"`
 	}
-	return `cap:in="media:void";out="media:object;textable;keyed";` + tags
+	return `cap:in="media:void";out="media:textable;form=map";` + tags
 }
 
 func TestCapManifestCreation(t *testing.T) {
@@ -59,7 +59,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
-	stdinUrn := "media:pdf;binary"
+	stdinUrn := "media:pdf;bytes"
 	cap.AddArg(CapArg{
 		MediaUrn: MediaBinary,
 		Required: true,
@@ -81,7 +81,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	assert.Contains(t, jsonStr, `"name":"TestComponent"`)
 	assert.Contains(t, jsonStr, `"version":"0.1.0"`)
 	assert.Contains(t, jsonStr, `"author":"Test Author"`)
-	assert.Contains(t, jsonStr, `"stdin":"media:pdf;binary"`)
+	assert.Contains(t, jsonStr, `"stdin":"media:pdf;bytes"`)
 
 	// Test deserialization
 	var deserialized CapManifest
@@ -235,7 +235,7 @@ func TestCapManifestValidation(t *testing.T) {
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
-	stdinUrn := "media:pdf;binary"
+	stdinUrn := "media:pdf;bytes"
 	cap.AddArg(CapArg{
 		MediaUrn: MediaBinary,
 		Required: true,
