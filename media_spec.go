@@ -35,7 +35,7 @@ const (
 	MediaBooleanArray = "media:bool;textable;form=list"
 	MediaObjectArray  = "media:form=list;textable"
 	// Semantic content types
-	MediaImage = "media:png;bytes"
+	MediaImage = "media:image;png;bytes"
 	MediaAudio = "media:wav;audio;bytes;"
 	MediaVideo = "media:video;bytes"
 	// Semantic AI input types
@@ -51,8 +51,16 @@ const (
 	MediaLog  = "media:log;textable"
 	MediaHtml = "media:html;textable"
 	MediaXml  = "media:xml;textable"
-	MediaJson = "media:json;textable;form=map"
-	MediaYaml = "media:yaml;textable;form=map"
+	MediaJson       = "media:json;textable;form=map"
+	MediaJsonSchema = "media:json;json-schema;textable;form=map"
+	MediaYaml       = "media:yaml;textable;form=map"
+	// Semantic input types
+	MediaModelSpec = "media:model-spec;textable;form=scalar"
+	MediaModelRepo = "media:model-repo;textable;form=map"
+	// Semantic output types
+	MediaModelDim      = "media:model-dim;integer;textable;numeric;form=scalar"
+	MediaDecision      = "media:decision;bool;textable;form=scalar"
+	MediaDecisionArray = "media:decision;bool;textable;form=list"
 )
 
 // Profile URL constants (defaults, use GetSchemaBase() for configurable version)

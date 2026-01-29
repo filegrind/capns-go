@@ -1,4 +1,5 @@
 module github.com/filegrind/cap-sdk-go
+// version: 0.84.26011
 
 go 1.21
 

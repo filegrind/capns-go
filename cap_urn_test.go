@@ -27,6 +27,7 @@ func testUrnWithIO(inSpec, outSpec, tags string) string {
 	return `cap:in="` + inSpec + `";out="` + outSpec + `";` + tags
 }
 
+// TEST001: Test that cap URN is created with tags parsed correctly and direction specs accessible
 func TestCapUrnCreation(t *testing.T) {
 	// Use key=value pairs instead of flags
 	capUrn, err := NewCapUrnFromString(testUrn("op=transform;format=json;type=data_processing"))
@@ -51,6 +52,7 @@ func TestCapUrnCreation(t *testing.T) {
 	assert.Equal(t, MediaObject, capUrn.OutSpec())
 }
 
+// TEST002: Test that missing 'in' spec fails with MissingInSpec, missing 'out' fails with MissingOutSpec
 func TestDirectionSpecsRequired(t *testing.T) {
 	// Missing 'in' should fail
 	_, err := NewCapUrnFromString(`cap:out="media:object";op=test`)
@@ -67,6 +69,7 @@ func TestDirectionSpecsRequired(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TEST003: Test that direction specs must match exactly, different in/out types don't match, wildcard matches any
 func TestDirectionMatching(t *testing.T) {
 	// Direction specs must match for caps to match
 	cap1, err := NewCapUrnFromString(`cap:in="media:string";out="media:object";op=test`)
@@ -102,6 +105,7 @@ func TestCanonicalStringFormat(t *testing.T) {
 	assert.Equal(t, `cap:ext=pdf;in=`+MediaVoid+`;op=generate;out="`+MediaObject+`";target=thumbnail`, capUrn.ToString())
 }
 
+// TEST015: Test that cap: prefix is required and case-insensitive
 func TestCapPrefixRequired(t *testing.T) {
 	// Missing cap: prefix should fail
 	capUrn, err := NewCapUrnFromString(`in="media:void";out="media:object";op=generate`)
@@ -125,6 +129,7 @@ func TestCapPrefixRequired(t *testing.T) {
 	assert.Equal(t, "generate", op)
 }
 
+// TEST016: Test that trailing semicolon is equivalent (same hash, same string, matches)
 func TestTrailingSemicolonEquivalence(t *testing.T) {
 	// Both with and without trailing semicolon should be equivalent
 	cap1, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
@@ -170,6 +175,7 @@ func TestInvalidCharacters(t *testing.T) {
 	assert.Equal(t, ErrorInvalidCharacter, err.(*CapUrnError).Code)
 }
 
+// TEST017: Test tag matching: exact match, subset match, wildcard match, value mismatch
 func TestTagMatching(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf;target=thumbnail"))
 	require.NoError(t, err)
@@ -195,6 +201,7 @@ func TestTagMatching(t *testing.T) {
 	assert.False(t, cap.Matches(request4))
 }
 
+// TEST019: Test that missing tags are treated as wildcards (cap without tag matches any value for that tag)
 func TestMissingTagHandling(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn("op=generate"))
 	require.NoError(t, err)
@@ -220,6 +227,7 @@ func TestMissingTagHandling(t *testing.T) {
 	assert.True(t, cap3.Matches(request3)) // cap has ext=*, pattern has ext=pdf → MATCH
 }
 
+// TEST020: Test specificity calculation (in/out base, wildcards don't count)
 func TestSpecificity(t *testing.T) {
 	// Specificity uses graded scoring:
 	// - Exact value (K=v): 3 points
@@ -249,6 +257,7 @@ func TestSpecificity(t *testing.T) {
 	assert.Equal(t, 8, cap4.Specificity())
 }
 
+// TEST024: Test compatibility checking (missing tags = wildcards, different directions = incompatible)
 func TestCompatibility(t *testing.T) {
 	cap1, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
 	require.NoError(t, err)
@@ -305,6 +314,7 @@ func TestConvenienceMethods(t *testing.T) {
 	assert.Equal(t, MediaObject, outVal)
 }
 
+// TEST021: Test builder creates cap URN with correct tags and direction specs
 func TestBuilder(t *testing.T) {
 	cap, err := NewCapUrnBuilder().
 		InSpec(MediaVoid).
@@ -323,6 +333,7 @@ func TestBuilder(t *testing.T) {
 	assert.Equal(t, MediaObject, cap.OutSpec())
 }
 
+// TEST022: Test builder requires both in_spec and out_spec
 func TestBuilderRequiresDirection(t *testing.T) {
 	// Missing inSpec should fail
 	_, err := NewCapUrnBuilder().
@@ -403,6 +414,7 @@ func TestWithInSpecOutSpec(t *testing.T) {
 	assert.Equal(t, MediaInteger, modified2.OutSpec())
 }
 
+// TEST027: Test with_wildcard_tag sets tag to wildcard, including in/out
 func TestWildcardTag(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn("ext=pdf"))
 	require.NoError(t, err)
@@ -420,6 +432,7 @@ func TestWildcardTag(t *testing.T) {
 	assert.Equal(t, "*", wildcardOut.OutSpec())
 }
 
+// TEST026: Test merge combines tags from both caps, subset keeps only specified tags
 func TestSubset(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf;output=binary;target=thumbnail"))
 	require.NoError(t, err)
@@ -439,6 +452,7 @@ func TestSubset(t *testing.T) {
 	assert.Equal(t, MediaObject, subset.OutSpec())
 }
 
+// TEST026: Test merge combines tags from both caps, subset keeps only specified tags
 func TestMerge(t *testing.T) {
 	cap1, err := NewCapUrnFromString(testUrn("op=generate"))
 	require.NoError(t, err)
@@ -478,6 +492,7 @@ func TestEquality(t *testing.T) {
 	assert.False(t, cap1.Equals(cap4))
 }
 
+// TEST025: Test find_best_match returns most specific matching cap
 func TestCapMatcher(t *testing.T) {
 	matcher := &CapMatcher{}
 
@@ -521,6 +536,7 @@ func TestJSONSerialization(t *testing.T) {
 	assert.True(t, original.Equals(&decoded))
 }
 
+// TEST004: Test that unquoted keys and values are normalized to lowercase
 func TestUnquotedValuesLowercased(t *testing.T) {
 	// Unquoted values are normalized to lowercase
 	cap, err := NewCapUrnFromString(testUrn("OP=Generate;EXT=PDF;Target=Thumbnail"))
@@ -545,6 +561,7 @@ func TestUnquotedValuesLowercased(t *testing.T) {
 	assert.Equal(t, "generate", op2)
 }
 
+// TEST005: Test that quoted values preserve case while unquoted are lowercased
 func TestQuotedValuesPreserveCase(t *testing.T) {
 	// Quoted values preserve their case
 	cap, err := NewCapUrnFromString(testUrn(`key="Value With Spaces"`))
@@ -573,6 +590,7 @@ func TestQuotedValuesPreserveCase(t *testing.T) {
 	assert.False(t, unquoted.Equals(quoted))  // NOT equal
 }
 
+// TEST006: Test that quoted values can contain special characters (semicolons, equals, spaces)
 func TestQuotedValueSpecialChars(t *testing.T) {
 	// Semicolons in quoted values
 	cap, err := NewCapUrnFromString(testUrn(`key="value;with;semicolons"`))
@@ -596,6 +614,7 @@ func TestQuotedValueSpecialChars(t *testing.T) {
 	assert.Equal(t, "hello world", value3)
 }
 
+// TEST007: Test that escape sequences in quoted values (\" and \\) are parsed correctly
 func TestQuotedValueEscapeSequences(t *testing.T) {
 	// Escaped quotes
 	cap, err := NewCapUrnFromString(testUrn(`key="value\"quoted\""`))
@@ -619,6 +638,7 @@ func TestQuotedValueEscapeSequences(t *testing.T) {
 	assert.Equal(t, `say "hello\world"`, value3)
 }
 
+// TEST008: Test that mixed quoted and unquoted values in same URN parse correctly
 func TestMixedQuotedUnquoted(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn(`a="Quoted";b=simple`))
 	require.NoError(t, err)
@@ -632,6 +652,7 @@ func TestMixedQuotedUnquoted(t *testing.T) {
 	assert.Equal(t, "simple", b)
 }
 
+// TEST009: Test that unterminated quote produces UnterminatedQuote error
 func TestUnterminatedQuoteError(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn(`key="unterminated`))
 	assert.Nil(t, cap)
@@ -641,6 +662,7 @@ func TestUnterminatedQuoteError(t *testing.T) {
 	assert.Equal(t, ErrorUnterminatedQuote, capError.Code)
 }
 
+// TEST010: Test that invalid escape sequences (like \n, \x) produce InvalidEscapeSequence error
 func TestInvalidEscapeSequenceError(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn(`key="bad\n"`))
 	assert.Nil(t, cap)
@@ -658,6 +680,7 @@ func TestInvalidEscapeSequenceError(t *testing.T) {
 	assert.Equal(t, ErrorInvalidEscapeSequence, capError2.Code)
 }
 
+// TEST011: Test that serialization uses smart quoting (no quotes for simple lowercase, quotes for special chars/uppercase)
 func TestSerializationSmartQuoting(t *testing.T) {
 	// Simple lowercase value - no quoting needed (but media URNs in in/out are quoted)
 	// MediaVoid has no coercion tags (no quotes needed), MediaObject has ;textable;form=map (quotes needed)
@@ -688,6 +711,7 @@ func TestSerializationSmartQuoting(t *testing.T) {
 	assert.Equal(t, `cap:in=media:void;key="HasUpper";out="`+MediaObject+`"`, cap4.ToString())
 }
 
+// TEST012: Test that simple cap URN round-trips (parse -> serialize -> parse equals original)
 func TestRoundTripSimple(t *testing.T) {
 	original := testUrn("op=generate;ext=pdf")
 	cap, err := NewCapUrnFromString(original)
@@ -698,6 +722,7 @@ func TestRoundTripSimple(t *testing.T) {
 	assert.True(t, cap.Equals(reparsed))
 }
 
+// TEST013: Test that quoted values round-trip preserving case and spaces
 func TestRoundTripQuoted(t *testing.T) {
 	original := testUrn(`key="Value With Spaces"`)
 	cap, err := NewCapUrnFromString(original)
@@ -711,6 +736,7 @@ func TestRoundTripQuoted(t *testing.T) {
 	assert.Equal(t, "Value With Spaces", value)
 }
 
+// TEST014: Test that escape sequences round-trip correctly
 func TestRoundTripEscapes(t *testing.T) {
 	original := testUrn(`key="value\"with\\escapes"`)
 	cap, err := NewCapUrnFromString(original)
@@ -724,6 +750,7 @@ func TestRoundTripEscapes(t *testing.T) {
 	assert.True(t, cap.Equals(reparsed))
 }
 
+// TEST018: Test that quoted values with different case do NOT match (case-sensitive)
 func TestMatchingCaseSensitiveValues(t *testing.T) {
 	// Values with different case should NOT match
 	cap1, err := NewCapUrnFromString(testUrn(`key="Value"`))
@@ -739,6 +766,7 @@ func TestMatchingCaseSensitiveValues(t *testing.T) {
 	assert.True(t, cap1.Matches(cap3))
 }
 
+// TEST023: Test builder lowercases keys but preserves value case
 func TestBuilderPreservesCase(t *testing.T) {
 	cap, err := NewCapUrnBuilder().
 		InSpec(MediaVoid).
@@ -753,6 +781,7 @@ func TestBuilderPreservesCase(t *testing.T) {
 	assert.Equal(t, "ValueWithCase", value)
 }
 
+// TEST035: Test has_tag is case-sensitive for values, case-insensitive for keys, works for in/out
 func TestHasTagCaseSensitive(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn(`key="Value"`))
 	require.NoError(t, err)
@@ -773,6 +802,7 @@ func TestHasTagCaseSensitive(t *testing.T) {
 	assert.True(t, cap.HasTag("out", MediaObject))
 }
 
+// TEST036: Test with_tag preserves value case
 func TestWithTagPreservesValue(t *testing.T) {
 	cap := NewCapUrn(MediaVoid, MediaObject, map[string]string{})
 	modified := cap.WithTag("key", "ValueWithCase")
@@ -782,6 +812,7 @@ func TestWithTagPreservesValue(t *testing.T) {
 	assert.Equal(t, "ValueWithCase", value)
 }
 
+// TEST038: Test semantic equivalence of unquoted and quoted simple lowercase values
 func TestSemanticEquivalence(t *testing.T) {
 	// Unquoted and quoted simple lowercase values are equivalent
 	unquoted, err := NewCapUrnFromString(testUrn("key=simple"))
@@ -791,6 +822,7 @@ func TestSemanticEquivalence(t *testing.T) {
 	assert.True(t, unquoted.Equals(quoted))
 }
 
+// TEST028: Test empty cap URN fails with MissingInSpec
 func TestEmptyCapUrnNotAllowed(t *testing.T) {
 	// Empty cap URN is no longer valid since in/out are required
 	result, err := NewCapUrnFromString("cap:")
@@ -804,6 +836,7 @@ func TestEmptyCapUrnNotAllowed(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TEST029: Test minimal valid cap URN has just in and out, empty tags
 func TestMinimalCapUrn(t *testing.T) {
 	// Minimal valid cap URN has just in and out
 	cap, err := NewCapUrnFromString(`cap:in="media:void";out="media:object"`)
@@ -814,6 +847,7 @@ func TestMinimalCapUrn(t *testing.T) {
 	assert.Equal(t, 0, len(cap.tags))
 }
 
+// TEST030: Test extended characters (forward slashes, colons) in tag values
 func TestExtendedCharacterSupport(t *testing.T) {
 	// Test forward slashes and colons in tag components
 	cap, err := NewCapUrnFromString(testUrn("url=https://example_org/api;path=/some/file"))
@@ -829,6 +863,7 @@ func TestExtendedCharacterSupport(t *testing.T) {
 	assert.Equal(t, "/some/file", path)
 }
 
+// TEST031: Test wildcard rejected in keys but accepted in values
 func TestWildcardRestrictions(t *testing.T) {
 	// Wildcard should be rejected in keys
 	invalidKey, err := NewCapUrnFromString(testUrn("*=value"))
@@ -848,6 +883,7 @@ func TestWildcardRestrictions(t *testing.T) {
 	assert.Equal(t, "*", value)
 }
 
+// TEST032: Test duplicate keys are rejected with DuplicateKey error
 func TestDuplicateKeyRejection(t *testing.T) {
 	// Duplicate keys should be rejected
 	duplicate, err := NewCapUrnFromString(testUrn("key=value1;key=value2"))
@@ -858,6 +894,7 @@ func TestDuplicateKeyRejection(t *testing.T) {
 	assert.Equal(t, ErrorDuplicateKey, capError.Code)
 }
 
+// TEST033: Test pure numeric keys rejected, mixed alphanumeric allowed, numeric values allowed
 func TestNumericKeyRestriction(t *testing.T) {
 	// Pure numeric keys should be rejected
 	numericKey, err := NewCapUrnFromString(testUrn("123=value"))
@@ -886,6 +923,7 @@ func TestNumericKeyRestriction(t *testing.T) {
 	assert.Equal(t, "123", value)
 }
 
+// TEST034: Test empty values are rejected
 func TestEmptyValueError(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn("key="))
 	assert.Nil(t, cap)
@@ -896,6 +934,7 @@ func TestEmptyValueError(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TEST039: Test get_tag returns direction specs (in/out) with case-insensitive lookup
 func TestGetTagReturnsDirectionSpecs(t *testing.T) {
 	cap, err := NewCapUrnFromString(`cap:in="media:string";out="media:integer";op=test`)
 	require.NoError(t, err)
@@ -930,6 +969,7 @@ func TestGetTagReturnsDirectionSpecs(t *testing.T) {
 // Note: All tests now require in/out direction specs
 // ============================================================================
 
+// TEST040: Matching semantics - exact match succeeds
 func TestMatchingSemantics_Test1_ExactMatch(t *testing.T) {
 	// Test 1: Exact match
 	cap, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
@@ -941,6 +981,7 @@ func TestMatchingSemantics_Test1_ExactMatch(t *testing.T) {
 	assert.True(t, cap.Matches(request), "Test 1: Exact match should succeed")
 }
 
+// TEST041: Matching semantics - cap missing tag matches (implicit wildcard)
 func TestMatchingSemantics_Test2_CapMissingTag(t *testing.T) {
 	// Test 2: Under new semantics, pattern with specific value requires instance to have it
 	cap, err := NewCapUrnFromString(testUrn("op=generate"))
@@ -958,6 +999,7 @@ func TestMatchingSemantics_Test2_CapMissingTag(t *testing.T) {
 	assert.True(t, cap2.Matches(request), "Test 2b: Cap with ext=* should match pattern with ext=pdf")
 }
 
+// TEST042: Matching semantics - cap with extra tag matches
 func TestMatchingSemantics_Test3_CapHasExtraTag(t *testing.T) {
 	// Test 3: Cap has extra tag
 	cap, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf;version=2"))
@@ -969,6 +1011,7 @@ func TestMatchingSemantics_Test3_CapHasExtraTag(t *testing.T) {
 	assert.True(t, cap.Matches(request), "Test 3: Cap with extra tag should match")
 }
 
+// TEST043: Matching semantics - request wildcard matches specific cap value
 func TestMatchingSemantics_Test4_RequestHasWildcard(t *testing.T) {
 	// Test 4: Request has wildcard
 	cap, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
@@ -980,6 +1023,7 @@ func TestMatchingSemantics_Test4_RequestHasWildcard(t *testing.T) {
 	assert.True(t, cap.Matches(request), "Test 4: Request wildcard should match")
 }
 
+// TEST044: Matching semantics - cap wildcard matches specific request value
 func TestMatchingSemantics_Test5_CapHasWildcard(t *testing.T) {
 	// Test 5: Cap has wildcard
 	cap, err := NewCapUrnFromString(testUrn("op=generate;ext=*"))
@@ -991,6 +1035,7 @@ func TestMatchingSemantics_Test5_CapHasWildcard(t *testing.T) {
 	assert.True(t, cap.Matches(request), "Test 5: Cap wildcard should match")
 }
 
+// TEST045: Matching semantics - value mismatch does not match
 func TestMatchingSemantics_Test6_ValueMismatch(t *testing.T) {
 	// Test 6: Value mismatch
 	cap, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
@@ -1002,6 +1047,7 @@ func TestMatchingSemantics_Test6_ValueMismatch(t *testing.T) {
 	assert.False(t, cap.Matches(request), "Test 6: Value mismatch should not match")
 }
 
+// TEST046: Matching semantics - fallback pattern (cap missing tag = implicit wildcard)
 func TestMatchingSemantics_Test7_FallbackPattern(t *testing.T) {
 	// Test 7: Under new semantics, fallback requires explicit wildcard
 	// Cap without ext does NOT match pattern with specific ext
@@ -1020,6 +1066,7 @@ func TestMatchingSemantics_Test7_FallbackPattern(t *testing.T) {
 	assert.True(t, capFallback.Matches(request), "Test 7b: Cap with ext=* should match pattern with ext=wav")
 }
 
+// TEST048: Matching semantics - wildcard direction matches anything
 func TestMatchingSemantics_Test8_WildcardDirectionMatchesAnything(t *testing.T) {
 	// Test 8: Wildcard direction matches any direction, but other tags still matter
 	cap, err := NewCapUrnFromString("cap:in=*;out=*")
@@ -1038,6 +1085,7 @@ func TestMatchingSemantics_Test8_WildcardDirectionMatchesAnything(t *testing.T) 
 	assert.True(t, cap.Matches(request2), "Test 8b: Wildcard directions should match any directions")
 }
 
+// TEST049: Matching semantics - cross-dimension independence
 func TestMatchingSemantics_Test9_CrossDimensionIndependence(t *testing.T) {
 	// Test 9: Under new semantics, each side's specific values must be satisfied
 	// Cap has op=generate, request has ext=pdf
@@ -1058,6 +1106,7 @@ func TestMatchingSemantics_Test9_CrossDimensionIndependence(t *testing.T) {
 	assert.True(t, cap2.Matches(request2), "Test 9b: Same tags should match")
 }
 
+// TEST050: Matching semantics - direction mismatch prevents matching
 func TestMatchingSemantics_Test10_DirectionMismatch(t *testing.T) {
 	// Test 10: Direction mismatch prevents matching
 	cap, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="media:object"`)

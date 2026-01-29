@@ -24,6 +24,7 @@ func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
 	return cap
 }
 
+// TEST051: Test input validation succeeds with valid positional argument
 func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 	validator := NewSchemaValidator()
 
@@ -62,6 +63,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TEST052: Test input validation fails with MissingRequiredArgument when required arg missing
 func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 	validator := NewSchemaValidator()
 
@@ -105,6 +107,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 	assert.Contains(t, schemaErr.Details, "name")
 }
 
+// TEST053: Test input validation fails with InvalidArgumentType when wrong type provided
 func TestSchemaValidator_ValidateArgumentWithSchema_NilSchema(t *testing.T) {
 	validator := NewSchemaValidator()
 
