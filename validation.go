@@ -882,3 +882,48 @@ func getNumericValue(value interface{}) (float64, bool) {
 	}
 	return 0, false
 }
+
+// ============================================================================
+// XV5 VALIDATION - No Redefinition of Registry Media Specs
+// ============================================================================
+
+// XV5ValidationResult contains the result of XV5 validation
+type XV5ValidationResult struct {
+	Valid     bool
+	Error     string
+	Redefines []string
+}
+
+// NewInlineMediaSpecRedefinesRegistryError creates an error for XV5 violations
+func NewInlineMediaSpecRedefinesRegistryError(mediaUrn string) *ValidationError {
+	return &ValidationError{
+		Type:    "InlineMediaSpecRedefinesRegistry",
+		Message: fmt.Sprintf("XV5: Inline media spec '%s' redefines existing registry spec", mediaUrn),
+	}
+}
+
+// ValidateNoInlineMediaSpecRedefinition checks that inline media_specs don't redefine built-in specs (XV5)
+// This is the synchronous version that only checks against built-in specs
+func ValidateNoInlineMediaSpecRedefinition(mediaSpecs map[string]any) XV5ValidationResult {
+	if len(mediaSpecs) == 0 {
+		return XV5ValidationResult{Valid: true}
+	}
+
+	var redefines []string
+	for mediaUrn := range mediaSpecs {
+		// Check if this media URN is a built-in spec
+		if IsBuiltinMediaUrn(mediaUrn) {
+			redefines = append(redefines, mediaUrn)
+		}
+	}
+
+	if len(redefines) > 0 {
+		return XV5ValidationResult{
+			Valid:     false,
+			Error:     fmt.Sprintf("XV5: Inline media specs redefine existing built-in specs: %v", redefines),
+			Redefines: redefines,
+		}
+	}
+
+	return XV5ValidationResult{Valid: true}
+}

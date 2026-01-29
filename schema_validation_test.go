@@ -656,3 +656,52 @@ func TestCustomMediaUrnResolution(t *testing.T) {
 	_, err = ResolveMediaUrn("media:unknown", mediaSpecs)
 	assert.Error(t, err)
 }
+
+// ============================================================================
+// XV5 VALIDATION TESTS
+// TEST054-056: Validate that inline media_specs don't redefine registry specs
+// ============================================================================
+
+// TEST054: XV5 - Test inline media spec redefinition of existing registry spec is detected and rejected
+func TestXV5InlineSpecRedefinitionDetected(t *testing.T) {
+	// Try to redefine MediaString which is a built-in spec
+	mediaSpecs := map[string]any{
+		MediaString: map[string]any{
+			"media_type": "text/plain",
+			"title":      "My Custom String",
+		},
+	}
+
+	result := ValidateNoInlineMediaSpecRedefinition(mediaSpecs)
+
+	assert.False(t, result.Valid, "Should fail validation when redefining built-in spec")
+	assert.Contains(t, result.Error, "XV5", "Error should mention XV5")
+	assert.Contains(t, result.Redefines, MediaString, "Should identify MediaString as redefined")
+}
+
+// TEST055: XV5 - Test new inline media spec (not in registry) is allowed
+func TestXV5NewInlineSpecAllowed(t *testing.T) {
+	// Define a completely new media spec that doesn't exist in built-ins
+	mediaSpecs := map[string]any{
+		"media:my-unique-custom-type-xyz123": map[string]any{
+			"media_type": "application/json",
+			"title":      "My Custom Output",
+		},
+	}
+
+	result := ValidateNoInlineMediaSpecRedefinition(mediaSpecs)
+
+	assert.True(t, result.Valid, "Should pass validation for new spec not in built-ins")
+	assert.Empty(t, result.Error, "Should not have error message")
+}
+
+// TEST056: XV5 - Test empty media_specs (no inline specs) passes XV5 validation
+func TestXV5EmptyMediaSpecsAllowed(t *testing.T) {
+	// Empty media_specs should pass
+	result := ValidateNoInlineMediaSpecRedefinition(map[string]any{})
+	assert.True(t, result.Valid, "Empty map should pass validation")
+
+	// Nil media_specs should pass
+	result = ValidateNoInlineMediaSpecRedefinition(nil)
+	assert.True(t, result.Valid, "Nil should pass validation")
+}
