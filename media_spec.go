@@ -235,6 +235,13 @@ func (r *ResolvedMediaSpec) IsJSON() bool {
 	return HasMediaUrnTag(r.SpecID, "json")
 }
 
+// IsStructured returns true if this represents structured data (map or list).
+// Structured data can be serialized as JSON when transmitted as text.
+// Note: This does NOT check for the explicit `json` tag - use IsJSON() for that.
+func (r *ResolvedMediaSpec) IsStructured() bool {
+	return r.IsMap() || r.IsList()
+}
+
 // IsText returns true if the "textable" marker tag is present in the source media URN.
 func (r *ResolvedMediaSpec) IsText() bool {
 	return HasMediaUrnTag(r.SpecID, "textable")

@@ -155,13 +155,14 @@ func (a *CapArg) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	return resolved.IsBinary(), nil
 }
 
-// IsJSON checks if this argument expects JSON data.
-func (a *CapArg) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+// IsStructured checks if this argument expects structured data (map or list).
+// Structured data can be serialized as JSON when transmitted as text.
+func (a *CapArg) IsStructured(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := a.Resolve(mediaSpecs)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
 	}
-	return resolved.IsJSON(), nil
+	return resolved.IsStructured(), nil
 }
 
 // GetMediaType returns the resolved media type for this argument.
@@ -194,13 +195,14 @@ func (co *CapOutput) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) 
 	return resolved.IsBinary(), nil
 }
 
-// IsJSON checks if this output produces JSON data.
-func (co *CapOutput) IsJSON(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+// IsStructured checks if this output produces structured data (map or list).
+// Structured data can be serialized as JSON when transmitted as text.
+func (co *CapOutput) IsStructured(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
-	return resolved.IsJSON(), nil
+	return resolved.IsStructured(), nil
 }
 
 // GetMediaType returns the resolved media type for this output.

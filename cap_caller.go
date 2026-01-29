@@ -159,7 +159,8 @@ func (cc *CapCaller) Call(
 			return nil, fmt.Errorf("cap %s returned text data but output spec '%s' expects binary",
 				cc.cap, outputSpec.SpecID)
 		}
-		if outputSpec.IsJSON() {
+		// Structured data (map/list) can be serialized as JSON
+		if outputSpec.IsStructured() {
 			response = NewResponseWrapperFromJSON([]byte(result.TextOutput))
 		} else {
 			response = NewResponseWrapperFromText([]byte(result.TextOutput))
@@ -272,7 +273,8 @@ func (cc *CapCaller) validateOutput(response *ResponseWrapper) error {
 	}
 
 	var outputValue interface{}
-	if outputSpec.IsJSON() {
+	// For structured outputs (map/list), verify it's valid JSON
+	if outputSpec.IsStructured() {
 		if err := json.Unmarshal([]byte(text), &outputValue); err != nil {
 			return fmt.Errorf("output is not valid JSON for cap %s: %w", cc.cap, err)
 		}

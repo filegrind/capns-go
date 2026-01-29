@@ -323,11 +323,13 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.False(t, resolved.IsJSON())
 	assert.True(t, resolved.IsText())
 
-	// Test object media URN
+	// Test object media URN - note: MediaObject is form=map, not explicit json tag
 	resolved, err = ResolveMediaUrn(MediaObject, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
-	assert.True(t, resolved.IsJSON())
+	assert.True(t, resolved.IsMap())       // form=map
+	assert.True(t, resolved.IsStructured()) // is_map || is_list
+	assert.False(t, resolved.IsJSON())     // no explicit json tag
 
 	// Test binary media URN
 	resolved, err = ResolveMediaUrn(MediaBinary, nil)

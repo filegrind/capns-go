@@ -364,8 +364,8 @@ func (iv *InputValidator) validateMediaSpecRules(cap *Cap, argDef *CapArg, resol
 
 // validateArgumentSchema validates argument against JSON schema
 func (iv *InputValidator) validateArgumentSchema(cap *Cap, argDef *CapArg, resolved *ResolvedMediaSpec, value interface{}) error {
-	// Only validate structured types (JSON) that have schemas
-	if !resolved.IsJSON() {
+	// Only validate structured types (map, list, or json) that have schemas
+	if !resolved.IsStructured() {
 		return nil
 	}
 
@@ -619,8 +619,8 @@ func (ov *OutputValidator) validateOutputMediaSpecRules(cap *Cap, resolved *Reso
 
 // validateOutputSchema validates output against JSON schema
 func (ov *OutputValidator) validateOutputSchema(cap *Cap, outputDef *CapOutput, resolved *ResolvedMediaSpec, value interface{}) error {
-	// Only validate structured types (JSON) that have schemas
-	if !resolved.IsJSON() {
+	// Only validate structured types (map, list, or json) that have schemas
+	if !resolved.IsStructured() {
 		return nil
 	}
 
