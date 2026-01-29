@@ -12,7 +12,7 @@ func main() {
 	// Example 1: Create capability with embedded schema
 	fmt.Println("=== Example 1: Basic Schema Validation ===")
 
-	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:textable;form=map";target=structured`)
+	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:form=map;textable";target=structured`)
 	cap := capns.NewCap(urn, "Query Command", "query-command")
 
 	// Define JSON schema for user data

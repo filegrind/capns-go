@@ -91,16 +91,16 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	assert.False(t, resolved2.IsBinary())
 	assert.True(t, resolved2.IsText())
 
-	// Test JSON cap with object output - use proper map tag
-	jsonCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:textable;form=map"`)
+	// Test map cap with object output - use proper form=map tag
+	mapCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="` + MediaObject + `"`)
 	require.NoError(t, err)
 
-	capDef3 := NewCap(jsonCapUrn, "Test Capability", "test-command")
-	caller3 := NewCapCaller(`cap:in="media:void";op=generate;out="media:textable;form=map"`, mockHost, capDef3)
+	capDef3 := NewCap(mapCapUrn, "Test Capability", "test-command")
+	caller3 := NewCapCaller(`cap:in="media:void";op=generate;out="`+MediaObject+`"`, mockHost, capDef3)
 
 	resolved3, err := caller3.resolveOutputSpec()
 	require.NoError(t, err)
-	assert.True(t, resolved3.IsJSON())
+	assert.True(t, resolved3.IsMap())
 
 	// Test cap with unresolvable media URN - MUST FAIL
 	badSpecCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:unknown"`)
@@ -146,7 +146,7 @@ func TestCapCallerCall(t *testing.T) {
 
 func TestCapCallerWithArguments(t *testing.T) {
 	// Setup test data with arguments - use proper map tag for object
-	capUrn, err := NewCapUrnFromString(`cap:in="media:void";op=process;out="media:textable;form=map"`)
+	capUrn, err := NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable"`)
 	require.NoError(t, err)
 
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
@@ -166,7 +166,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller(`cap:in="media:void";op=process;out="media:textable;form=map"`, mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:void";op=process;out="media:form=map;textable"`, mockHost, capDef)
 
 	// Test call with positional argument
 	ctx := context.Background()

@@ -11,9 +11,9 @@ import (
 // Test helper for response wrapper tests - use proper media URNs with tags
 func respTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:textable;form=map"`
+		return `cap:in="media:void";out="media:form=map;textable"`
 	}
-	return `cap:in="media:void";out="media:textable;form=map";` + tags
+	return `cap:in="media:void";out="media:form=map;textable";` + tags
 }
 
 func TestResponseWrapperFromJSON(t *testing.T) {
@@ -163,7 +163,7 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
 	binaryCap.SetOutput(NewCapOutput(MediaBinary, "Binary output"))
 
-	jsonCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable;form=map"`)
+	jsonCapUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
 	require.NoError(t, err)
 	jsonCap := NewCap(jsonCapUrn, "JSON Test", "test")
 	jsonCap.SetOutput(NewCapOutput(MediaObject, "JSON output"))

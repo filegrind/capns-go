@@ -459,10 +459,16 @@ func getExpectedTypeFromMediaUrn(mediaUrn string, resolved *ResolvedMediaSpec) s
 		if resolved.IsBinary() {
 			return "binary"
 		}
-		if resolved.IsJSON() {
-			return "object" // JSON types are objects or arrays
+		// Check for map structure (form=map) OR explicit json tag
+		if resolved.IsMap() || resolved.IsJSON() {
+			return "object"
 		}
-		if resolved.IsText() {
+		// Check for list structure (form=list)
+		if resolved.IsList() {
+			return "array"
+		}
+		// Scalar or text types
+		if resolved.IsText() || resolved.IsScalar() {
 			return "string"
 		}
 	}

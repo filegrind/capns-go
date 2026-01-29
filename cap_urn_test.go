@@ -12,10 +12,11 @@ import (
 // Media URNs must be quoted in cap URNs because they contain semicolons
 // Use proper tags for is_binary/is_json/is_text detection
 func testUrn(tags string) string {
+	// Use MediaObject constant for consistent canonical form
 	if tags == "" {
-		return `cap:in="media:void";out="media:textable;form=map"`
+		return `cap:in="media:void";out="` + MediaObject + `"`
 	}
-	return `cap:in="media:void";out="media:textable;form=map";` + tags
+	return `cap:in="media:void";out="` + MediaObject + `";` + tags
 }
 
 func testUrnWithIO(inSpec, outSpec, tags string) string {

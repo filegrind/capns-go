@@ -11,7 +11,7 @@ func main() {
 	fmt.Println("=== Schema Integration Example ===")
 
 	// Create a capability
-	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:textable;form=map";target=structured`)
+	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:form=map;textable";target=structured`)
 	cap := capns.NewCap(urn, "Query Command", "query-command")
 
 	// Define a comprehensive schema for document query parameters

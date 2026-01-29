@@ -25,27 +25,22 @@ const (
 	MediaVoid         = "media:void"
 	MediaString       = "media:textable;form=scalar"
 	MediaInteger      = "media:integer;textable;numeric;form=scalar"
-	MediaNumber       = "media:number;textable;numeric;form=scalar"
-	MediaBoolean      = "media:boolean;textable;form=scalar"
-	MediaObject       = "media:object;textable;form=map"
+	MediaNumber       = "media:textable;numeric;form=scalar"
+	MediaBoolean      = "media:bool;textable;form=scalar"
+	MediaObject       = "media:form=map;textable"
 	MediaBinary       = "media:bytes"
-	MediaStringArray  = "media:string-array;textable;form=list"
-	MediaIntegerArray = "media:integer-array;textable;numeric;form=list"
-	MediaNumberArray  = "media:number-array;textable;numeric;form=list"
-	MediaBooleanArray = "media:boolean-array;textable;form=list"
-	MediaObjectArray  = "media:object-array;textable;form=list"
+	MediaStringArray  = "media:textable;form=list"
+	MediaIntegerArray = "media:integer;textable;numeric;form=list"
+	MediaNumberArray  = "media:textable;numeric;form=list"
+	MediaBooleanArray = "media:bool;textable;form=list"
+	MediaObjectArray  = "media:form=list;textable"
 	// Semantic content types
 	MediaImage = "media:png;bytes"
 	MediaAudio = "media:wav;audio;bytes;"
 	MediaVideo = "media:video;bytes"
-	MediaText  = "media:textable"
 	// Semantic AI input types
-	MediaImageVisualEmbedding = "media:image;png;bytes"
-	MediaImageCaptioning      = "media:image;png;bytes"
-	MediaImageVisionQuery     = "media:image;png;bytes"
-	MediaAudioSpeech          = "media:audio;wav;bytes;speech"
-	MediaTextEmbedding        = "media:image;png;bytes"
-	MediaImageThumbnail       = "media:image;png;bytes;thumbnail"
+	MediaAudioSpeech    = "media:audio;wav;bytes;speech"
+	MediaImageThumbnail = "media:image;png;bytes;thumbnail"
 	// Document types (PRIMARY naming - type IS the format)
 	MediaPdf  = "media:pdf;bytes"
 	MediaEpub = "media:epub;bytes"
@@ -214,14 +209,30 @@ type ResolvedMediaSpec struct {
 	Metadata    map[string]interface{}
 }
 
-// IsBinary returns true if the "binary" marker tag is present in the source media URN.
+// IsBinary returns true if the "bytes" marker tag is present in the source media URN.
 func (r *ResolvedMediaSpec) IsBinary() bool {
-	return HasMediaUrnTag(r.SpecID, "binary")
+	return HasMediaUrnTag(r.SpecID, "bytes")
 }
 
-// IsJSON returns true if the "form=map" marker tag is present in the source media URN.
+// IsMap returns true if form=map tag is present (key-value structure).
+func (r *ResolvedMediaSpec) IsMap() bool {
+	return HasMediaUrnTagValue(r.SpecID, "form", "map")
+}
+
+// IsScalar returns true if form=scalar tag is present (single value).
+func (r *ResolvedMediaSpec) IsScalar() bool {
+	return HasMediaUrnTagValue(r.SpecID, "form", "scalar")
+}
+
+// IsList returns true if form=list tag is present (ordered collection).
+func (r *ResolvedMediaSpec) IsList() bool {
+	return HasMediaUrnTagValue(r.SpecID, "form", "list")
+}
+
+// IsJSON returns true if the "json" marker tag is present in the source media URN.
+// Note: This checks for JSON representation specifically, not map structure (use IsMap for that).
 func (r *ResolvedMediaSpec) IsJSON() bool {
-	return HasMediaUrnTag(r.SpecID, "form=map")
+	return HasMediaUrnTag(r.SpecID, "json")
 }
 
 // IsText returns true if the "textable" marker tag is present in the source media URN.
@@ -229,7 +240,7 @@ func (r *ResolvedMediaSpec) IsText() bool {
 	return HasMediaUrnTag(r.SpecID, "textable")
 }
 
-// HasMediaUrnTag checks if a media URN has a marker tag (e.g., binary, form=map, textable).
+// HasMediaUrnTag checks if a media URN has a marker tag (e.g., bytes, json, textable).
 // Uses tagged-urn parsing for proper tag detection.
 func HasMediaUrnTag(mediaUrn, tagName string) bool {
 	if mediaUrn == "" {
@@ -241,6 +252,20 @@ func HasMediaUrnTag(mediaUrn, tagName string) bool {
 	}
 	_, exists := parsed.GetTag(tagName)
 	return exists
+}
+
+// HasMediaUrnTagValue checks if a media URN has a tag with a specific value (e.g., form=map).
+// Uses tagged-urn parsing for proper tag detection.
+func HasMediaUrnTagValue(mediaUrn, tagKey, tagValue string) bool {
+	if mediaUrn == "" {
+		return false
+	}
+	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
+	if err != nil {
+		return false
+	}
+	value, exists := parsed.GetTag(tagKey)
+	return exists && value == tagValue
 }
 
 // PrimaryType returns the primary type (e.g., "image" from "image/png")
@@ -414,8 +439,6 @@ func resolveBuiltin(mediaUrn string) *ResolvedMediaSpec {
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "audio/wav", ProfileURI: ProfileAudio}
 	case MediaVideo:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "video/mp4", ProfileURI: ProfileVideo}
-	case MediaText:
-		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "text/plain", ProfileURI: ProfileText}
 	// Document types (PRIMARY naming)
 	case MediaPdf:
 		return &ResolvedMediaSpec{SpecID: mediaUrn, MediaType: "application/pdf", ProfileURI: ProfilePdf}
@@ -555,10 +578,16 @@ func GetTypeFromResolvedMediaSpec(resolved *ResolvedMediaSpec) string {
 	if resolved.IsBinary() {
 		return "binary"
 	}
-	if resolved.IsJSON() {
-		return "object" // JSON can be object or array, but object is the default assumption
+	// Check for map structure (form=map) OR explicit json tag
+	if resolved.IsMap() || resolved.IsJSON() {
+		return "object"
 	}
-	if resolved.IsText() {
+	// Check for list structure (form=list)
+	if resolved.IsList() {
+		return "array"
+	}
+	// Scalar or text types
+	if resolved.IsText() || resolved.IsScalar() {
 		return "string"
 	}
 	return "unknown"

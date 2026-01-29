@@ -11,9 +11,9 @@ import (
 // Test helper for manifest tests - use proper media URNs with tags
 func manifestTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:textable;form=map"`
+		return `cap:in="media:void";out="media:form=map;textable"`
 	}
-	return `cap:in="media:void";out="media:textable;form=map";` + tags
+	return `cap:in="media:void";out="media:form=map;textable";` + tags
 }
 
 func TestCapManifestCreation(t *testing.T) {

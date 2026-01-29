@@ -11,9 +11,9 @@ import (
 // Test helper for integration tests - use proper media URNs with tags
 func intTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:textable;form=map"`
+		return `cap:in="media:void";out="media:form=map;textable"`
 	}
-	return `cap:in="media:void";out="media:textable;form=map";` + tags
+	return `cap:in="media:void";out="media:form=map;textable";` + tags
 }
 
 // TestIntegrationVersionlessCapCreation verifies caps can be created without version fields
@@ -27,9 +27,9 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 
 	// Verify the cap has direction specs in canonical form
 	// Colons don't need quoting, so media:void doesn't need quotes
-	// But media:textable;form=map has semicolons, so needs quotes
+	// But media:form=map;textable has semicolons, so needs quotes
 	assert.Contains(t, cap.UrnString(), `in=media:void`)
-	assert.Contains(t, cap.UrnString(), `out="media:textable;form=map"`)
+	assert.Contains(t, cap.UrnString(), `out="media:form=map;textable"`)
 	assert.Equal(t, "transform-command", cap.Command)
 
 	// Test case 2: Create cap with description but no version
@@ -94,7 +94,7 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 // TestIntegrationCallerAndResponseSystem verifies the caller and response system
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	// Setup test cap definition with media URNs - use proper tags
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:textable;form=map";target=metadata`)
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
@@ -118,7 +118,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	}
 
 	// Create caller
-	caller := NewCapCaller(`cap:in="media:void";op=extract;out="media:textable;form=map";target=metadata`, mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`, mockHost, capDef)
 
 	// Test call with valid arguments
 	ctx := context.Background()
@@ -282,7 +282,7 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a cap with arguments - use proper tags
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=process;out="media:textable;form=map";target=data`)
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable";target=data`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Processor", "process-data")

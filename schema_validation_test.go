@@ -9,7 +9,7 @@ import (
 
 // Helper to create a cap with media specs for testing
 func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable;form=map"`)
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Test Cap", "test-command")
@@ -189,7 +189,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=query;out="media:textable;form=map";target=structured`)
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=query;out="media:form=map;textable";target=structured`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Query Processor", "test-command")
@@ -301,7 +301,7 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewInputValidator()
 
 	// Create a capability with schema-enabled arguments
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable;form=map"`)
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Config Validator", "test-command")
@@ -356,7 +356,7 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 	validator := NewOutputValidator()
 
 	// Create a capability with schema-enabled output
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable;form=map"`)
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Output Validator", "test-command")
@@ -411,7 +411,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a capability with full schema validation
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=query;out="media:textable;form=map";target=structured`)
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=query;out="media:form=map;textable";target=structured`)
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Structured Query", "query-command")
