@@ -123,13 +123,14 @@ func GetProfileURL(profileName string) string {
 
 // MediaSpecDefObject represents the rich object form of a media spec definition
 type MediaSpecDefObject struct {
-	MediaType   string               `json:"media_type"`
-	ProfileURI  string               `json:"profile_uri"`
-	Schema      interface{}          `json:"schema,omitempty"`
-	Title       string               `json:"title,omitempty"`
-	Description string               `json:"description,omitempty"`
-	Validation  *MediaValidation  `json:"validation,omitempty"`
+	MediaType   string                 `json:"media_type"`
+	ProfileURI  string                 `json:"profile_uri"`
+	Schema      interface{}            `json:"schema,omitempty"`
+	Title       string                 `json:"title,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Validation  *MediaValidation       `json:"validation,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Extension   string                 `json:"extension,omitempty"`
 }
 
 // MediaSpecDef represents a media spec definition - can be string (compact) or object (rich)
@@ -214,7 +215,9 @@ type ResolvedMediaSpec struct {
 	Description string
 	Validation  *MediaValidation
 	// Metadata contains arbitrary key-value pairs for display/categorization
-	Metadata    map[string]interface{}
+	Metadata  map[string]interface{}
+	// Extension is the optional file extension for storing this media type (e.g., "pdf", "json", "txt")
+	Extension string
 }
 
 // IsBinary returns true if the "bytes" marker tag is present in the source media URN.
@@ -379,7 +382,8 @@ func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, 
 		Title:       def.ObjectValue.Title,
 		Description: def.ObjectValue.Description,
 		Validation:  def.ObjectValue.Validation,
-		Metadata:    def.ObjectValue.Metadata,    // Propagate metadata
+		Metadata:    def.ObjectValue.Metadata,  // Propagate metadata
+		Extension:   def.ObjectValue.Extension, // Propagate extension
 	}, nil
 }
 
