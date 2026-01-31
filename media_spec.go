@@ -258,15 +258,41 @@ func (r *ResolvedMediaSpec) IsText() bool {
 	return HasMediaUrnTag(r.SpecID, "textable")
 }
 
+// IsImage returns true if the "image" marker tag is present in the source media URN.
+func (r *ResolvedMediaSpec) IsImage() bool {
+	return HasMediaUrnTag(r.SpecID, "image")
+}
+
+// IsAudio returns true if the "audio" marker tag is present in the source media URN.
+func (r *ResolvedMediaSpec) IsAudio() bool {
+	return HasMediaUrnTag(r.SpecID, "audio")
+}
+
+// IsVideo returns true if the "video" marker tag is present in the source media URN.
+func (r *ResolvedMediaSpec) IsVideo() bool {
+	return HasMediaUrnTag(r.SpecID, "video")
+}
+
+// IsNumeric returns true if the "numeric" marker tag is present in the source media URN.
+func (r *ResolvedMediaSpec) IsNumeric() bool {
+	return HasMediaUrnTag(r.SpecID, "numeric")
+}
+
+// IsBool returns true if the "bool" marker tag is present in the source media URN.
+func (r *ResolvedMediaSpec) IsBool() bool {
+	return HasMediaUrnTag(r.SpecID, "bool")
+}
+
 // HasMediaUrnTag checks if a media URN has a marker tag (e.g., bytes, json, textable).
 // Uses tagged-urn parsing for proper tag detection.
+// Requires a valid, non-empty media URN - panics otherwise.
 func HasMediaUrnTag(mediaUrn, tagName string) bool {
 	if mediaUrn == "" {
-		return false
+		panic("HasMediaUrnTag called with empty mediaUrn - this indicates the MediaSpec was not resolved via ResolveMediaUrn")
 	}
 	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
 	if err != nil {
-		return false
+		panic(fmt.Sprintf("Failed to parse media URN '%s': %v - this indicates invalid data", mediaUrn, err))
 	}
 	_, exists := parsed.GetTag(tagName)
 	return exists
@@ -274,13 +300,14 @@ func HasMediaUrnTag(mediaUrn, tagName string) bool {
 
 // HasMediaUrnTagValue checks if a media URN has a tag with a specific value (e.g., form=map).
 // Uses tagged-urn parsing for proper tag detection.
+// Requires a valid, non-empty media URN - panics otherwise.
 func HasMediaUrnTagValue(mediaUrn, tagKey, tagValue string) bool {
 	if mediaUrn == "" {
-		return false
+		panic("HasMediaUrnTagValue called with empty mediaUrn - this indicates the MediaSpec was not resolved via ResolveMediaUrn")
 	}
 	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
 	if err != nil {
-		return false
+		panic(fmt.Sprintf("Failed to parse media URN '%s': %v - this indicates invalid data", mediaUrn, err))
 	}
 	value, exists := parsed.GetTag(tagKey)
 	return exists && value == tagValue
