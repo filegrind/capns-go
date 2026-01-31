@@ -15,7 +15,8 @@ func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
 	cap := NewCap(urn, "Test Cap", "test-command")
 
 	// Add a custom media spec with the provided schema
-	cap.AddMediaSpec("media:test-obj;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:test-obj;textable;form=map",
 		"application/json",
 		"https://test.example.com/schema",
 		argSchema,
@@ -207,7 +208,8 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 		"required": []interface{}{"name"},
 	}
 
-	cap.AddMediaSpec("media:user;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:user;textable;form=map",
 		"application/json",
 		"https://example.com/schema/user",
 		userSchema,
@@ -318,7 +320,8 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 		"required": []interface{}{"value"},
 	}
 
-	cap.AddMediaSpec("media:config;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:config;textable;form=map",
 		"application/json",
 		"https://example.com/schema/config",
 		schema,
@@ -377,7 +380,8 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 		"required": []interface{}{"status"},
 	}
 
-	cap.AddMediaSpec("media:result;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:result;textable;form=map",
 		"application/json",
 		"https://example.com/schema/result",
 		schema,
@@ -429,7 +433,8 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		"required": []interface{}{"query"},
 	}
 
-	cap.AddMediaSpec("media:query-params;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:query-params;textable;form=map",
 		"application/json",
 		"https://example.com/schema/query-params",
 		inputSchema,
@@ -463,7 +468,8 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		"required": []interface{}{"results", "total"},
 	}
 
-	cap.AddMediaSpec("media:query-results;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:query-results;textable;form=map",
 		"application/json",
 		"https://example.com/schema/query-results",
 		outputSchema,
@@ -611,13 +617,13 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 }
 
 func TestMediaUrnResolutionWithMediaSpecs(t *testing.T) {
-	// Media URN resolution requires a mediaSpecs table - no built-in fallback
+	// Media URN resolution requires a mediaSpecs array - no built-in fallback
 	// Test resolution with provided mediaSpecs
-	mediaSpecs := map[string]MediaSpecDef{
-		MediaString:  NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
-		MediaInteger: NewMediaSpecDefString("text/plain; profile=" + ProfileInt),
-		MediaObject:  NewMediaSpecDefString("application/json; profile=" + ProfileObj),
-		MediaBinary:  NewMediaSpecDefString("application/octet-stream"),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
+		{Urn: MediaInteger, MediaType: "text/plain", ProfileURI: ProfileInt},
+		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
+		{Urn: MediaBinary, MediaType: "application/octet-stream"},
 	}
 
 	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs)
@@ -646,16 +652,17 @@ func TestMediaUrnResolutionWithMediaSpecs(t *testing.T) {
 }
 
 func TestCustomMediaUrnResolution(t *testing.T) {
-	mediaSpecs := map[string]MediaSpecDef{
-		"media:custom;textable": NewMediaSpecDefString("text/html; profile=https://example.com/schema/html"),
-		"media:complex;textable;form=map": NewMediaSpecDefObjectWithSchema(
+	mediaSpecs := []MediaSpecDef{
+		{Urn: "media:custom;textable", MediaType: "text/html", ProfileURI: "https://example.com/schema/html"},
+		NewMediaSpecDefWithSchema(
+			"media:complex;textable;form=map",
 			"application/json",
 			"https://example.com/schema/complex",
 			map[string]interface{}{"type": "object"},
 		),
 	}
 
-	// String form resolution
+	// Resolution
 	resolved, err := ResolveMediaUrn("media:custom;textable", mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "text/html", resolved.MediaType)

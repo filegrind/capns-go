@@ -101,9 +101,9 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	capDef.SetOutput(NewCapOutput(MediaObject, "Extracted metadata"))
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs(map[string]MediaSpecDef{
-		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	capDef.SetMediaSpecs([]MediaSpecDef{
+		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
 	})
 
 	// Add required argument using new architecture
@@ -163,8 +163,8 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 	capDef.SetOutput(NewCapOutput(MediaBinary, "Generated thumbnail"))
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs(map[string]MediaSpecDef{
-		MediaBinary: NewMediaSpecDefString("application/octet-stream"),
+	capDef.SetMediaSpecs([]MediaSpecDef{
+		{Urn: MediaBinary, MediaType: "application/octet-stream"},
 	})
 
 	// Mock host that returns binary data
@@ -204,8 +204,8 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 	capDef.SetOutput(NewCapOutput(MediaString, "Formatted text"))
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs(map[string]MediaSpecDef{
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	capDef.SetMediaSpecs([]MediaSpecDef{
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
 	})
 
 	// Add required argument using new architecture
@@ -252,7 +252,8 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 	capDef := NewCap(urn, "Data Query", "query-data")
 
 	// Add custom media spec with schema - needs map tag for JSON
-	capDef.AddMediaSpec("media:result;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	capDef.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:result;textable;form=map",
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{
@@ -304,9 +305,9 @@ func TestIntegrationCapValidation(t *testing.T) {
 	capDef := NewCap(urn, "Data Processor", "process-data")
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs(map[string]MediaSpecDef{
-		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	capDef.SetMediaSpecs([]MediaSpecDef{
+		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
 	})
 
 	// Add required string argument using new architecture
@@ -337,10 +338,10 @@ func TestIntegrationCapValidation(t *testing.T) {
 // TestIntegrationMediaUrnResolution verifies media URN resolution
 func TestIntegrationMediaUrnResolution(t *testing.T) {
 	// mediaSpecs for resolution - no built-in resolution, must provide specs
-	mediaSpecs := map[string]MediaSpecDef{
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
-		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
-		MediaBinary: NewMediaSpecDefString("application/octet-stream"),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
+		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
+		{Urn: MediaBinary, MediaType: "application/octet-stream"},
 	}
 
 	// Test string media URN resolution
@@ -366,8 +367,8 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.True(t, resolved.IsBinary())
 
 	// Test custom media URN resolution - use proper tags
-	customSpecs := map[string]MediaSpecDef{
-		"media:custom;textable": NewMediaSpecDefString("text/html; profile=https://example.com/schema/html"),
+	customSpecs := []MediaSpecDef{
+		{Urn: "media:custom;textable", MediaType: "text/html", ProfileURI: "https://example.com/schema/html"},
 	}
 
 	resolved, err = ResolveMediaUrn("media:custom;textable", customSpecs)
@@ -380,21 +381,20 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestIntegrationMediaSpecDefJSON verifies MediaSpecDef JSON serialization
-func TestIntegrationMediaSpecDefJSON(t *testing.T) {
-	// Test string form
-	strDef := NewMediaSpecDefString("text/plain; profile=https://capns.org/schema/str")
-	assert.True(t, strDef.IsString)
-	assert.Equal(t, "text/plain; profile=https://capns.org/schema/str", strDef.StringValue)
+// TestIntegrationMediaSpecDefConstruction verifies MediaSpecDef construction
+func TestIntegrationMediaSpecDefConstruction(t *testing.T) {
+	// Test basic construction
+	def := NewMediaSpecDef("media:test;textable", "text/plain", "https://capns.org/schema/str")
+	assert.Equal(t, "media:test;textable", def.Urn)
+	assert.Equal(t, "text/plain", def.MediaType)
+	assert.Equal(t, "https://capns.org/schema/str", def.ProfileURI)
 
-	// Test object form
-	objDef := NewMediaSpecDefObject("application/json", "https://example.com/schema")
-	assert.False(t, objDef.IsString)
-	assert.Equal(t, "application/json", objDef.ObjectValue.MediaType)
-	assert.Equal(t, "https://example.com/schema", objDef.ObjectValue.ProfileURI)
+	// Test with title
+	defWithTitle := NewMediaSpecDefWithTitle("media:test;textable", "text/plain", "https://example.com/schema", "Test Title")
+	assert.Equal(t, "Test Title", defWithTitle.Title)
 
 	// Test object form with schema
 	schema := map[string]interface{}{"type": "object"}
-	schemaDef := NewMediaSpecDefObjectWithSchema("application/json", "https://example.com/schema", schema)
-	assert.NotNil(t, schemaDef.ObjectValue.Schema)
+	schemaDef := NewMediaSpecDefWithSchema("media:test;json", "application/json", "https://example.com/schema", schema)
+	assert.NotNil(t, schemaDef.Schema)
 }

@@ -148,10 +148,11 @@ func TestCapWithMediaSpecs(t *testing.T) {
 	cap := NewCap(id, "Query Structured Data", "query-cmd")
 
 	// Add media spec for MediaString (required for resolution)
-	cap.AddMediaSpec(MediaString, NewMediaSpecDefString("text/plain; profile="+ProfileStr))
+	cap.AddMediaSpec(NewMediaSpecDef(MediaString, "text/plain", ProfileStr))
 
 	// Add a custom media spec for the result type
-	cap.AddMediaSpec("media:result", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:result",
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{

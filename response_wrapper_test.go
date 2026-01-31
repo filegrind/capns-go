@@ -154,11 +154,11 @@ func TestResponseWrapperGetContentType(t *testing.T) {
 func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	// Common mediaSpecs for all caps - resolution requires this table
 	// Use the constant values directly since the cap URNs reference these specific media URN strings
-	mediaSpecs := map[string]MediaSpecDef{
-		"media:textable;form=scalar": NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
-		"media:bytes":                NewMediaSpecDefString("application/octet-stream"),
-		"media:form=map;textable":    NewMediaSpecDefString("application/json; profile=" + ProfileObj),
-		"media:void":                 NewMediaSpecDefString("application/x-void; profile=" + ProfileVoid),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: "media:textable;form=scalar", MediaType: "text/plain", ProfileURI: ProfileStr},
+		{Urn: "media:bytes", MediaType: "application/octet-stream"},
+		{Urn: "media:form=map;textable", MediaType: "application/json", ProfileURI: ProfileObj},
+		{Urn: "media:void", MediaType: "application/x-void", ProfileURI: ProfileVoid},
 	}
 
 	// Setup cap definitions with media URNs - all need in/out with proper tags
@@ -241,7 +241,8 @@ func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 	cap := NewCap(capUrn, "Test Cap", "test")
 
 	// Add custom spec with schema - needs map tag for JSON
-	cap.AddMediaSpec("media:result;textable;form=map", NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+		"media:result;textable;form=map",
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{

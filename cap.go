@@ -142,12 +142,12 @@ func (a *CapArg) GetCliFlag() *string {
 }
 
 // Resolve resolves the argument's media URN to a ResolvedMediaSpec
-func (a *CapArg) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+func (a *CapArg) Resolve(mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
 	return ResolveMediaUrn(a.MediaUrn, mediaSpecs)
 }
 
 // IsBinary checks if this argument expects binary data.
-func (a *CapArg) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+func (a *CapArg) IsBinary(mediaSpecs []MediaSpecDef) (bool, error) {
 	resolved, err := a.Resolve(mediaSpecs)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
@@ -157,7 +157,7 @@ func (a *CapArg) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
 
 // IsStructured checks if this argument expects structured data (map or list).
 // Structured data can be serialized as JSON when transmitted as text.
-func (a *CapArg) IsStructured(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+func (a *CapArg) IsStructured(mediaSpecs []MediaSpecDef) (bool, error) {
 	resolved, err := a.Resolve(mediaSpecs)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
@@ -166,7 +166,7 @@ func (a *CapArg) IsStructured(mediaSpecs map[string]MediaSpecDef) (bool, error) 
 }
 
 // GetMediaType returns the resolved media type for this argument.
-func (a *CapArg) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error) {
+func (a *CapArg) GetMediaType(mediaSpecs []MediaSpecDef) (string, error) {
 	resolved, err := a.Resolve(mediaSpecs)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
@@ -182,12 +182,12 @@ type CapOutput struct {
 }
 
 // Resolve resolves the output's media URN to a ResolvedMediaSpec
-func (co *CapOutput) Resolve(mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+func (co *CapOutput) Resolve(mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
 	return ResolveMediaUrn(co.MediaUrn, mediaSpecs)
 }
 
 // IsBinary checks if this output produces binary data.
-func (co *CapOutput) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+func (co *CapOutput) IsBinary(mediaSpecs []MediaSpecDef) (bool, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
@@ -197,7 +197,7 @@ func (co *CapOutput) IsBinary(mediaSpecs map[string]MediaSpecDef) (bool, error) 
 
 // IsStructured checks if this output produces structured data (map or list).
 // Structured data can be serialized as JSON when transmitted as text.
-func (co *CapOutput) IsStructured(mediaSpecs map[string]MediaSpecDef) (bool, error) {
+func (co *CapOutput) IsStructured(mediaSpecs []MediaSpecDef) (bool, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
@@ -206,7 +206,7 @@ func (co *CapOutput) IsStructured(mediaSpecs map[string]MediaSpecDef) (bool, err
 }
 
 // GetMediaType returns the resolved media type for this output.
-func (co *CapOutput) GetMediaType(mediaSpecs map[string]MediaSpecDef) (string, error) {
+func (co *CapOutput) GetMediaType(mediaSpecs []MediaSpecDef) (string, error) {
 	resolved, err := co.Resolve(mediaSpecs)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
@@ -278,16 +278,16 @@ func NewMediaValidationAllowedValues(values []string) *MediaValidation {
 
 // Cap represents a formal cap definition
 type Cap struct {
-	Urn            *CapUrn                  `json:"urn"`
-	Title          string                   `json:"title"`
-	CapDescription *string                  `json:"cap_description,omitempty"`
-	Metadata       map[string]string        `json:"metadata,omitempty"`
-	Command        string                   `json:"command"`
-	MediaSpecs     map[string]MediaSpecDef  `json:"media_specs,omitempty"`
-	Args           []CapArg                 `json:"args,omitempty"`
-	Output         *CapOutput               `json:"output,omitempty"`
-	MetadataJSON   any                      `json:"metadata_json,omitempty"`
-	RegisteredBy   *RegisteredBy            `json:"registered_by,omitempty"`
+	Urn            *CapUrn           `json:"urn"`
+	Title          string            `json:"title"`
+	CapDescription *string           `json:"cap_description,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+	Command        string            `json:"command"`
+	MediaSpecs     []MediaSpecDef    `json:"media_specs,omitempty"`
+	Args           []CapArg          `json:"args,omitempty"`
+	Output         *CapOutput        `json:"output,omitempty"`
+	MetadataJSON   any               `json:"metadata_json,omitempty"`
+	RegisteredBy   *RegisteredBy     `json:"registered_by,omitempty"`
 }
 
 // NewCap creates a new cap
@@ -297,7 +297,7 @@ func NewCap(urn *CapUrn, title string, command string) *Cap {
 		Title:      title,
 		Command:    command,
 		Metadata:   make(map[string]string),
-		MediaSpecs: make(map[string]MediaSpecDef),
+		MediaSpecs: []MediaSpecDef{},
 		Args:       []CapArg{},
 	}
 }
@@ -310,7 +310,7 @@ func NewCapWithDescription(urn *CapUrn, title string, command string, descriptio
 		Command:        command,
 		CapDescription: &description,
 		Metadata:       make(map[string]string),
-		MediaSpecs:     make(map[string]MediaSpecDef),
+		MediaSpecs:     []MediaSpecDef{},
 		Args:           []CapArg{},
 	}
 }
@@ -325,30 +325,31 @@ func NewCapWithMetadata(urn *CapUrn, title string, command string, metadata map[
 		Title:      title,
 		Command:    command,
 		Metadata:   metadata,
-		MediaSpecs: make(map[string]MediaSpecDef),
+		MediaSpecs: []MediaSpecDef{},
 		Args:       []CapArg{},
 	}
 }
 
-// GetMediaSpecs returns the media specs table
-func (c *Cap) GetMediaSpecs() map[string]MediaSpecDef {
+// GetMediaSpecs returns the media specs array
+func (c *Cap) GetMediaSpecs() []MediaSpecDef {
 	if c.MediaSpecs == nil {
-		c.MediaSpecs = make(map[string]MediaSpecDef)
+		c.MediaSpecs = []MediaSpecDef{}
 	}
 	return c.MediaSpecs
 }
 
-// SetMediaSpecs sets the media specs table
-func (c *Cap) SetMediaSpecs(mediaSpecs map[string]MediaSpecDef) {
+// SetMediaSpecs sets the media specs array
+func (c *Cap) SetMediaSpecs(mediaSpecs []MediaSpecDef) {
 	c.MediaSpecs = mediaSpecs
 }
 
-// AddMediaSpec adds a media spec to the table
-func (c *Cap) AddMediaSpec(specID string, def MediaSpecDef) {
+// AddMediaSpec adds a media spec to the array
+// The URN is taken from the def.Urn field
+func (c *Cap) AddMediaSpec(def MediaSpecDef) {
 	if c.MediaSpecs == nil {
-		c.MediaSpecs = make(map[string]MediaSpecDef)
+		c.MediaSpecs = []MediaSpecDef{}
 	}
-	c.MediaSpecs[specID] = def
+	c.MediaSpecs = append(c.MediaSpecs, def)
 }
 
 // ResolveMediaUrn resolves a media URN using this cap's media_specs table
@@ -740,10 +741,10 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		}
 	}
 
-	// Handle media_specs
+	// Handle media_specs (array format)
 	if mediaSpecsRaw, ok := raw["media_specs"]; ok {
 		mediaSpecsBytes, _ := json.Marshal(mediaSpecsRaw)
-		var mediaSpecs map[string]MediaSpecDef
+		var mediaSpecs []MediaSpecDef
 		if err := json.Unmarshal(mediaSpecsBytes, &mediaSpecs); err != nil {
 			return fmt.Errorf("failed to unmarshal media_specs: %w", err)
 		}

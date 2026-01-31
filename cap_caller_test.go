@@ -69,10 +69,10 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	mockHost := &MockCapSet{}
 
 	// Common mediaSpecs for resolution
-	mediaSpecs := map[string]MediaSpecDef{
-		"media:bytes":                 NewMediaSpecDefString("application/octet-stream"),
-		"media:textable;form=scalar":  NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
-		MediaObject:                   NewMediaSpecDefString("application/json; profile=" + ProfileObj),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: "media:bytes", MediaType: "application/octet-stream"},
+		{Urn: "media:textable;form=scalar", MediaType: "text/plain", ProfileURI: ProfileStr},
+		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
 	}
 
 	// Test binary cap using the 'out' tag with media URN - use proper binary tag
@@ -132,9 +132,9 @@ func TestCapCallerCall(t *testing.T) {
 	require.NoError(t, err)
 
 	// mediaSpecs for resolution
-	mediaSpecs := map[string]MediaSpecDef{
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
-		MediaVoid:   NewMediaSpecDefString("application/x-void; profile=" + ProfileVoid),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
+		{Urn: MediaVoid, MediaType: "application/x-void", ProfileURI: ProfileVoid},
 	}
 
 	capDef := NewCap(capUrn, "Test Capability", "test-command")
@@ -168,9 +168,9 @@ func TestCapCallerWithArguments(t *testing.T) {
 	require.NoError(t, err)
 
 	// mediaSpecs for resolution - MediaObject = "media:form=map;textable"
-	mediaSpecs := map[string]MediaSpecDef{
-		MediaObject: NewMediaSpecDefString("application/json; profile=" + ProfileObj),
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
 	}
 
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
@@ -208,8 +208,8 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	// mediaSpecs for resolution - MediaBinary = "media:bytes"
-	mediaSpecs := map[string]MediaSpecDef{
-		MediaBinary: NewMediaSpecDefString("application/octet-stream"),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: MediaBinary, MediaType: "application/octet-stream"},
 	}
 
 	capDef := NewCap(capUrn, "Generate Capability", "generate-command")
@@ -311,8 +311,8 @@ func TestCapCallerWithStdinSourceData(t *testing.T) {
 	require.NoError(t, err)
 
 	// mediaSpecs for resolution
-	mediaSpecs := map[string]MediaSpecDef{
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
 	}
 
 	capDef := NewCap(capUrn, "Process Capability", "process-command")
@@ -343,8 +343,8 @@ func TestCapCallerWithStdinSourceFileReference(t *testing.T) {
 	require.NoError(t, err)
 
 	// mediaSpecs for resolution
-	mediaSpecs := map[string]MediaSpecDef{
-		MediaString: NewMediaSpecDefString("text/plain; profile=" + ProfileStr),
+	mediaSpecs := []MediaSpecDef{
+		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
 	}
 
 	capDef := NewCap(capUrn, "Process Capability", "process-command")

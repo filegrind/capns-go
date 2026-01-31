@@ -1,17 +1,16 @@
 // Package capns provides MediaSpec parsing and media URN resolution
 //
-// Media URNs reference media type definitions in the media_specs table.
-// Format: `media:<type>;v=<version>` with optional profile tag.
+// Media URNs reference media type definitions in the media_specs array.
+// Format: `media:<type>` with optional tags.
 //
 // Examples:
-// - `media:string`
-// - `media:object;profile="https://example.com/schema.json"`
+// - `media:textable;form=scalar`
+// - `media:pdf;bytes`
 //
-// NO LEGACY SUPPORT: The old `std:xxx.v1` format is NOT supported and will fail hard.
+// MediaSpecDef is always a structured object - NO string form parsing.
 package capns
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -121,10 +120,12 @@ func GetProfileURL(profileName string) string {
 	return GetSchemaBase() + "/" + profileName
 }
 
-// MediaSpecDefObject represents the rich object form of a media spec definition
-type MediaSpecDefObject struct {
+// MediaSpecDef represents a media spec definition - always a structured object
+// The Urn field identifies the media spec within a cap's media_specs array
+type MediaSpecDef struct {
+	Urn         string                 `json:"urn"`
 	MediaType   string                 `json:"media_type"`
-	ProfileURI  string                 `json:"profile_uri"`
+	ProfileURI  string                 `json:"profile_uri,omitempty"`
 	Schema      interface{}            `json:"schema,omitempty"`
 	Title       string                 `json:"title,omitempty"`
 	Description string                 `json:"description,omitempty"`
@@ -133,76 +134,33 @@ type MediaSpecDefObject struct {
 	Extension   string                 `json:"extension,omitempty"`
 }
 
-// MediaSpecDef represents a media spec definition - can be string (compact) or object (rich)
-// String form: "text/plain; profile=https://..."
-// Object form: { media_type, profile_uri, schema? }
-type MediaSpecDef struct {
-	// IsString indicates if this is the compact string form
-	IsString bool
-	// StringValue holds the value when IsString is true
-	StringValue string
-	// ObjectValue holds the value when IsString is false
-	ObjectValue *MediaSpecDefObject
-}
-
-// NewMediaSpecDefString creates a compact string form media spec def
-func NewMediaSpecDefString(value string) MediaSpecDef {
+// NewMediaSpecDef creates a media spec def with required fields
+func NewMediaSpecDef(urn, mediaType, profileURI string) MediaSpecDef {
 	return MediaSpecDef{
-		IsString:    true,
-		StringValue: value,
+		Urn:        urn,
+		MediaType:  mediaType,
+		ProfileURI: profileURI,
 	}
 }
 
-// NewMediaSpecDefObject creates a rich object form media spec def
-func NewMediaSpecDefObject(mediaType, profileURI string) MediaSpecDef {
+// NewMediaSpecDefWithTitle creates a media spec def with title
+func NewMediaSpecDefWithTitle(urn, mediaType, profileURI, title string) MediaSpecDef {
 	return MediaSpecDef{
-		IsString: false,
-		ObjectValue: &MediaSpecDefObject{
-			MediaType:  mediaType,
-			ProfileURI: profileURI,
-		},
+		Urn:        urn,
+		MediaType:  mediaType,
+		ProfileURI: profileURI,
+		Title:      title,
 	}
 }
 
-// NewMediaSpecDefObjectWithSchema creates a rich object form with schema
-func NewMediaSpecDefObjectWithSchema(mediaType, profileURI string, schema interface{}) MediaSpecDef {
+// NewMediaSpecDefWithSchema creates a media spec def with schema
+func NewMediaSpecDefWithSchema(urn, mediaType, profileURI string, schema interface{}) MediaSpecDef {
 	return MediaSpecDef{
-		IsString: false,
-		ObjectValue: &MediaSpecDefObject{
-			MediaType:  mediaType,
-			ProfileURI: profileURI,
-			Schema:     schema,
-		},
+		Urn:        urn,
+		MediaType:  mediaType,
+		ProfileURI: profileURI,
+		Schema:     schema,
 	}
-}
-
-// MarshalJSON implements custom JSON marshaling
-func (m MediaSpecDef) MarshalJSON() ([]byte, error) {
-	if m.IsString {
-		return json.Marshal(m.StringValue)
-	}
-	return json.Marshal(m.ObjectValue)
-}
-
-// UnmarshalJSON implements custom JSON unmarshaling
-func (m *MediaSpecDef) UnmarshalJSON(data []byte) error {
-	// Try string first
-	var str string
-	if err := json.Unmarshal(data, &str); err == nil {
-		m.IsString = true
-		m.StringValue = str
-		return nil
-	}
-
-	// Try object
-	var obj MediaSpecDefObject
-	if err := json.Unmarshal(data, &obj); err == nil {
-		m.IsString = false
-		m.ObjectValue = &obj
-		return nil
-	}
-
-	return errors.New("MediaSpecDef must be string or object")
 }
 
 // ResolvedMediaSpec represents a fully resolved media spec with all fields populated
@@ -347,10 +305,8 @@ func (e *MediaSpecError) Error() string {
 
 var (
 	ErrUnresolvableMediaUrn = &MediaSpecError{"media URN cannot be resolved"}
-	ErrLegacyFormat         = &MediaSpecError{"legacy 'std:xxx.v1' format is not supported - use media URN format"}
-	ErrEmptyMediaType       = &MediaSpecError{"media type cannot be empty"}
-	ErrUnterminatedQuote    = &MediaSpecError{"unterminated quote in profile value"}
 	ErrInvalidMediaUrn      = &MediaSpecError{"invalid media URN - must start with 'media:'"}
+	ErrDuplicateMediaUrn    = &MediaSpecError{"duplicate media URN in media_specs array"}
 )
 
 // NewUnresolvableMediaUrnError creates an error for unresolvable media URNs
@@ -360,17 +316,38 @@ func NewUnresolvableMediaUrnError(mediaUrn string) error {
 	}
 }
 
+// NewDuplicateMediaUrnError creates an error for duplicate URNs in media_specs
+func NewDuplicateMediaUrnError(mediaUrn string) error {
+	return &MediaSpecError{
+		Message: fmt.Sprintf("duplicate media URN '%s' in media_specs array", mediaUrn),
+	}
+}
+
+// ValidateNoMediaSpecDuplicates checks for duplicate URNs in the media_specs array
+func ValidateNoMediaSpecDuplicates(mediaSpecs []MediaSpecDef) error {
+	seen := make(map[string]bool)
+	for _, spec := range mediaSpecs {
+		if seen[spec.Urn] {
+			return NewDuplicateMediaUrnError(spec.Urn)
+		}
+		seen[spec.Urn] = true
+	}
+	return nil
+}
+
 // ResolveMediaUrn resolves a media URN to a ResolvedMediaSpec
-// Resolution: Look up in provided media_specs map, FAIL HARD if not found
-func ResolveMediaUrn(mediaUrn string, mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+// Resolution: Iterate media_specs array and find by URN, FAIL HARD if not found
+func ResolveMediaUrn(mediaUrn string, mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
 	// Validate it's a media URN
 	if !strings.HasPrefix(mediaUrn, "media:") {
 		return nil, ErrInvalidMediaUrn
 	}
 
-	// Look up in the provided media_specs
-	if def, exists := mediaSpecs[mediaUrn]; exists {
-		return resolveMediaSpecDef(mediaUrn, &def)
+	// Find in the provided media_specs array
+	for i := range mediaSpecs {
+		if mediaSpecs[i].Urn == mediaUrn {
+			return resolveMediaSpecDef(&mediaSpecs[i])
+		}
 	}
 
 	// FAIL HARD - media URN must be in media_specs
@@ -378,139 +355,20 @@ func ResolveMediaUrn(mediaUrn string, mediaSpecs map[string]MediaSpecDef) (*Reso
 }
 
 // resolveMediaSpecDef resolves a MediaSpecDef to a ResolvedMediaSpec
-func resolveMediaSpecDef(specID string, def *MediaSpecDef) (*ResolvedMediaSpec, error) {
-	if def.IsString {
-		// Parse the string form: "media_type; profile=url"
-		parsed, err := ParseMediaSpec(def.StringValue)
-		if err != nil {
-			return nil, err
-		}
-		return &ResolvedMediaSpec{
-			SpecID:      specID,
-			MediaType:   parsed.MediaType,
-			ProfileURI:  parsed.ProfileURI,
-			Schema:      nil,
-			Title:       "",
-			Description: "",
-			Validation:  nil,      // String form has no validation
-			Metadata:    nil,      // String form has no metadata
-		}, nil
-	}
-
-	// Object form
-	if def.ObjectValue == nil {
-		return nil, &MediaSpecError{Message: "invalid media spec def: object value is nil"}
-	}
+func resolveMediaSpecDef(def *MediaSpecDef) (*ResolvedMediaSpec, error) {
 	return &ResolvedMediaSpec{
-		SpecID:      specID,
-		MediaType:   def.ObjectValue.MediaType,
-		ProfileURI:  def.ObjectValue.ProfileURI,
-		Schema:      def.ObjectValue.Schema,
-		Title:       def.ObjectValue.Title,
-		Description: def.ObjectValue.Description,
-		Validation:  def.ObjectValue.Validation,
-		Metadata:    def.ObjectValue.Metadata,  // Propagate metadata
-		Extension:   def.ObjectValue.Extension, // Propagate extension
+		SpecID:      def.Urn,
+		MediaType:   def.MediaType,
+		ProfileURI:  def.ProfileURI,
+		Schema:      def.Schema,
+		Title:       def.Title,
+		Description: def.Description,
+		Validation:  def.Validation,
+		Metadata:    def.Metadata,
+		Extension:   def.Extension,
 	}, nil
 }
 
-// extractBaseType extracts the base type identifier from a media URN
-// e.g., "media:textable;form=scalar" -> "string"
-func extractBaseType(mediaUrn string) string {
-	if !strings.HasPrefix(mediaUrn, "media:") {
-		return ""
-	}
-	// Parse tags from the media URN
-	rest := mediaUrn[6:] // Skip "media:"
-	parts := strings.Split(rest, ";")
-
-	var typeVal, vVal string
-	for _, part := range parts {
-		if strings.HasPrefix(part, "type=") {
-			typeVal = part[5:]
-		} else if strings.HasPrefix(part, "v=") {
-			vVal = part[2:]
-		}
-	}
-	if typeVal != "" && vVal != "" {
-		return typeVal + ";v=" + vVal
-	}
-	if typeVal != "" {
-		return typeVal
-	}
-	return ""
-}
-
-// ParsedMediaSpec represents a parsed media spec string (canonical form)
-type ParsedMediaSpec struct {
-	MediaType  string
-	ProfileURI string
-}
-
-// ParseMediaSpec parses a media spec string in CANONICAL format only
-// Format: `<mime-type>; profile=<url>`
-// NO SUPPORT for legacy `content-type:` prefix - will FAIL HARD
-func ParseMediaSpec(s string) (*ParsedMediaSpec, error) {
-	s = strings.TrimSpace(s)
-
-	// FAIL HARD on legacy format
-	if strings.HasPrefix(strings.ToLower(s), "content-type:") {
-		return nil, ErrLegacyFormat
-	}
-
-	// Split by semicolon to separate mime type from parameters
-	parts := strings.SplitN(s, ";", 2)
-
-	mediaType := strings.TrimSpace(parts[0])
-	if mediaType == "" {
-		return nil, ErrEmptyMediaType
-	}
-
-	// Parse profile if present
-	var profileURI string
-	if len(parts) > 1 {
-		params := strings.TrimSpace(parts[1])
-		var err error
-		profileURI, err = parseProfile(params)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &ParsedMediaSpec{
-		MediaType:  mediaType,
-		ProfileURI: profileURI,
-	}, nil
-}
-
-// parseProfile extracts the profile value from parameters string
-func parseProfile(params string) (string, error) {
-	// Look for profile= (case-insensitive)
-	lower := strings.ToLower(params)
-	pos := strings.Index(lower, "profile=")
-	if pos == -1 {
-		return "", nil
-	}
-
-	afterProfile := params[pos+8:]
-
-	// Handle quoted value
-	if strings.HasPrefix(afterProfile, "\"") {
-		rest := afterProfile[1:]
-		endPos := strings.Index(rest, "\"")
-		if endPos == -1 {
-			return "", ErrUnterminatedQuote
-		}
-		return rest[:endPos], nil
-	}
-
-	// Unquoted value - take until semicolon or end
-	semicolonPos := strings.Index(afterProfile, ";")
-	if semicolonPos != -1 {
-		return strings.TrimSpace(afterProfile[:semicolonPos]), nil
-	}
-	return strings.TrimSpace(afterProfile), nil
-}
 
 // GetTypeFromMediaUrn returns the base type (string, integer, number, boolean, object, binary, etc.) from a media URN
 // This is useful for validation to determine what Go type to expect
@@ -586,7 +444,7 @@ func GetTypeFromResolvedMediaSpec(resolved *ResolvedMediaSpec) string {
 
 // GetMediaSpecFromCapUrn extracts media spec from a CapUrn using the 'out' tag
 // The 'out' tag contains a media URN
-func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs map[string]MediaSpecDef) (*ResolvedMediaSpec, error) {
+func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
 	outUrn := urn.OutSpec()
 	if outUrn == "" {
 		return nil, errors.New("no 'out' tag found in cap URN")
