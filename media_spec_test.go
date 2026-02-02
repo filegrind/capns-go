@@ -94,8 +94,8 @@ func TestResolveMediaUrnNotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot be resolved")
 }
 
-// Test extension field propagation from object def to resolved media spec
-func TestExtensionPropagationFromObjectDef(t *testing.T) {
+// Test extensions field propagation from object def to resolved media spec
+func TestExtensionsPropagationFromObjectDef(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:pdf;bytes",
@@ -103,17 +103,17 @@ func TestExtensionPropagationFromObjectDef(t *testing.T) {
 			ProfileURI:  "https://capns.org/schema/pdf",
 			Title:       "PDF Document",
 			Description: "A PDF document",
-			Extension:   "pdf",
+			Extensions:  []string{"pdf"},
 		},
 	}
 
 	resolved, err := ResolveMediaUrn("media:pdf;bytes", mediaSpecs)
 	require.NoError(t, err)
-	assert.Equal(t, "pdf", resolved.Extension)
+	assert.Equal(t, []string{"pdf"}, resolved.Extensions)
 }
 
-// Test extension is empty string when not set
-func TestExtensionEmptyWhenNotSet(t *testing.T) {
+// Test extensions is empty slice when not set
+func TestExtensionsEmptyWhenNotSet(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:        "media:text;textable",
@@ -124,11 +124,11 @@ func TestExtensionEmptyWhenNotSet(t *testing.T) {
 
 	resolved, err := ResolveMediaUrn("media:text;textable", mediaSpecs)
 	require.NoError(t, err)
-	assert.Equal(t, "", resolved.Extension)
+	assert.Empty(t, resolved.Extensions)
 }
 
-// Test extension can coexist with metadata and validation
-func TestExtensionWithMetadataAndValidation(t *testing.T) {
+// Test extensions can coexist with metadata and validation
+func TestExtensionsWithMetadataAndValidation(t *testing.T) {
 	minLen := 1
 	maxLen := 1000
 	mediaSpecs := []MediaSpecDef{
@@ -145,7 +145,7 @@ func TestExtensionWithMetadataAndValidation(t *testing.T) {
 			Metadata: map[string]interface{}{
 				"category": "output",
 			},
-			Extension: "json",
+			Extensions: []string{"json"},
 		},
 	}
 
@@ -155,7 +155,26 @@ func TestExtensionWithMetadataAndValidation(t *testing.T) {
 	// Verify all fields are present
 	require.NotNil(t, resolved.Validation)
 	require.NotNil(t, resolved.Metadata)
-	assert.Equal(t, "json", resolved.Extension)
+	assert.Equal(t, []string{"json"}, resolved.Extensions)
+}
+
+// Test multiple extensions in a media spec
+func TestMultipleExtensions(t *testing.T) {
+	mediaSpecs := []MediaSpecDef{
+		{
+			Urn:         "media:image;jpeg;bytes",
+			MediaType:   "image/jpeg",
+			ProfileURI:  "https://capns.org/schema/jpeg",
+			Title:       "JPEG Image",
+			Description: "JPEG image data",
+			Extensions:  []string{"jpg", "jpeg"},
+		},
+	}
+
+	resolved, err := ResolveMediaUrn("media:image;jpeg;bytes", mediaSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"jpg", "jpeg"}, resolved.Extensions)
+	assert.Len(t, resolved.Extensions, 2)
 }
 
 // Test ValidateNoMediaSpecDuplicates function

@@ -131,7 +131,7 @@ type MediaSpecDef struct {
 	Description string                 `json:"description,omitempty"`
 	Validation  *MediaValidation       `json:"validation,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Extension   string                 `json:"extension,omitempty"`
+	Extensions  []string               `json:"extensions,omitempty"`
 }
 
 // NewMediaSpecDef creates a media spec def with required fields
@@ -173,9 +173,9 @@ type ResolvedMediaSpec struct {
 	Description string
 	Validation  *MediaValidation
 	// Metadata contains arbitrary key-value pairs for display/categorization
-	Metadata  map[string]interface{}
-	// Extension is the optional file extension for storing this media type (e.g., "pdf", "json", "txt")
-	Extension string
+	Metadata map[string]interface{}
+	// Extensions are the file extensions for storing this media type (e.g., ["pdf"], ["jpg", "jpeg"])
+	Extensions []string
 }
 
 // IsBinary returns true if the "bytes" marker tag is present in the source media URN.
@@ -365,7 +365,7 @@ func resolveMediaSpecDef(def *MediaSpecDef) (*ResolvedMediaSpec, error) {
 		Description: def.Description,
 		Validation:  def.Validation,
 		Metadata:    def.Metadata,
-		Extension:   def.Extension,
+		Extensions:  def.Extensions,
 	}, nil
 }
 
