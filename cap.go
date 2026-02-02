@@ -622,17 +622,8 @@ func (c *Cap) Equals(other *Cap) bool {
 
 // MarshalJSON implements custom JSON marshaling
 func (c *Cap) MarshalJSON() ([]byte, error) {
-	allTags := make(map[string]string)
-	allTags["in"] = c.Urn.inSpec
-	allTags["out"] = c.Urn.outSpec
-	for k, v := range c.Urn.tags {
-		allTags[k] = v
-	}
-
 	capData := map[string]any{
-		"urn": map[string]any{
-			"tags": allTags,
-		},
+		"urn":     c.Urn.String(),
 		"title":   c.Title,
 		"command": c.Command,
 	}
@@ -675,42 +666,20 @@ func (c *Cap) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Handle urn field - can be string or object with tags
+	// URN must be a string in canonical format
 	urnField, ok := raw["urn"]
 	if !ok {
 		return fmt.Errorf("missing required field 'urn'")
 	}
 
-	var urn *CapUrn
-	var err error
-	switch v := urnField.(type) {
-	case string:
-		urn, err = NewCapUrnFromString(v)
-		if err != nil {
-			return fmt.Errorf("failed to parse URN string: %v", err)
-		}
-	case map[string]any:
-		tagsField, ok := v["tags"]
-		if !ok {
-			return fmt.Errorf("URN object missing 'tags' field")
-		}
-		tagsMap, ok := tagsField.(map[string]any)
-		if !ok {
-			return fmt.Errorf("URN tags field must be an object")
-		}
+	urnStr, ok := urnField.(string)
+	if !ok {
+		return fmt.Errorf("URN must be a string in canonical format (e.g., 'cap:in=\"media:...\";op=...;out=\"media:...\"')")
+	}
 
-		tags := make(map[string]string)
-		for k, v := range tagsMap {
-			if s, ok := v.(string); ok {
-				tags[k] = s
-			}
-		}
-		urn, err = NewCapUrnFromTags(tags)
-		if err != nil {
-			return fmt.Errorf("failed to create URN from tags: %v", err)
-		}
-	default:
-		return fmt.Errorf("URN field must be string or object")
+	urn, err := NewCapUrnFromString(urnStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse URN string: %v", err)
 	}
 
 	c.Urn = urn

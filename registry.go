@@ -82,7 +82,7 @@ func (e *CacheEntry) isExpired() bool {
 
 // RegistryCapResponse represents the response format from capns.org registry
 type RegistryCapResponse struct {
-	Urn            interface{}         `json:"urn"`          // Can be string or object with tags
+	Urn            string              `json:"urn"`          // URN in canonical string format
 	Version        string              `json:"version"`
 	CapDescription *string             `json:"cap_description,omitempty"`
 	Metadata       map[string]string   `json:"metadata"`
@@ -93,33 +93,10 @@ type RegistryCapResponse struct {
 
 // ToCap converts a registry response to a standard Cap
 func (r *RegistryCapResponse) ToCap() (*Cap, error) {
-	// Handle URN conversion
-	var capUrn *CapUrn
-	var err error
-	
-	switch urnData := r.Urn.(type) {
-	case string:
-		capUrn, err = NewCapUrnFromString(urnData)
-		if err != nil {
-			return nil, fmt.Errorf("invalid URN string: %w", err)
-		}
-	case map[string]interface{}:
-		if tags, ok := urnData["tags"].(map[string]interface{}); ok {
-			builder := NewCapUrnBuilder()
-			for key, value := range tags {
-				if strVal, ok := value.(string); ok {
-					builder = builder.Tag(key, strVal)
-				}
-			}
-			capUrn, err = builder.Build()
-			if err != nil {
-				return nil, fmt.Errorf("invalid URN tags: %w", err)
-			}
-		} else {
-			return nil, fmt.Errorf("invalid URN object format")
-		}
-	default:
-		return nil, fmt.Errorf("URN must be string or object")
+	// URN must be a string in canonical format
+	capUrn, err := NewCapUrnFromString(r.Urn)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URN string: %w", err)
 	}
 	
 	// Use description as title if available, otherwise use a default based on command
