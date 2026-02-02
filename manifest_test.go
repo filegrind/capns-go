@@ -53,6 +53,29 @@ func TestCapManifestWithAuthor(t *testing.T) {
 	assert.Equal(t, "Test Author", *manifest.Author)
 }
 
+func TestCapManifestWithPageUrl(t *testing.T) {
+	id, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
+	require.NoError(t, err)
+
+	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
+
+	manifest := NewCapManifest(
+		"TestComponent",
+		"0.1.0",
+		"A test component for validation",
+		[]Cap{*cap},
+	).WithAuthor("Test Author").WithPageUrl("https://github.com/example/test")
+
+	require.NotNil(t, manifest.PageUrl)
+	assert.Equal(t, "https://github.com/example/test", *manifest.PageUrl)
+
+	// Verify it serializes correctly
+	jsonData, err := json.Marshal(manifest)
+	require.NoError(t, err)
+	jsonStr := string(jsonData)
+	assert.Contains(t, jsonStr, `"page_url":"https://github.com/example/test"`)
+}
+
 func TestCapManifestJSONSerialization(t *testing.T) {
 	id, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
@@ -162,30 +185,32 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 	assert.Len(t, deserialized.Caps, 0)
 }
 
-func TestCapManifestOptionalAuthorField(t *testing.T) {
+func TestCapManifestOptionalFields(t *testing.T) {
 	id, err := NewCapUrnFromString(manifestTestUrn("op=validate;file"))
 	require.NoError(t, err)
 	cap := NewCap(id, "File Validator", "validate")
 
-	manifestWithoutAuthor := NewCapManifest(
+	manifestWithoutOptionals := NewCapManifest(
 		"ValidatorComponent",
 		"1.0.0",
 		"File validation component",
 		[]Cap{*cap},
 	)
 
-	// Serialize manifest without author
-	jsonData, err := json.Marshal(manifestWithoutAuthor)
+	// Serialize manifest without optional fields
+	jsonData, err := json.Marshal(manifestWithoutOptionals)
 	require.NoError(t, err)
 
 	jsonStr := string(jsonData)
 	assert.NotContains(t, jsonStr, `"author"`)
+	assert.NotContains(t, jsonStr, `"page_url"`)
 
 	// Should deserialize correctly
 	var deserialized CapManifest
 	err = json.Unmarshal(jsonData, &deserialized)
 	require.NoError(t, err)
 	assert.Nil(t, deserialized.Author)
+	assert.Nil(t, deserialized.PageUrl)
 }
 
 // Test component that implements ComponentMetadata interface
