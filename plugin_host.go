@@ -119,12 +119,12 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 		// Error response
 		if req, ok := ph.pendingRequests[idKey]; ok {
 			delete(ph.pendingRequests, idKey)
-			req.done <- fmt.Errorf("[%s] %s", frame.Code, frame.Message)
+			req.done <- fmt.Errorf("[%s] %s", frame.ErrorCode(), frame.ErrorMessage())
 		}
 
 	case cbor.FrameTypeLog:
 		// Log message from plugin
-		fmt.Printf("[Plugin:%s] %s\n", frame.Level, frame.Message)
+		fmt.Printf("[Plugin:%s] %s\n", frame.LogLevel(), frame.LogMessage())
 
 	case cbor.FrameTypeHeartbeat:
 		// Heartbeat - send response

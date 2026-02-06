@@ -27,22 +27,20 @@ func TestReqFrameRoundtrip(t *testing.T) {
 	if decoded.FrameType != original.FrameType {
 		t.Error("FrameType mismatch")
 	}
-	if decoded.Cap != original.Cap {
-		t.Errorf("Cap mismatch: expected %s, got %s", original.Cap, decoded.Cap)
+	if decoded.Cap == nil || original.Cap == nil || *decoded.Cap != *original.Cap {
+		t.Errorf("Cap mismatch: expected %v, got %v", original.Cap, decoded.Cap)
 	}
 	if string(decoded.Payload) != string(original.Payload) {
 		t.Error("Payload mismatch")
 	}
-	if decoded.ContentType != original.ContentType {
-		t.Errorf("ContentType mismatch: expected %s, got %s", original.ContentType, decoded.ContentType)
+	if decoded.ContentType == nil || original.ContentType == nil || *decoded.ContentType != *original.ContentType {
+		t.Errorf("ContentType mismatch: expected %v, got %v", original.ContentType, decoded.ContentType)
 	}
 }
 
 // TEST206: Test HELLO frame encode/decode roundtrip preserves metadata
 func TestHelloFrameRoundtrip(t *testing.T) {
-	limits := DefaultLimits()
-	limitsData, _ := EncodeCBOR(limits)
-	original := NewHello(limitsData)
+	original := NewHello(DefaultMaxFrame, DefaultMaxChunk)
 
 	encoded, err := EncodeFrame(original)
 	if err != nil {
@@ -57,8 +55,11 @@ func TestHelloFrameRoundtrip(t *testing.T) {
 	if decoded.FrameType != FrameTypeHello {
 		t.Error("FrameType mismatch")
 	}
-	if len(decoded.Payload) == 0 {
-		t.Error("Expected limits payload")
+	if decoded.Meta == nil {
+		t.Error("Expected Meta map with limits")
+	}
+	if decoded.Meta["max_frame"] == nil {
+		t.Error("Expected max_frame in Meta")
 	}
 }
 
@@ -79,11 +80,11 @@ func TestErrFrameRoundtrip(t *testing.T) {
 		t.Fatalf("Decode failed: %v", err)
 	}
 
-	if decoded.Code != code {
-		t.Errorf("Code mismatch: expected %s, got %s", code, decoded.Code)
+	if decoded.ErrorCode() != code {
+		t.Errorf("Code mismatch: expected %s, got %s", code, decoded.ErrorCode())
 	}
-	if decoded.Message != message {
-		t.Errorf("Message mismatch: expected %s, got %s", message, decoded.Message)
+	if decoded.ErrorMessage() != message {
+		t.Errorf("Message mismatch: expected %s, got %s", message, decoded.ErrorMessage())
 	}
 }
 
@@ -104,11 +105,11 @@ func TestLogFrameRoundtrip(t *testing.T) {
 		t.Fatalf("Decode failed: %v", err)
 	}
 
-	if decoded.Level != level {
-		t.Errorf("Level mismatch: expected %s, got %s", level, decoded.Level)
+	if decoded.LogLevel() != level {
+		t.Errorf("Level mismatch: expected %s, got %s", level, decoded.LogLevel())
 	}
-	if decoded.Message != message {
-		t.Errorf("Message mismatch: expected %s, got %s", message, decoded.Message)
+	if decoded.LogMessage() != message {
+		t.Errorf("Message mismatch: expected %s, got %s", message, decoded.LogMessage())
 	}
 }
 
@@ -132,7 +133,7 @@ func TestResFrameRoundtrip(t *testing.T) {
 	if string(decoded.Payload) != string(payload) {
 		t.Error("Payload mismatch")
 	}
-	if decoded.ContentType != contentType {
+	if decoded.ContentType == nil || *decoded.ContentType != contentType {
 		t.Errorf("ContentType mismatch")
 	}
 }
@@ -141,9 +142,8 @@ func TestResFrameRoundtrip(t *testing.T) {
 func TestEndFrameRoundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	payload := []byte("final data")
-	contentType := "application/json"
 
-	original := NewEnd(id, payload, contentType)
+	original := NewEnd(id, payload)
 	encoded, err := EncodeFrame(original)
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
@@ -160,12 +160,15 @@ func TestEndFrameRoundtrip(t *testing.T) {
 	if string(decoded.Payload) != string(payload) {
 		t.Error("Payload mismatch")
 	}
+	if !decoded.IsEof() {
+		t.Error("Expected eof to be true")
+	}
 }
 
 // TEST211: Test HELLO with manifest encode/decode roundtrip preserves manifest bytes
 func TestHelloWithManifestRoundtrip(t *testing.T) {
 	manifest := []byte(`{"name":"test","version":"1.0.0"}`)
-	original := NewHello(manifest)
+	original := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifest)
 
 	encoded, err := EncodeFrame(original)
 	if err != nil {
@@ -177,8 +180,11 @@ func TestHelloWithManifestRoundtrip(t *testing.T) {
 		t.Fatalf("Decode failed: %v", err)
 	}
 
-	if string(decoded.Payload) != string(manifest) {
-		t.Errorf("Manifest mismatch: expected %s, got %s", string(manifest), string(decoded.Payload))
+	if decoded.Meta == nil {
+		t.Fatal("Expected Meta map")
+	}
+	if manifestBytes, ok := decoded.Meta["manifest"].([]byte); !ok || string(manifestBytes) != string(manifest) {
+		t.Errorf("Manifest mismatch: expected %s, got %v", string(manifest), decoded.Meta["manifest"])
 	}
 }
 
@@ -250,7 +256,7 @@ func TestFrameIOroundtrip(t *testing.T) {
 		t.Fatalf("ReadFrame failed: %v", err)
 	}
 
-	if decoded.Cap != original.Cap {
+	if decoded.Cap == nil || original.Cap == nil || *decoded.Cap != *original.Cap {
 		t.Error("Cap mismatch after I/O roundtrip")
 	}
 }
@@ -356,7 +362,7 @@ func TestWriteChunked(t *testing.T) {
 			t.Fatalf("ReadFrame failed: %v", err)
 		}
 		chunks = append(chunks, frame.Payload)
-		if frame.FrameType == FrameTypeEnd {
+		if frame.FrameType == FrameTypeEnd || frame.IsEof() {
 			break
 		}
 	}

@@ -165,7 +165,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 		switch frame.FrameType {
 		case cbor.FrameTypeReq:
-			if frame.Cap == "" {
+			if frame.Cap == nil || *frame.Cap == "" {
 				errFrame := cbor.NewErr(frame.Id, "INVALID_REQUEST", "Request missing cap URN")
 				if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
@@ -173,9 +173,9 @@ func (pr *PluginRuntime) runCBORMode() error {
 				continue
 			}
 
-			handler := pr.FindHandler(frame.Cap)
+			handler := pr.FindHandler(*frame.Cap)
 			if handler == nil {
-				errFrame := cbor.NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", frame.Cap))
+				errFrame := cbor.NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", *frame.Cap))
 				if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
 				}
@@ -184,9 +184,12 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 			// Clone what we need for the handler goroutine
 			requestID := frame.Id
-			capUrn := frame.Cap
+			capUrn := *frame.Cap
 			rawPayload := frame.Payload
-			contentType := frame.ContentType
+			var contentType string
+			if frame.ContentType != nil {
+				contentType = *frame.ContentType
+			}
 			maxChunk := negotiatedLimits.MaxChunk
 
 			// Spawn handler in separate goroutine - main loop continues immediately
@@ -221,7 +224,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 				// Automatic chunking: split large payloads into CHUNK frames
 				if len(result) <= maxChunk {
 					// Small payload: send single END frame
-					endFrame := cbor.NewEnd(requestID, result, "media:bytes")
+					endFrame := cbor.NewEnd(requestID, result)
 					if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
 						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
 					}
@@ -249,7 +252,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 							seq++
 						} else {
 							// Last chunk - send END frame with remaining data
-							endFrame := cbor.NewEnd(requestID, chunkData, "media:bytes")
+							endFrame := cbor.NewEnd(requestID, chunkData)
 							if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
 								fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
 							}
@@ -291,13 +294,13 @@ func (pr *PluginRuntime) runCBORMode() error {
 			// Error frame from host - could be response to peer request
 			if pending, ok := pendingPeerRequests.LoadAndDelete(frame.Id); ok {
 				pendingReq := pending.(*pendingPeerRequest)
-				code := "UNKNOWN"
-				message := "Unknown error"
-				if frame.Code != "" {
-					code = frame.Code
+				code := frame.ErrorCode()
+				message := frame.ErrorMessage()
+				if code == "" {
+					code = "UNKNOWN"
 				}
-				if frame.Message != "" {
-					message = frame.Message
+				if message == "" {
+					message = "Unknown error"
 				}
 				pendingReq.sender <- InvokeResult{
 					Error: fmt.Errorf("[%s] %s", code, message),

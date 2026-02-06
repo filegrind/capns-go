@@ -31,18 +31,18 @@ func TestFrameTypeRoundtrip(t *testing.T) {
 // TEST172: Test FrameType values are within expected range
 func TestFrameTypeValidRange(t *testing.T) {
 	validTypes := map[uint8]bool{
+		0: true, // HELLO
 		1: true, // REQ
 		2: true, // RES
 		3: true, // CHUNK
 		4: true, // END
-		5: true, // ERR
-		6: true, // LOG
+		5: true, // LOG
+		6: true, // ERR
 		7: true, // HEARTBEAT
-		8: true, // HELLO
 	}
 
 	for i := uint8(0); i < 20; i++ {
-		if i >= 1 && i <= 8 {
+		if i >= 0 && i <= 7 {
 			if !validTypes[i] {
 				t.Errorf("Expected %d to be valid FrameType", i)
 			}
@@ -52,6 +52,9 @@ func TestFrameTypeValidRange(t *testing.T) {
 
 // TEST173: Test FrameType discriminant values match the wire protocol specification exactly
 func TestFrameTypeWireProtocolValues(t *testing.T) {
+	if uint8(FrameTypeHello) != 0 {
+		t.Errorf("HELLO must be 0, got %d", FrameTypeHello)
+	}
 	if uint8(FrameTypeReq) != 1 {
 		t.Errorf("REQ must be 1, got %d", FrameTypeReq)
 	}
@@ -64,17 +67,14 @@ func TestFrameTypeWireProtocolValues(t *testing.T) {
 	if uint8(FrameTypeEnd) != 4 {
 		t.Errorf("END must be 4, got %d", FrameTypeEnd)
 	}
-	if uint8(FrameTypeErr) != 5 {
-		t.Errorf("ERR must be 5, got %d", FrameTypeErr)
+	if uint8(FrameTypeLog) != 5 {
+		t.Errorf("LOG must be 5, got %d", FrameTypeLog)
 	}
-	if uint8(FrameTypeLog) != 6 {
-		t.Errorf("LOG must be 6, got %d", FrameTypeLog)
+	if uint8(FrameTypeErr) != 6 {
+		t.Errorf("ERR must be 6, got %d", FrameTypeErr)
 	}
 	if uint8(FrameTypeHeartbeat) != 7 {
 		t.Errorf("HEARTBEAT must be 7, got %d", FrameTypeHeartbeat)
-	}
-	if uint8(FrameTypeHello) != 8 {
-		t.Errorf("HELLO must be 8, got %d", FrameTypeHello)
 	}
 }
 
@@ -169,24 +169,32 @@ func TestMessageIdDefault(t *testing.T) {
 
 // TEST180: Test Frame::hello without manifest produces correct HELLO frame
 func TestFrameHelloWithoutManifest(t *testing.T) {
-	frame := NewHello([]byte{})
+	frame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
 	if frame.FrameType != FrameTypeHello {
 		t.Errorf("Expected HELLO frame type, got %v", frame.FrameType)
 	}
-	if len(frame.Payload) != 0 {
-		t.Error("Expected empty payload for HELLO without manifest")
+	// Host-side HELLO has limits in Meta, no manifest in payload
+	if frame.Meta == nil {
+		t.Error("Expected Meta map with limits")
+	}
+	if frame.Meta["max_frame"] == nil {
+		t.Error("Expected max_frame in Meta")
 	}
 }
 
 // TEST181: Test Frame::hello_with_manifest produces HELLO with manifest bytes
 func TestFrameHelloWithManifest(t *testing.T) {
 	manifest := []byte(`{"name":"test"}`)
-	frame := NewHello(manifest)
+	frame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifest)
 	if frame.FrameType != FrameTypeHello {
 		t.Errorf("Expected HELLO frame type, got %v", frame.FrameType)
 	}
-	if string(frame.Payload) != string(manifest) {
-		t.Errorf("Expected manifest payload, got %s", string(frame.Payload))
+	// Plugin-side HELLO has limits AND manifest in Meta
+	if frame.Meta == nil {
+		t.Error("Expected Meta map")
+	}
+	if manifestBytes, ok := frame.Meta["manifest"].([]byte); !ok || string(manifestBytes) != string(manifest) {
+		t.Errorf("Expected manifest in Meta, got %v", frame.Meta["manifest"])
 	}
 }
 
@@ -202,14 +210,14 @@ func TestFrameReq(t *testing.T) {
 	if frame.FrameType != FrameTypeReq {
 		t.Errorf("Expected REQ frame type, got %v", frame.FrameType)
 	}
-	if frame.Cap != cap {
-		t.Errorf("Expected cap %s, got %s", cap, frame.Cap)
+	if frame.Cap == nil || *frame.Cap != cap {
+		t.Errorf("Expected cap %s, got %v", cap, frame.Cap)
 	}
 	if string(frame.Payload) != string(payload) {
 		t.Error("Payload mismatch")
 	}
-	if frame.ContentType != contentType {
-		t.Errorf("Expected content_type %s, got %s", contentType, frame.ContentType)
+	if frame.ContentType == nil || *frame.ContentType != contentType {
+		t.Errorf("Expected content_type %s, got %v", contentType, frame.ContentType)
 	}
 }
 
@@ -227,8 +235,8 @@ func TestFrameRes(t *testing.T) {
 	if string(frame.Payload) != string(payload) {
 		t.Error("Payload mismatch")
 	}
-	if frame.ContentType != contentType {
-		t.Errorf("Expected content_type %s, got %s", contentType, frame.ContentType)
+	if frame.ContentType == nil || *frame.ContentType != contentType {
+		t.Errorf("Expected content_type %s, got %v", contentType, frame.ContentType)
 	}
 }
 
@@ -262,11 +270,11 @@ func TestFrameErr(t *testing.T) {
 	if frame.FrameType != FrameTypeErr {
 		t.Errorf("Expected ERR frame type, got %v", frame.FrameType)
 	}
-	if frame.Code != code {
-		t.Errorf("Expected code %s, got %s", code, frame.Code)
+	if frame.ErrorCode() != code {
+		t.Errorf("Expected code %s, got %s", code, frame.ErrorCode())
 	}
-	if frame.Message != message {
-		t.Errorf("Expected message %s, got %s", message, frame.Message)
+	if frame.ErrorMessage() != message {
+		t.Errorf("Expected message %s, got %s", message, frame.ErrorMessage())
 	}
 }
 
@@ -281,11 +289,11 @@ func TestFrameLog(t *testing.T) {
 	if frame.FrameType != FrameTypeLog {
 		t.Errorf("Expected LOG frame type, got %v", frame.FrameType)
 	}
-	if frame.Level != level {
-		t.Errorf("Expected level %s, got %s", level, frame.Level)
+	if frame.LogLevel() != level {
+		t.Errorf("Expected level %s, got %s", level, frame.LogLevel())
 	}
-	if frame.Message != message {
-		t.Errorf("Expected message %s, got %s", message, frame.Message)
+	if frame.LogMessage() != message {
+		t.Errorf("Expected message %s, got %s", message, frame.LogMessage())
 	}
 }
 
@@ -293,9 +301,8 @@ func TestFrameLog(t *testing.T) {
 func TestFrameEndWithPayload(t *testing.T) {
 	id := NewMessageIdRandom()
 	payload := []byte("final data")
-	contentType := "application/json"
 
-	frame := NewEnd(id, payload, contentType)
+	frame := NewEnd(id, payload)
 
 	if frame.FrameType != FrameTypeEnd {
 		t.Errorf("Expected END frame type, got %v", frame.FrameType)
@@ -303,21 +310,24 @@ func TestFrameEndWithPayload(t *testing.T) {
 	if string(frame.Payload) != string(payload) {
 		t.Error("Payload mismatch")
 	}
-	if frame.ContentType != contentType {
-		t.Errorf("Expected content_type %s, got %s", contentType, frame.ContentType)
+	if !frame.IsEof() {
+		t.Error("Expected eof to be true")
 	}
 }
 
 // TEST188: Test Frame::end without payload
 func TestFrameEndWithoutPayload(t *testing.T) {
 	id := NewMessageIdRandom()
-	frame := NewEnd(id, []byte{}, "")
+	frame := NewEnd(id, []byte{})
 
 	if frame.FrameType != FrameTypeEnd {
 		t.Errorf("Expected END frame type, got %v", frame.FrameType)
 	}
 	if len(frame.Payload) != 0 {
 		t.Error("Expected empty payload")
+	}
+	if !frame.IsEof() {
+		t.Error("Expected eof to be true")
 	}
 }
 
@@ -339,7 +349,7 @@ func TestFrameHeartbeat(t *testing.T) {
 	if len(frame.Payload) != 0 {
 		t.Error("HEARTBEAT should have empty payload")
 	}
-	if frame.Cap != "" {
+	if frame.Cap != nil {
 		t.Error("HEARTBEAT should have no cap")
 	}
 }

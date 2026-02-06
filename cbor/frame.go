@@ -25,14 +25,14 @@ const MaxFrameHardLimit int = 16_777_216
 type FrameType uint8
 
 const (
+	FrameTypeHello     FrameType = 0 // MUST be 0 - matches Rust
 	FrameTypeReq       FrameType = 1
 	FrameTypeRes       FrameType = 2
 	FrameTypeChunk     FrameType = 3
 	FrameTypeEnd       FrameType = 4
-	FrameTypeErr       FrameType = 5
-	FrameTypeLog       FrameType = 6
+	FrameTypeLog       FrameType = 5 // MUST be 5 - matches Rust
+	FrameTypeErr       FrameType = 6 // MUST be 6 - matches Rust
 	FrameTypeHeartbeat FrameType = 7
-	FrameTypeHello     FrameType = 8
 )
 
 // String returns the frame type name
@@ -146,94 +146,166 @@ func (m MessageId) Equals(other MessageId) bool {
 }
 
 // Frame represents a CBOR protocol frame
+// This structure MUST match the Rust Frame structure exactly
 type Frame struct {
-	FrameType   FrameType
-	Id          MessageId
-	Cap         string  // For REQ frames
-	Seq         uint64  // For CHUNK frames
-	Payload     []byte  // Frame payload
-	ContentType string  // For RES/END frames
-	Code        string  // For ERR frames
-	Message     string  // For ERR/LOG frames
-	Level       string  // For LOG frames
-	Len         *int    // For CHUNK frames - total content length
-	Eof         *bool   // For CHUNK frames - end of stream
+	Version     uint8                  // Protocol version (always 1)
+	FrameType   FrameType              // Frame type discriminator
+	Id          MessageId              // Message ID for correlation
+	Seq         uint64                 // Sequence number within a stream
+	ContentType *string                // Content type of payload (MIME-like)
+	Meta        map[string]interface{} // Metadata map (for ERR/LOG data, HELLO limits, etc.)
+	Payload     []byte                 // Binary payload
+	Len         *uint64                // Total length for chunked transfers (first chunk only)
+	Offset      *uint64                // Byte offset in chunked stream
+	Eof         *bool                  // End of stream marker
+	Cap         *string                // Cap URN (for REQ frames)
 }
 
-// NewReq creates a REQ frame
-func NewReq(id MessageId, cap string, payload []byte, contentType string) *Frame {
+// New creates a new frame with required fields (matches Rust Frame::new)
+func newFrame(frameType FrameType, id MessageId) *Frame {
 	return &Frame{
-		FrameType:   FrameTypeReq,
-		Id:          id,
-		Cap:         cap,
-		Payload:     payload,
-		ContentType: contentType,
+		Version:   ProtocolVersion,
+		FrameType: frameType,
+		Id:        id,
+		Seq:       0,
 	}
 }
 
-// NewRes creates a RES frame
+// NewReq creates a REQ frame (matches Rust Frame::req)
+func NewReq(id MessageId, capUrn string, payload []byte, contentType string) *Frame {
+	frame := newFrame(FrameTypeReq, id)
+	frame.Cap = &capUrn
+	frame.Payload = payload
+	frame.ContentType = &contentType
+	return frame
+}
+
+// NewRes creates a RES frame (matches Rust Frame::res)
 func NewRes(id MessageId, payload []byte, contentType string) *Frame {
-	return &Frame{
-		FrameType:   FrameTypeRes,
-		Id:          id,
-		Payload:     payload,
-		ContentType: contentType,
-	}
+	frame := newFrame(FrameTypeRes, id)
+	frame.Payload = payload
+	frame.ContentType = &contentType
+	return frame
 }
 
-// NewChunk creates a CHUNK frame
+// NewChunk creates a CHUNK frame (matches Rust Frame::chunk)
 func NewChunk(id MessageId, seq uint64, payload []byte) *Frame {
-	return &Frame{
-		FrameType: FrameTypeChunk,
-		Id:        id,
-		Seq:       seq,
-		Payload:   payload,
-	}
+	frame := newFrame(FrameTypeChunk, id)
+	frame.Seq = seq
+	frame.Payload = payload
+	return frame
 }
 
-// NewEnd creates an END frame
-func NewEnd(id MessageId, payload []byte, contentType string) *Frame {
-	return &Frame{
-		FrameType:   FrameTypeEnd,
-		Id:          id,
-		Payload:     payload,
-		ContentType: contentType,
+// NewEnd creates an END frame (matches Rust Frame::end)
+func NewEnd(id MessageId, payload []byte) *Frame {
+	frame := newFrame(FrameTypeEnd, id)
+	if payload != nil {
+		frame.Payload = payload
 	}
+	eof := true
+	frame.Eof = &eof
+	return frame
 }
 
-// NewErr creates an ERR frame
+// NewErr creates an ERR frame (matches Rust Frame::err)
+// code and message are stored in the Meta map
 func NewErr(id MessageId, code string, message string) *Frame {
-	return &Frame{
-		FrameType: FrameTypeErr,
-		Id:        id,
-		Code:      code,
-		Message:   message,
+	frame := newFrame(FrameTypeErr, id)
+	frame.Meta = map[string]interface{}{
+		"code":    code,
+		"message": message,
 	}
+	return frame
 }
 
-// NewLog creates a LOG frame
+// NewLog creates a LOG frame (matches Rust Frame::log)
+// level and message are stored in the Meta map
 func NewLog(id MessageId, level string, message string) *Frame {
-	return &Frame{
-		FrameType: FrameTypeLog,
-		Id:        id,
-		Level:     level,
-		Message:   message,
+	frame := newFrame(FrameTypeLog, id)
+	frame.Meta = map[string]interface{}{
+		"level":   level,
+		"message": message,
 	}
+	return frame
 }
 
-// NewHeartbeat creates a HEARTBEAT frame
+// NewHeartbeat creates a HEARTBEAT frame (matches Rust Frame::heartbeat)
 func NewHeartbeat(id MessageId) *Frame {
-	return &Frame{
-		FrameType: FrameTypeHeartbeat,
-		Id:        id,
-	}
+	return newFrame(FrameTypeHeartbeat, id)
 }
 
-// NewHello creates a HELLO frame with manifest payload
-func NewHello(manifestPayload []byte) *Frame {
-	return &Frame{
-		FrameType: FrameTypeHello,
-		Id:        NewMessageIdDefault(),
-		Payload:   manifestPayload,
+// NewHello creates a HELLO frame for handshake (host side - no manifest)
+// Matches Rust Frame::hello
+func NewHello(maxFrame, maxChunk int) *Frame {
+	frame := newFrame(FrameTypeHello, MessageId{uintValue: new(uint64)})
+	frame.Meta = map[string]interface{}{
+		"max_frame": maxFrame,
+		"max_chunk": maxChunk,
+		"version":   ProtocolVersion,
 	}
+	return frame
+}
+
+// NewHelloWithManifest creates a HELLO frame with manifest (plugin side)
+// Matches Rust Frame::hello_with_manifest
+func NewHelloWithManifest(maxFrame, maxChunk int, manifest []byte) *Frame {
+	frame := newFrame(FrameTypeHello, MessageId{uintValue: new(uint64)})
+	frame.Meta = map[string]interface{}{
+		"max_frame": maxFrame,
+		"max_chunk": maxChunk,
+		"version":   ProtocolVersion,
+		"manifest":  manifest,
+	}
+	return frame
+}
+
+// Helper methods to extract values from Meta map (matches Rust Frame::error_code, error_message, log_level, log_message)
+
+// ErrorCode gets error code from ERR frame meta
+func (f *Frame) ErrorCode() string {
+	if f.FrameType != FrameTypeErr || f.Meta == nil {
+		return ""
+	}
+	if code, ok := f.Meta["code"].(string); ok {
+		return code
+	}
+	return ""
+}
+
+// ErrorMessage gets error message from ERR frame meta
+func (f *Frame) ErrorMessage() string {
+	if f.FrameType != FrameTypeErr || f.Meta == nil {
+		return ""
+	}
+	if msg, ok := f.Meta["message"].(string); ok {
+		return msg
+	}
+	return ""
+}
+
+// LogLevel gets log level from LOG frame meta
+func (f *Frame) LogLevel() string {
+	if f.FrameType != FrameTypeLog || f.Meta == nil {
+		return ""
+	}
+	if level, ok := f.Meta["level"].(string); ok {
+		return level
+	}
+	return ""
+}
+
+// LogMessage gets log message from LOG frame meta
+func (f *Frame) LogMessage() string {
+	if f.FrameType != FrameTypeLog || f.Meta == nil {
+		return ""
+	}
+	if msg, ok := f.Meta["message"].(string); ok {
+		return msg
+	}
+	return ""
+}
+
+// IsEof checks if this is the final frame in a stream (matches Rust Frame::is_eof)
+func (f *Frame) IsEof() bool {
+	return f.Eof != nil && *f.Eof
 }

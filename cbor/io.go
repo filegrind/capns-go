@@ -114,7 +114,7 @@ func (fw *FrameWriter) WriteFrame(frame *Frame) error {
 func (fw *FrameWriter) WriteResponseWithChunking(requestId MessageId, payload []byte) error {
 	if len(payload) <= fw.limits.MaxChunk {
 		// Small payload: single END frame
-		frame := NewEnd(requestId, payload, "media:bytes")
+		frame := NewEnd(requestId, payload)
 		return fw.WriteFrame(frame)
 	}
 
@@ -137,7 +137,7 @@ func (fw *FrameWriter) WriteResponseWithChunking(requestId MessageId, payload []
 			seq++
 		} else {
 			// Last chunk - send END frame with remaining data
-			frame := NewEnd(requestId, chunkData, "media:bytes")
+			frame := NewEnd(requestId, chunkData)
 			return fw.WriteFrame(frame)
 		}
 	}
@@ -157,19 +157,22 @@ func HandshakeAccept(reader *FrameReader, writer *FrameWriter, manifestData []by
 		return Limits{}, errors.New("expected HELLO frame")
 	}
 
-	// 2. Decode host limits from payload
+	// 2. Decode host limits from Meta map
 	var hostLimits Limits
-	if len(helloFrame.Payload) > 0 {
-		if err := DecodeCBOR(helloFrame.Payload, &hostLimits); err != nil {
-			// Host sent empty or invalid limits - use defaults
-			hostLimits = DefaultLimits()
+	if helloFrame.Meta != nil {
+		if maxFrame, ok := helloFrame.Meta["max_frame"].(int); ok {
+			hostLimits.MaxFrame = maxFrame
 		}
-	} else {
+		if maxChunk, ok := helloFrame.Meta["max_chunk"].(int); ok {
+			hostLimits.MaxChunk = maxChunk
+		}
+	}
+	if hostLimits.MaxFrame == 0 || hostLimits.MaxChunk == 0 {
 		hostLimits = DefaultLimits()
 	}
 
 	// 3. Send HELLO back with manifest
-	responseFrame := NewHello(manifestData)
+	responseFrame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifestData)
 	if err := writer.WriteFrame(responseFrame); err != nil {
 		return Limits{}, fmt.Errorf("failed to write HELLO response: %w", err)
 	}
@@ -183,13 +186,7 @@ func HandshakeAccept(reader *FrameReader, writer *FrameWriter, manifestData []by
 // HandshakeInitiate performs handshake from host side
 func HandshakeInitiate(reader *FrameReader, writer *FrameWriter) ([]byte, Limits, error) {
 	// 1. Send HELLO with our limits
-	ourLimits := DefaultLimits()
-	limitsData, err := EncodeCBOR(ourLimits)
-	if err != nil {
-		return nil, Limits{}, fmt.Errorf("failed to encode limits: %w", err)
-	}
-
-	helloFrame := NewHello(limitsData)
+	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
 	if err := writer.WriteFrame(helloFrame); err != nil {
 		return nil, Limits{}, fmt.Errorf("failed to write HELLO: %w", err)
 	}
@@ -204,14 +201,30 @@ func HandshakeInitiate(reader *FrameReader, writer *FrameWriter) ([]byte, Limits
 		return nil, Limits{}, errors.New("expected HELLO response")
 	}
 
-	manifestData := responseFrame.Payload
+	// 3. Extract manifest from Meta map
+	var manifestData []byte
+	if responseFrame.Meta != nil {
+		if manifest, ok := responseFrame.Meta["manifest"].([]byte); ok {
+			manifestData = manifest
+		}
+	}
 
-	// 3. Extract plugin limits (if provided in manifest, else use defaults)
-	// For now, assume defaults - manifest parsing is separate
-	pluginLimits := DefaultLimits()
+	// 4. Extract plugin limits from Meta map
+	var pluginLimits Limits
+	if responseFrame.Meta != nil {
+		if maxFrame, ok := responseFrame.Meta["max_frame"].(int); ok {
+			pluginLimits.MaxFrame = maxFrame
+		}
+		if maxChunk, ok := responseFrame.Meta["max_chunk"].(int); ok {
+			pluginLimits.MaxChunk = maxChunk
+		}
+	}
+	if pluginLimits.MaxFrame == 0 || pluginLimits.MaxChunk == 0 {
+		pluginLimits = DefaultLimits()
+	}
 
-	// 4. Negotiate limits
-	negotiated := NegotiateLimits(ourLimits, pluginLimits)
+	// 5. Negotiate limits
+	negotiated := NegotiateLimits(DefaultLimits(), pluginLimits)
 
 	return manifestData, negotiated, nil
 }
