@@ -60,6 +60,11 @@ const (
 	MediaModelDim      = "media:model-dim;integer;textable;numeric;form=scalar"
 	MediaDecision      = "media:decision;bool;textable;form=scalar"
 	MediaDecisionArray = "media:decision;bool;textable;form=list"
+	// Semantic output types
+	MediaLlmInferenceOutput = "media:generated-text;textable;form=map"
+	// Semantic output types for model operations
+	MediaAvailabilityOutput = "media:model-availability;textable;form=map"
+	MediaPathOutput         = "media:model-path;textable;form=map"
 )
 
 // Profile URL constants (defaults, use GetSchemaBase() for configurable version)

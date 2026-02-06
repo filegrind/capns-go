@@ -350,27 +350,61 @@ func (c *CapUrn) WithoutTag(key string) *CapUrn {
 	return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
 }
 
-// Matches checks if this cap (instance) matches a pattern based on tag compatibility
+// Matches checks if this cap (instance) matches a request based on tag compatibility
 //
-// Per-tag matching semantics:
+// Direction (in/out) uses `TaggedUrn.Matches()` semantics:
+//   - Input: `request_input.Matches(&cap_input)` — does request's data satisfy cap's requirement?
+//   - Output: `cap_output.Matches(&request_output)` — does cap's output satisfy what request expects?
+//
+// For other tags:
 //   - (missing) or K=?: no constraint - matches anything
 //   - K=!: must-not-have - instance must NOT have this key
 //   - K=*: must-have-any - instance must have this key with any value
 //   - K=v: must-have-exact - instance must have this key with exact value v
 //
-// Direction specs (in/out) follow the same matching rules.
 // Special values work symmetrically on both instance and pattern sides.
 func (c *CapUrn) Matches(request *CapUrn) bool {
 	if request == nil {
 		return true
 	}
 
-	// Check direction specs using valuesMatch
-	if !valuesMatch(&c.inSpec, &request.inSpec) {
-		return false
+	// Direction specs: TaggedUrn semantic matching
+	// Check in_urn: request's input must satisfy cap's input requirement
+	if c.inSpec != "*" && request.inSpec != "*" {
+		capIn, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: cap in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
+		}
+		requestIn, err := taggedurn.NewTaggedUrnFromString(request.inSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: request in_spec '%s' is not a valid media URN: %v", request.inSpec, err))
+		}
+		matches, err := requestIn.Matches(capIn)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec matching: %v", err))
+		}
+		if !matches {
+			return false
+		}
 	}
-	if !valuesMatch(&c.outSpec, &request.outSpec) {
-		return false
+
+	// Check out_urn: cap's output must satisfy what the request expects
+	if c.outSpec != "*" && request.outSpec != "*" {
+		capOut, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: cap out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
+		}
+		requestOut, err := taggedurn.NewTaggedUrnFromString(request.outSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: request out_spec '%s' is not a valid media URN: %v", request.outSpec, err))
+		}
+		matches, err := capOut.Matches(requestOut)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec matching: %v", err))
+		}
+		if !matches {
+			return false
+		}
 	}
 
 	// Collect all tag keys from both instance and pattern
@@ -454,20 +488,33 @@ func (c *CapUrn) CanHandle(request *CapUrn) bool {
 	return c.Matches(request)
 }
 
-// Specificity returns the specificity score for cap matching using graded scoring.
+// Specificity returns the specificity score for cap matching.
 // More specific caps have higher scores and are preferred.
 //
-// Graded scoring:
+// Direction specs contribute their media URN tag count (more tags = more specific).
+// Other tags use graded scoring:
 //   - Exact value (K=v): 3 points (most specific)
 //   - Must-have-any (K=*): 2 points
 //   - Must-not-have (K=!): 1 point
 //   - Unspecified (K=?) or missing: 0 points (least specific)
 func (c *CapUrn) Specificity() int {
 	score := 0
-	// Score direction specs
-	score += valueScore(c.inSpec)
-	score += valueScore(c.outSpec)
-	// Score other tags
+	// Direction specs contribute their media URN tag count
+	if c.inSpec != "*" && c.inSpec != "?" {
+		inParsed, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
+		}
+		score += len(inParsed.AllTags())
+	}
+	if c.outSpec != "*" && c.outSpec != "?" {
+		outParsed, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
+		}
+		score += len(outParsed.AllTags())
+	}
+	// Score other tags using graded scoring
 	for _, value := range c.tags {
 		score += valueScore(value)
 	}
@@ -506,20 +553,56 @@ func (c *CapUrn) IsMoreSpecificThan(other *CapUrn) bool {
 //
 // Two caps are compatible if they can potentially match
 // the same types of requests (considering wildcards and missing tags as wildcards)
-// Direction specs must be compatible (same value or one is wildcard)
+// Direction specs are compatible if either is a subtype of the other via TaggedUrn matching
 func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
 	if other == nil {
 		return true
 	}
 
-	// Check inSpec compatibility
-	if c.inSpec != "*" && other.inSpec != "*" && c.inSpec != other.inSpec {
-		return false
+	// Check inSpec compatibility: either direction of Matches succeeds
+	if c.inSpec != "*" && other.inSpec != "*" {
+		selfIn, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: self in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
+		}
+		otherIn, err := taggedurn.NewTaggedUrnFromString(other.inSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: other in_spec '%s' is not a valid media URN: %v", other.inSpec, err))
+		}
+		fwd, err := selfIn.Matches(otherIn)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
+		}
+		rev, err := otherIn.Matches(selfIn)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
+		}
+		if !fwd && !rev {
+			return false
+		}
 	}
 
 	// Check outSpec compatibility
-	if c.outSpec != "*" && other.outSpec != "*" && c.outSpec != other.outSpec {
-		return false
+	if c.outSpec != "*" && other.outSpec != "*" {
+		selfOut, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: self out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
+		}
+		otherOut, err := taggedurn.NewTaggedUrnFromString(other.outSpec)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: other out_spec '%s' is not a valid media URN: %v", other.outSpec, err))
+		}
+		fwd, err := selfOut.Matches(otherOut)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
+		}
+		rev, err := otherOut.Matches(selfOut)
+		if err != nil {
+			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
+		}
+		if !fwd && !rev {
+			return false
+		}
 	}
 
 	// Get all unique tag keys from both caps

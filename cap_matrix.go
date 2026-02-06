@@ -373,9 +373,7 @@ func (c *CapCube) findBestInRegistry(registry *CapMatrix, request *CapUrn) (*Cap
 func (cs *CompositeCapSet) ExecuteCap(
 	ctx context.Context,
 	capUrn string,
-	positionalArgs []string,
-	namedArgs map[string]string,
-	stdinSource *StdinSource,
+	arguments []CapArgumentValue,
 ) (*HostResult, error) {
 	// Parse the request URN
 	request, err := NewCapUrnFromString(capUrn)
@@ -407,7 +405,7 @@ func (cs *CompositeCapSet) ExecuteCap(
 	}
 
 	// Delegate execution to the best matching host
-	return bestHost.ExecuteCap(ctx, capUrn, positionalArgs, namedArgs, stdinSource)
+	return bestHost.ExecuteCap(ctx, capUrn, arguments)
 }
 
 // Graph builds a directed graph from all capabilities in the registries.

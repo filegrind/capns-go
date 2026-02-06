@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
+	"unicode/utf8"
 )
 
 // StdinSourceKind identifies the type of stdin source
@@ -64,6 +64,39 @@ func (s *StdinSource) IsFileReference() bool {
 	return s != nil && s.Kind == StdinSourceKindFileReference
 }
 
+// CapArgumentValue is a unified argument type — arguments are identified by media_urn.
+// The cap definition's sources specify how to extract values (stdin, position, cli_flag).
+type CapArgumentValue struct {
+	// MediaUrn is the semantic identifier, e.g., "media:model-spec;textable;form=scalar"
+	MediaUrn string
+	// Value is the argument bytes (UTF-8 for text, raw for binary)
+	Value []byte
+}
+
+// NewCapArgumentValue creates a new CapArgumentValue
+func NewCapArgumentValue(mediaUrn string, value []byte) CapArgumentValue {
+	return CapArgumentValue{
+		MediaUrn: mediaUrn,
+		Value:    value,
+	}
+}
+
+// NewCapArgumentValueFromStr creates a new CapArgumentValue from a string value
+func NewCapArgumentValueFromStr(mediaUrn string, value string) CapArgumentValue {
+	return CapArgumentValue{
+		MediaUrn: mediaUrn,
+		Value:    []byte(value),
+	}
+}
+
+// ValueAsStr returns the value as a UTF-8 string. Returns error for non-UTF-8 data.
+func (a *CapArgumentValue) ValueAsStr() (string, error) {
+	if !utf8.Valid(a.Value) {
+		return "", fmt.Errorf("value contains invalid UTF-8 data")
+	}
+	return string(a.Value), nil
+}
+
 // CapCaller executes caps via host service with strict validation
 type CapCaller struct {
 	cap           string
@@ -76,9 +109,7 @@ type CapSet interface {
 	ExecuteCap(
 		ctx context.Context,
 		capUrn string,
-		positionalArgs []string,
-		namedArgs map[string]string,
-		stdinSource *StdinSource,
+		arguments []CapArgumentValue,
 	) (*HostResult, error)
 }
 
@@ -97,44 +128,22 @@ func NewCapCaller(cap string, capSet CapSet, capDefinition *Cap) *CapCaller {
 	}
 }
 
-// Call executes the cap with structured arguments and optional stdin source
-// Validates inputs against cap definition before execution
+// Call executes the cap with unified arguments identified by media_urn.
+// Validates arguments against cap definition before execution.
 func (cc *CapCaller) Call(
 	ctx context.Context,
-	positionalArgs []interface{},
-	namedArgs []interface{},
-	stdinSource *StdinSource,
+	arguments []CapArgumentValue,
 ) (*ResponseWrapper, error) {
-	// Validate inputs against cap definition
-	if err := cc.validateInputs(positionalArgs, namedArgs); err != nil {
-		return nil, fmt.Errorf("input validation failed for %s: %w", cc.cap, err)
+	// Validate arguments against cap definition
+	if err := cc.validateArguments(arguments); err != nil {
+		return nil, fmt.Errorf("argument validation failed for %s: %w", cc.cap, err)
 	}
 
-	// Convert JSON positional args to strings
-	stringPositionalArgs := make([]string, len(positionalArgs))
-	for i, arg := range positionalArgs {
-		stringPositionalArgs[i] = cc.convertToString(arg)
-	}
-
-	// Convert JSON named args to map[string]string
-	stringNamedArgs := make(map[string]string)
-	for _, arg := range namedArgs {
-		if argMap, ok := arg.(map[string]interface{}); ok {
-			if name, nameOk := argMap["name"].(string); nameOk {
-				if value, valueOk := argMap["value"]; valueOk {
-					stringNamedArgs[name] = cc.convertToString(value)
-				}
-			}
-		}
-	}
-
-	// Execute via cap host method with stdin support
+	// Execute via cap host method
 	result, err := cc.capSet.ExecuteCap(
 		ctx,
 		cc.cap,
-		stringPositionalArgs,
-		stringNamedArgs,
-		stdinSource,
+		arguments,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("cap execution failed: %w", err)
@@ -177,38 +186,6 @@ func (cc *CapCaller) Call(
 	return response, nil
 }
 
-// convertToString converts various types to string
-func (cc *CapCaller) convertToString(arg interface{}) string {
-	switch v := arg.(type) {
-	case string:
-		return v
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", v)
-	case float32, float64:
-		return fmt.Sprintf("%g", v)
-	case bool:
-		return fmt.Sprintf("%t", v)
-	case nil:
-		return ""
-	default:
-		// For complex types, marshal to JSON
-		if data, err := json.Marshal(v); err == nil {
-			return string(data)
-		}
-		return fmt.Sprintf("%v", v)
-	}
-}
-
-// capToCommand converts cap name to command
-func (cc *CapCaller) capToCommand(cap string) string {
-	// Extract operation part (everything before the last colon)
-	if colonPos := strings.LastIndex(cap, ":"); colonPos != -1 {
-		cap = cap[:colonPos]
-	}
-
-	// Convert underscores to hyphens for command name
-	return strings.ReplaceAll(cap, "_", "-")
-}
 
 // resolveOutputSpec resolves the output media URN from the cap URN's out spec.
 // This method fails hard if:
@@ -231,25 +208,38 @@ func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
 	return resolved, nil
 }
 
-// validateInputs validates input arguments against cap definition
-func (cc *CapCaller) validateInputs(positionalArgs, namedArgs []interface{}) error {
-	// Create enhanced input validator with schema support
-	inputValidator := NewInputValidator()
+// validateArguments validates unified arguments against cap definition.
+// Checks that all required arguments are provided (by media_urn) and rejects unknown arguments.
+func (cc *CapCaller) validateArguments(arguments []CapArgumentValue) error {
+	argDefs := cc.capDefinition.GetArgs()
 
-	// Convert named args to map for validation
-	namedArgsMap := make(map[string]interface{})
-	for _, arg := range namedArgs {
-		if argMap, ok := arg.(map[string]interface{}); ok {
-			if name, nameOk := argMap["name"].(string); nameOk {
-				if value, valueOk := argMap["value"]; valueOk {
-					namedArgsMap[name] = value
-				}
-			}
+	// Build set of provided media_urns
+	providedUrns := make(map[string]bool)
+	for _, arg := range arguments {
+		providedUrns[arg.MediaUrn] = true
+	}
+
+	// Check all required arguments are provided
+	for _, argDef := range argDefs {
+		if argDef.Required && !providedUrns[argDef.MediaUrn] {
+			return fmt.Errorf("missing required argument: %s", argDef.MediaUrn)
 		}
 	}
 
-	// Use schema validator for comprehensive validation
-	return inputValidator.schemaValidator.ValidateArguments(cc.capDefinition, positionalArgs, namedArgsMap)
+	// Check for unknown arguments
+	knownUrns := make(map[string]bool)
+	for _, argDef := range argDefs {
+		knownUrns[argDef.MediaUrn] = true
+	}
+
+	for _, arg := range arguments {
+		if !knownUrns[arg.MediaUrn] {
+			return fmt.Errorf("unknown argument media_urn: %s (cap %s accepts: %v)",
+				arg.MediaUrn, cc.cap, knownUrns)
+		}
+	}
+
+	return nil
 }
 
 // validateOutput validates output against cap definition

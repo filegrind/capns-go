@@ -10,20 +10,15 @@ import (
 
 // MockCapSet implements CapSet for testing
 type MockCapSet struct {
-	expectedCapUrn         string
-	expectedPositionalArgs []string
-	expectedNamedArgs      map[string]string
-	expectedStdinSource    *StdinSource
-	returnResult           *HostResult
-	returnError            error
+	expectedCapUrn string
+	returnResult   *HostResult
+	returnError    error
 }
 
 func (m *MockCapSet) ExecuteCap(
 	ctx context.Context,
 	capUrn string,
-	positionalArgs []string,
-	namedArgs map[string]string,
-	stdinSource *StdinSource,
+	arguments []CapArgumentValue,
 ) (*HostResult, error) {
 	if m.expectedCapUrn != "" {
 		if capUrn != m.expectedCapUrn {
@@ -47,22 +42,6 @@ func TestCapCallerCreation(t *testing.T) {
 	assert.Equal(t, `cap:in="media:void";op=test;out="media:string"`, caller.cap)
 	assert.Equal(t, capDef, caller.capDefinition)
 	assert.Equal(t, mockHost, caller.capSet)
-}
-
-func TestCapCallerConvertToString(t *testing.T) {
-	capUrn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:string"`)
-	require.NoError(t, err)
-
-	capDef := NewCap(capUrn, "Test Capability", "test-command")
-	mockHost := &MockCapSet{}
-	caller := NewCapCaller(`cap:in="media:void";op=test;out="media:string"`, mockHost, capDef)
-
-	// Test different type conversions
-	assert.Equal(t, "hello", caller.convertToString("hello"))
-	assert.Equal(t, "42", caller.convertToString(42))
-	assert.Equal(t, "3.14", caller.convertToString(3.14))
-	assert.Equal(t, "true", caller.convertToString(true))
-	assert.Equal(t, "", caller.convertToString(nil))
 }
 
 func TestCapCallerResolveOutputSpec(t *testing.T) {
@@ -152,7 +131,7 @@ func TestCapCallerCall(t *testing.T) {
 
 	// Test call with no arguments
 	ctx := context.Background()
-	result, err := caller.Call(ctx, []interface{}{}, []interface{}{}, nil)
+	result, err := caller.Call(ctx, []CapArgumentValue{})
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -193,9 +172,11 @@ func TestCapCallerWithArguments(t *testing.T) {
 
 	caller := NewCapCaller(`cap:in="media:void";op=process;out="media:form=map;textable"`, mockHost, capDef)
 
-	// Test call with positional argument
+	// Test call with unified argument
 	ctx := context.Background()
-	result, err := caller.Call(ctx, []interface{}{"test.txt"}, []interface{}{}, nil)
+	result, err := caller.Call(ctx, []CapArgumentValue{
+		NewCapArgumentValueFromStr(MediaString, "test.txt"),
+	})
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -227,7 +208,7 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 
 	// Test call
 	ctx := context.Background()
-	result, err := caller.Call(ctx, []interface{}{}, []interface{}{}, nil)
+	result, err := caller.Call(ctx, []CapArgumentValue{})
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -274,100 +255,69 @@ func TestStdinSourceNilHandling(t *testing.T) {
 	assert.False(t, nilSource.IsFileReference())
 }
 
-// MockCapSetWithStdinVerification implements CapSet and verifies stdin source
-type MockCapSetWithStdinVerification struct {
-	t                 *testing.T
-	expectedStdinKind StdinSourceKind
-	expectedStdinData []byte
-	expectedFileID    string
+// TEST274: Test CapArgumentValue stores media_urn and raw byte value
+func TestCapArgumentValueNew(t *testing.T) {
+	arg := NewCapArgumentValue("media:model-spec;textable;form=scalar", []byte("gpt-4"))
+	assert.Equal(t, "media:model-spec;textable;form=scalar", arg.MediaUrn)
+	assert.Equal(t, []byte("gpt-4"), arg.Value)
 }
 
-func (m *MockCapSetWithStdinVerification) ExecuteCap(
-	ctx context.Context,
-	capUrn string,
-	positionalArgs []string,
-	namedArgs map[string]string,
-	stdinSource *StdinSource,
-) (*HostResult, error) {
-	if stdinSource == nil {
-		m.t.Fatal("Expected StdinSource but got nil")
-	}
-
-	assert.Equal(m.t, m.expectedStdinKind, stdinSource.Kind)
-
-	if stdinSource.IsData() {
-		assert.Equal(m.t, m.expectedStdinData, stdinSource.Data)
-	} else if stdinSource.IsFileReference() {
-		assert.Equal(m.t, m.expectedFileID, stdinSource.TrackedFileID)
-	}
-
-	return &HostResult{TextOutput: "ok"}, nil
+// TEST275: Test CapArgumentValueFromStr converts string to UTF-8 bytes
+func TestCapArgumentValueFromStr(t *testing.T) {
+	arg := NewCapArgumentValueFromStr("media:string;textable", "hello world")
+	assert.Equal(t, "media:string;textable", arg.MediaUrn)
+	assert.Equal(t, []byte("hello world"), arg.Value)
 }
 
-// TestCapCallerWithStdinSourceData tests calling a cap with StdinSource Data
-func TestCapCallerWithStdinSourceData(t *testing.T) {
-	capUrnStr := `cap:in="` + MediaVoid + `";op=process;out="` + MediaString + `"`
-	capUrn, err := NewCapUrnFromString(capUrnStr)
+// TEST276: Test CapArgumentValue ValueAsStr succeeds for UTF-8 data
+func TestCapArgumentValueAsStrValid(t *testing.T) {
+	arg := NewCapArgumentValueFromStr("media:string", "test")
+	val, err := arg.ValueAsStr()
 	require.NoError(t, err)
-
-	// mediaSpecs for resolution
-	mediaSpecs := []MediaSpecDef{
-		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
-	}
-
-	capDef := NewCap(capUrn, "Process Capability", "process-command")
-	capDef.SetMediaSpecs(mediaSpecs)
-	capDef.SetOutput(NewCapOutput(MediaString, "Process output"))
-
-	stdinData := []byte("test stdin content")
-	mockHost := &MockCapSetWithStdinVerification{
-		t:                 t,
-		expectedStdinKind: StdinSourceKindData,
-		expectedStdinData: stdinData,
-	}
-
-	caller := NewCapCaller(capUrnStr, mockHost, capDef)
-
-	ctx := context.Background()
-	stdinSource := NewStdinSourceFromData(stdinData)
-	result, err := caller.Call(ctx, []interface{}{}, []interface{}{}, stdinSource)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
+	assert.Equal(t, "test", val)
 }
 
-// TestCapCallerWithStdinSourceFileReference tests calling a cap with StdinSource FileReference
-func TestCapCallerWithStdinSourceFileReference(t *testing.T) {
-	capUrnStr := `cap:in="` + MediaVoid + `";op=process;out="` + MediaString + `"`
-	capUrn, err := NewCapUrnFromString(capUrnStr)
+// TEST277: Test CapArgumentValue ValueAsStr fails for non-UTF-8 binary data
+func TestCapArgumentValueAsStrInvalidUtf8(t *testing.T) {
+	arg := NewCapArgumentValue("media:pdf;bytes", []byte{0xFF, 0xFE, 0x80})
+	_, err := arg.ValueAsStr()
+	require.Error(t, err, "non-UTF-8 data must fail")
+}
+
+// TEST278: Test CapArgumentValue with empty value stores empty slice
+func TestCapArgumentValueEmpty(t *testing.T) {
+	arg := NewCapArgumentValue("media:void", []byte{})
+	assert.Empty(t, arg.Value)
+	val, err := arg.ValueAsStr()
 	require.NoError(t, err)
+	assert.Equal(t, "", val)
+}
 
-	// mediaSpecs for resolution
-	mediaSpecs := []MediaSpecDef{
-		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
-	}
+// TEST281: Test CapArgumentValue constructors accept various string types
+func TestCapArgumentValueStringTypes(t *testing.T) {
+	s := "media:owned"
+	arg1 := NewCapArgumentValue(s, []byte{})
+	assert.Equal(t, "media:owned", arg1.MediaUrn)
 
-	capDef := NewCap(capUrn, "Process Capability", "process-command")
-	capDef.SetMediaSpecs(mediaSpecs)
-	capDef.SetOutput(NewCapOutput(MediaString, "Process output"))
+	arg2 := NewCapArgumentValue("media:borrowed", []byte{})
+	assert.Equal(t, "media:borrowed", arg2.MediaUrn)
+}
 
-	mockHost := &MockCapSetWithStdinVerification{
-		t:                 t,
-		expectedStdinKind: StdinSourceKindFileReference,
-		expectedFileID:    "tracked-file-123",
-	}
-
-	caller := NewCapCaller(capUrnStr, mockHost, capDef)
-
-	ctx := context.Background()
-	stdinSource := NewStdinSourceFromFileReference(
-		"tracked-file-123",
-		"/path/to/file.pdf",
-		[]byte("bookmark"),
-		"media:pdf;bytes",
-	)
-	result, err := caller.Call(ctx, []interface{}{}, []interface{}{}, stdinSource)
-
+// TEST282: Test CapArgumentValue from_str with Unicode string preserves all characters
+func TestCapArgumentValueUnicode(t *testing.T) {
+	arg := NewCapArgumentValueFromStr("media:string", "hello 世界 🌍")
+	val, err := arg.ValueAsStr()
 	require.NoError(t, err)
-	require.NotNil(t, result)
+	assert.Equal(t, "hello 世界 🌍", val)
+}
+
+// TEST283: Test CapArgumentValue with large binary payload preserves all bytes
+func TestCapArgumentValueLargeBinary(t *testing.T) {
+	data := make([]byte, 10000)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+	arg := NewCapArgumentValue("media:pdf;bytes", data)
+	assert.Equal(t, 10000, len(arg.Value))
+	assert.Equal(t, data, arg.Value)
 }

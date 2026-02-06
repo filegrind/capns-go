@@ -237,3 +237,34 @@ func TestNewMediaSpecDefWithSchema(t *testing.T) {
 	assert.Equal(t, "https://example.com/schema", def.ProfileURI)
 	assert.NotNil(t, def.Schema)
 }
+
+// TEST304: Test MediaAvailabilityOutput constant parses as valid media URN with correct tags
+func TestMediaAvailabilityOutputConstant(t *testing.T) {
+	assert.True(t, HasMediaUrnTag(MediaAvailabilityOutput, "textable"),
+		"model-availability must be textable")
+	assert.True(t, HasMediaUrnTagValue(MediaAvailabilityOutput, "form", "map"),
+		"model-availability must be form=map")
+	assert.False(t, HasMediaUrnTag(MediaAvailabilityOutput, "bytes"),
+		"model-availability must not be binary")
+}
+
+// TEST305: Test MediaPathOutput constant parses as valid media URN with correct tags
+func TestMediaPathOutputConstant(t *testing.T) {
+	assert.True(t, HasMediaUrnTag(MediaPathOutput, "textable"),
+		"model-path must be textable")
+	assert.True(t, HasMediaUrnTagValue(MediaPathOutput, "form", "map"),
+		"model-path must be form=map")
+	assert.False(t, HasMediaUrnTag(MediaPathOutput, "bytes"),
+		"model-path must not be binary")
+}
+
+// TEST306: Test MediaAvailabilityOutput and MediaPathOutput are distinct URNs
+func TestAvailabilityAndPathOutputDistinct(t *testing.T) {
+	assert.NotEqual(t, MediaAvailabilityOutput, MediaPathOutput,
+		"availability and path output must be distinct media URNs")
+	// They must NOT be the same type (different model-availability vs model-path marker tags)
+	assert.True(t, HasMediaUrnTag(MediaAvailabilityOutput, "model-availability"),
+		"availability must have model-availability tag")
+	assert.True(t, HasMediaUrnTag(MediaPathOutput, "model-path"),
+		"path must have model-path tag")
+}

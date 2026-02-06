@@ -227,9 +227,12 @@ func TestMissingTagHandling(t *testing.T) {
 	assert.True(t, cap3.Matches(request3)) // cap has ext=*, pattern has ext=pdf → MATCH
 }
 
-// TEST020: Test specificity calculation (in/out base, wildcards don't count)
+// TEST020: Test specificity calculation (direction specs use MediaUrn tag count, wildcards don't count)
 func TestSpecificity(t *testing.T) {
-	// Specificity uses graded scoring:
+	// Direction specs contribute their MediaUrn tag count:
+	// MEDIA_VOID = "media:void" -> 1 tag (void)
+	// MEDIA_OBJECT = "media:form=map;textable" -> 2 tags (form, textable)
+	// Other tags use graded scoring:
 	// - Exact value (K=v): 3 points
 	// - Must-have-any (K=*): 2 points
 	// - Must-not-have (K=!): 1 point
@@ -243,18 +246,18 @@ func TestSpecificity(t *testing.T) {
 	cap3, err := NewCapUrnFromString(testUrn("op=*;ext=pdf"))
 	require.NoError(t, err)
 
-	// cap1: in (3) + out (3) + type (3) = 9
-	assert.Equal(t, 9, cap1.Specificity())
-	// cap2: in (3) + out (3) + op (3) = 9
-	assert.Equal(t, 9, cap2.Specificity())
-	// cap3: in (3) + out (3) + op (2 for *) + ext (3) = 11
-	assert.Equal(t, 11, cap3.Specificity())
+	// cap1: void(1) + object(2) + type(3) = 6
+	assert.Equal(t, 6, cap1.Specificity())
+	// cap2: void(1) + object(2) + op(3) = 6
+	assert.Equal(t, 6, cap2.Specificity())
+	// cap3: void(1) + object(2) + op(2 for *) + ext(3) = 8
+	assert.Equal(t, 8, cap3.Specificity())
 
-	// Wildcard in direction scores 2 points
-	cap4, err := NewCapUrnFromString(`cap:in=*;out="media:object";op=test`)
+	// Wildcard in direction doesn't count
+	cap4, err := NewCapUrnFromString(`cap:in=*;out="` + MediaObject + `";op=test`)
 	require.NoError(t, err)
-	// cap4: in (2 for *) + out (3) + op (3) = 8
-	assert.Equal(t, 8, cap4.Specificity())
+	// cap4: object(2) + op(3) = 5 (in wildcard doesn't count)
+	assert.Equal(t, 5, cap4.Specificity())
 }
 
 // TEST024: Test compatibility checking (missing tags = wildcards, different directions = incompatible)
@@ -1109,11 +1112,112 @@ func TestMatchingSemantics_Test9_CrossDimensionIndependence(t *testing.T) {
 // TEST050: Matching semantics - direction mismatch prevents matching
 func TestMatchingSemantics_Test10_DirectionMismatch(t *testing.T) {
 	// Test 10: Direction mismatch prevents matching
-	cap, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="media:object"`)
+	// media:string has tags {textable:*, form:scalar}, media:bytes has tags {bytes:*}
+	// Neither can provide input for the other (completely different marker tags)
+	cap, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="` + MediaObject + `"`)
 	require.NoError(t, err)
 
-	request, err := NewCapUrnFromString(`cap:in="media:binary";op=generate;out="media:object"`)
+	request, err := NewCapUrnFromString(`cap:in="media:bytes";op=generate;out="` + MediaObject + `"`)
 	require.NoError(t, err)
 
 	assert.False(t, cap.Matches(request), "Test 10: Direction mismatch should not match")
+}
+
+// TEST051: Semantic direction matching - generic provider matches specific request
+func TestDirectionSemanticMatching(t *testing.T) {
+	// A cap accepting media:bytes (generic) should match a request with media:pdf;bytes (specific)
+	// because media:pdf;bytes has all marker tags that media:bytes requires (bytes=*)
+	genericCap, err := NewCapUrnFromString(
+		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	pdfRequest, err := NewCapUrnFromString(
+		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	assert.True(t, genericCap.Matches(pdfRequest),
+		"Generic bytes provider must match specific pdf;bytes request")
+
+	// Generic cap also matches epub;bytes (any bytes subtype)
+	epubRequest, err := NewCapUrnFromString(
+		`cap:in="media:epub;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	assert.True(t, genericCap.Matches(epubRequest),
+		"Generic bytes provider must match epub;bytes request")
+
+	// Reverse: specific cap does NOT match generic request
+	// A pdf-only handler cannot accept arbitrary bytes
+	pdfCap, err := NewCapUrnFromString(
+		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	genericRequest, err := NewCapUrnFromString(
+		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	assert.False(t, pdfCap.Matches(genericRequest),
+		"Specific pdf;bytes cap must NOT match generic bytes request")
+
+	// Incompatible types: pdf cap does NOT match epub request
+	assert.False(t, pdfCap.Matches(epubRequest),
+		"PDF-specific cap must NOT match epub request (epub lacks pdf marker)")
+
+	// Output direction: cap producing more specific output matches less specific request
+	specificOutCap, err := NewCapUrnFromString(
+		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	genericOutRequest, err := NewCapUrnFromString(
+		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;bytes"`,
+	)
+	require.NoError(t, err)
+	assert.True(t, specificOutCap.Matches(genericOutRequest),
+		"Cap producing image;png;bytes;thumbnail must satisfy request for image;bytes")
+
+	// Reverse output: generic output cap does NOT match specific output request
+	genericOutCap, err := NewCapUrnFromString(
+		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;bytes"`,
+	)
+	require.NoError(t, err)
+	specificOutRequest, err := NewCapUrnFromString(
+		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	assert.False(t, genericOutCap.Matches(specificOutRequest),
+		"Cap producing generic image;bytes must NOT satisfy request requiring image;png;bytes;thumbnail")
+}
+
+// TEST052: Semantic direction specificity - more media URN tags = higher specificity
+func TestDirectionSemanticSpecificity(t *testing.T) {
+	// media:bytes has 1 tag, media:pdf;bytes has 2 tags
+	// media:image;png;bytes;thumbnail has 4 tags
+	genericCap, err := NewCapUrnFromString(
+		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	specificCap, err := NewCapUrnFromString(
+		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+
+	// generic: bytes(1) + image;png;bytes;thumbnail(4) + op(3) = 8
+	assert.Equal(t, 8, genericCap.Specificity())
+	// specific: pdf;bytes(2) + image;png;bytes;thumbnail(4) + op(3) = 9
+	assert.Equal(t, 9, specificCap.Specificity())
+
+	assert.True(t, specificCap.Specificity() > genericCap.Specificity(),
+		"pdf;bytes cap must be more specific than bytes cap")
+
+	// CapMatcher should prefer the more specific cap when both match
+	pdfRequest, err := NewCapUrnFromString(
+		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+	)
+	require.NoError(t, err)
+	caps := []*CapUrn{genericCap, specificCap}
+	matcher := &CapMatcher{}
+	best := matcher.FindBestMatch(caps, pdfRequest)
+	require.NotNil(t, best)
+	assert.Equal(t, 9, best.Specificity(),
+		"CapMatcher must prefer the more specific pdf;bytes provider")
 }

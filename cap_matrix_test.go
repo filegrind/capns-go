@@ -13,9 +13,7 @@ type MockCapSetForRegistry struct {
 func (m *MockCapSetForRegistry) ExecuteCap(
 	ctx context.Context,
 	capUrn string,
-	positionalArgs []string,
-	namedArgs map[string]string,
-	stdinSource *StdinSource,
+	arguments []CapArgumentValue,
 ) (*HostResult, error) {
 	return &HostResult{
 		TextOutput: "Mock response from " + m.name,
@@ -108,8 +106,8 @@ func TestBestCapSetSelection(t *testing.T) {
 	registry.RegisterCapSet("specific", specificHost, []*Cap{specificCap})
 
 	// Request for specific model - both match but specific wins due to higher specificity
-	// General: model=* (2), op=generate (3), text=* (2) = 7 + in/out (6) = 13
-	// Specific: model=gpt-4 (3), op=generate (3), text (2) = 8 + in/out (6) = 14
+	// General: in=void(1) + out=object(1) + model=*(2) + op=generate(3) + text=*(2) = 9
+	// Specific: in=void(1) + out=object(1) + model=gpt-4(3) + op=generate(3) + text(2) = 10
 	bestHost, bestCap, err := registry.FindBestCapSet(matrixTestUrn("model=gpt-4;op=generate;text"))
 	if err != nil {
 		t.Fatalf("Failed to find best cap host: %v", err)
@@ -242,14 +240,14 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 		t.Fatalf("Failed to find best cap set: %v", err)
 	}
 
-	// Plugin registry has specificity 12 (4 exact values * 3 points each)
-	// Provider registry has specificity 9 (3 exact values * 3 points each)
+	// Plugin: in=bytes(1) + out=bytes(1) + ext=pdf(3) + op=generate_thumbnail(3) = 8
+	// Provider: in=bytes(1) + out=bytes(1) + op=generate_thumbnail(3) = 5
 	// Plugin should win even though providers were added first
 	if best.RegistryName != "plugins" {
 		t.Errorf("Expected plugins registry to win, got %s", best.RegistryName)
 	}
-	if best.Specificity != 12 {
-		t.Errorf("Expected specificity 12, got %d", best.Specificity)
+	if best.Specificity != 8 {
+		t.Errorf("Expected specificity 8, got %d", best.Specificity)
 	}
 	if best.Cap.Title != "Plugin PDF Thumbnail Generator (specific)" {
 		t.Errorf("Expected plugin cap title, got %s", best.Cap.Title)
@@ -384,15 +382,16 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 		t.Fatalf("Failed to find best cap set: %v", err)
 	}
 
-	// Plugin (specificity 12: 4 exact * 3) should beat provider (specificity 11: 3 exact * 3 + 1 wildcard * 2)
+	// Plugin: in=bytes(1) + out=bytes(1) + ext=pdf(3) + op=generate_thumbnail(3) = 8
+	// Provider: in=bytes(1) + out=bytes(1) + ext=*(2) + op=generate_thumbnail(3) = 7
 	if best.RegistryName != "plugins" {
 		t.Errorf("Expected plugins to win, got %s", best.RegistryName)
 	}
 	if best.Cap.Title != "PDF Thumbnail Plugin" {
 		t.Errorf("Expected PDF Thumbnail Plugin, got %s", best.Cap.Title)
 	}
-	if best.Specificity != 12 {
-		t.Errorf("Expected specificity 12, got %d", best.Specificity)
+	if best.Specificity != 8 {
+		t.Errorf("Expected specificity 8, got %d", best.Specificity)
 	}
 
 	// Also test that for a different file type, provider wins (since plugin doesn't match ext=wav)

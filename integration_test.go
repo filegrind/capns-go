@@ -26,8 +26,6 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	cap := NewCap(urn, "Data Transformer", "transform-command")
 
 	// Verify the cap has direction specs in canonical form
-	// Colons don't need quoting, so media:void doesn't need quotes
-	// But media:form=map;textable has semicolons, so needs quotes
 	assert.Contains(t, cap.UrnString(), `in=media:void`)
 	assert.Contains(t, cap.UrnString(), `out="media:form=map;textable"`)
 	assert.Equal(t, "transform-command", cap.Command)
@@ -49,7 +47,6 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 // TestIntegrationCaseInsensitiveUrns verifies URNs are case-insensitive
 func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 	// Test case 1: Different case inputs should produce same URN
-	// Both must use key=value (not flags) for proper comparison
 	urn1, err := NewCapUrnFromString(intTestUrn("OP=Transform;FORMAT=JSON;Type=Data_Processing"))
 	require.NoError(t, err)
 
@@ -70,23 +67,20 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 	assert.Equal(t, "transform", op2)
 
 	// Test case 3: HasTag - keys case-insensitive, values case-sensitive
-	// Unquoted values were normalized to lowercase, so "transform" is stored
 	assert.True(t, urn1.HasTag("OP", "transform"))
 	assert.True(t, urn1.HasTag("op", "transform"))
 	assert.True(t, urn1.HasTag("Op", "transform"))
-	// Different case values should NOT match
 	assert.False(t, urn1.HasTag("op", "TRANSFORM"))
 
 	// Test case 4: Builder preserves value case
 	urn3, err := NewCapUrnBuilder().
 		InSpec(MediaVoid).
 		OutSpec(MediaObject).
-		Tag("OP", "Transform"). // value case preserved
-		Tag("Format", "JSON").  // value case preserved
+		Tag("OP", "Transform").
+		Tag("Format", "JSON").
 		Build()
 	require.NoError(t, err)
 
-	// Builder preserves case, so we need exact match
 	assert.True(t, urn3.HasTag("op", "Transform"))
 	assert.True(t, urn3.HasTag("format", "JSON"))
 }
@@ -126,12 +120,11 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	// Create caller
 	caller := NewCapCaller(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`, mockHost, capDef)
 
-	// Test call with valid arguments
+	// Test call with unified argument
 	ctx := context.Background()
-	positionalArgs := []interface{}{"test.pdf"}
-	namedArgs := []interface{}{}
-
-	response, err := caller.Call(ctx, positionalArgs, namedArgs, nil)
+	response, err := caller.Call(ctx, []CapArgumentValue{
+		NewCapArgumentValueFromStr(MediaString, "test.pdf"),
+	})
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -179,7 +172,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 
 	// Test binary response
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []interface{}{}, []interface{}{}, nil)
+	response, err := caller.Call(ctx, []CapArgumentValue{})
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -229,7 +222,9 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 
 	// Test text response
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []interface{}{"input text"}, []interface{}{}, nil)
+	response, err := caller.Call(ctx, []CapArgumentValue{
+		NewCapArgumentValueFromStr(MediaString, "input text"),
+	})
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -251,7 +246,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 
 	capDef := NewCap(urn, "Data Query", "query-data")
 
-	// Add custom media spec with schema - needs map tag for JSON
+	// Add custom media spec with schema
 	capDef.AddMediaSpec(NewMediaSpecDefWithSchema(
 		"media:result;textable;form=map",
 		"application/json",
@@ -282,7 +277,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 
 	// Test call
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []interface{}{}, []interface{}{}, nil)
+	response, err := caller.Call(ctx, []CapArgumentValue{})
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -353,20 +348,20 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.False(t, resolved.IsJSON())
 	assert.True(t, resolved.IsText())
 
-	// Test object media URN - note: MediaObject is form=map, not explicit json tag
+	// Test object media URN
 	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
-	assert.True(t, resolved.IsMap())        // form=map
-	assert.True(t, resolved.IsStructured()) // is_map || is_list
-	assert.False(t, resolved.IsJSON())      // no explicit json tag
+	assert.True(t, resolved.IsMap())
+	assert.True(t, resolved.IsStructured())
+	assert.False(t, resolved.IsJSON())
 
 	// Test binary media URN
 	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs)
 	require.NoError(t, err)
 	assert.True(t, resolved.IsBinary())
 
-	// Test custom media URN resolution - use proper tags
+	// Test custom media URN resolution
 	customSpecs := []MediaSpecDef{
 		{Urn: "media:custom;textable", MediaType: "text/html", ProfileURI: "https://example.com/schema/html"},
 	}
