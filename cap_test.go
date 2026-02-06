@@ -195,14 +195,6 @@ func TestCapWithMediaSpecs(t *testing.T) {
 	assert.NotNil(t, outResolved.Schema)
 }
 
-// Helper to create a test registry (matches Rust test_registry() helper)
-func testRegistry(t *testing.T) *MediaUrnRegistry {
-	t.Helper()
-	registry, err := NewMediaUrnRegistry()
-	require.NoError(t, err, "Failed to create test registry")
-	return registry
-}
-
 func TestCapJSONRoundTrip(t *testing.T) {
 	id, err := NewCapUrnFromString(capTestUrn("op=test"))
 	require.NoError(t, err)

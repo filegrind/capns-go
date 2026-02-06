@@ -172,7 +172,7 @@ func (rw *ResponseWrapper) IsText() bool {
 }
 
 // ValidateAgainstCap validates response against cap output definition
-func (rw *ResponseWrapper) ValidateAgainstCap(cap *Cap) error {
+func (rw *ResponseWrapper) ValidateAgainstCap(cap *Cap, registry *MediaUrnRegistry) error {
 	// Convert response to interface{} for validation
 	var value interface{}
 	switch rw.contentType {
@@ -193,10 +193,6 @@ func (rw *ResponseWrapper) ValidateAgainstCap(cap *Cap) error {
 	case ResponseContentTypeBinary:
 		// Binary outputs can't be validated as JSON, validate the response type instead
 		if output := cap.GetOutput(); output != nil {
-			registry, err := GetGlobalRegistry()
-			if err != nil {
-				return fmt.Errorf("failed to get global registry: %w", err)
-			}
 			resolved, err := output.Resolve(cap.GetMediaSpecs(), registry)
 			if err != nil {
 				return fmt.Errorf("failed to resolve output media URN '%s': %w", output.MediaUrn, err)
@@ -213,7 +209,7 @@ func (rw *ResponseWrapper) ValidateAgainstCap(cap *Cap) error {
 	}
 
 	outputValidator := NewOutputValidator()
-	return outputValidator.ValidateOutput(cap, value)
+	return outputValidator.ValidateOutput(cap, value, registry)
 }
 
 // GetContentType returns the content type for validation purposes
@@ -231,15 +227,10 @@ func (rw *ResponseWrapper) GetContentType() string {
 
 // MatchesOutputType checks if response matches expected output type.
 // Returns error if the output spec cannot be resolved - no fallbacks.
-func (rw *ResponseWrapper) MatchesOutputType(cap *Cap) (bool, error) {
+func (rw *ResponseWrapper) MatchesOutputType(cap *Cap, registry *MediaUrnRegistry) (bool, error) {
 	output := cap.GetOutput()
 	if output == nil {
 		return false, fmt.Errorf("cap '%s' has no output definition", cap.UrnString())
-	}
-
-	registry, err := GetGlobalRegistry()
-	if err != nil {
-		return false, fmt.Errorf("failed to get global registry: %w", err)
 	}
 
 	// Resolve the output media URN to get the media type - fail hard if resolution fails

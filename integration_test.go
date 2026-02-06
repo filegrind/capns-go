@@ -87,6 +87,7 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 
 // TestIntegrationCallerAndResponseSystem verifies the caller and response system
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup test cap definition with media URNs - use proper tags
 	urn, err := NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`)
 	require.NoError(t, err)
@@ -124,7 +125,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	ctx := context.Background()
 	response, err := caller.Call(ctx, []CapArgumentValue{
 		NewCapArgumentValueFromStr(MediaString, "test.pdf"),
-	})
+	}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -142,12 +143,13 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	assert.Equal(t, float64(10), metadata["pages"])
 
 	// Verify response validation against cap
-	err = response.ValidateAgainstCap(capDef)
+	err = response.ValidateAgainstCap(capDef, registry)
 	assert.NoError(t, err)
 }
 
 // TestIntegrationBinaryCapHandling verifies binary cap handling
 func TestIntegrationBinaryCapHandling(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup binary cap - use raw type with binary tag
 	urn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`)
 	require.NoError(t, err)
@@ -172,7 +174,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 
 	// Test binary response
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []CapArgumentValue{})
+	response, err := caller.Call(ctx, []CapArgumentValue{}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -189,6 +191,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 
 // TestIntegrationTextCapHandling verifies text cap handling
 func TestIntegrationTextCapHandling(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup text cap - use proper tags
 	urn, err := NewCapUrnFromString(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`)
 	require.NoError(t, err)
@@ -224,7 +227,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 	ctx := context.Background()
 	response, err := caller.Call(ctx, []CapArgumentValue{
 		NewCapArgumentValueFromStr(MediaString, "input text"),
-	})
+	}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -240,6 +243,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 
 // TestIntegrationCapWithMediaSpecs verifies caps with custom media specs
 func TestIntegrationCapWithMediaSpecs(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup cap with custom media spec - use proper tags
 	urn, err := NewCapUrnFromString(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`)
 	require.NoError(t, err)
@@ -277,7 +281,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 
 	// Test call
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []CapArgumentValue{})
+	response, err := caller.Call(ctx, []CapArgumentValue{}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -285,12 +289,13 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 	assert.True(t, response.IsJSON())
 
 	// Validate against cap
-	err = response.ValidateAgainstCap(capDef)
+	err = response.ValidateAgainstCap(capDef, registry)
 	assert.NoError(t, err)
 }
 
 // TestIntegrationCapValidation verifies cap schema validation
 func TestIntegrationCapValidation(t *testing.T) {
+	registry := testRegistry(t)
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a cap with arguments - use proper tags
@@ -322,16 +327,18 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator.RegisterCap(capDef)
 
 	// Test valid inputs - string for MediaString
-	err = coordinator.ValidateInputs(capDef.UrnString(), []interface{}{"test.txt"})
+	err = coordinator.ValidateInputs(capDef.UrnString(), []interface{}{"test.txt"}, registry)
 	assert.NoError(t, err)
 
 	// Test missing required argument
-	err = coordinator.ValidateInputs(capDef.UrnString(), []interface{}{})
+	err = coordinator.ValidateInputs(capDef.UrnString(), []interface{}{}, registry)
 	assert.Error(t, err)
 }
 
 // TestIntegrationMediaUrnResolution verifies media URN resolution
 func TestIntegrationMediaUrnResolution(t *testing.T) {
+	registry := testRegistry(t)
+
 	// mediaSpecs for resolution - no built-in resolution, must provide specs
 	mediaSpecs := []MediaSpecDef{
 		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
@@ -340,7 +347,7 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	}
 
 	// Test string media URN resolution
-	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs)
+	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileStr, resolved.ProfileURI)
@@ -349,7 +356,7 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.True(t, resolved.IsText())
 
 	// Test object media URN
-	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs)
+	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.True(t, resolved.IsMap())
@@ -357,7 +364,7 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.False(t, resolved.IsJSON())
 
 	// Test binary media URN
-	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs)
+	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.True(t, resolved.IsBinary())
 
@@ -366,13 +373,13 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 		{Urn: "media:custom;textable", MediaType: "text/html", ProfileURI: "https://example.com/schema/html"},
 	}
 
-	resolved, err = ResolveMediaUrn("media:custom;textable", customSpecs)
+	resolved, err = ResolveMediaUrn("media:custom;textable", customSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/html", resolved.MediaType)
 	assert.Equal(t, "https://example.com/schema/html", resolved.ProfileURI)
 
 	// Test unknown media URN fails
-	_, err = ResolveMediaUrn("media:unknown", nil)
+	_, err = ResolveMediaUrn("media:unknown", nil, registry)
 	assert.Error(t, err)
 }
 

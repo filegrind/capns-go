@@ -152,6 +152,7 @@ func TestResponseWrapperGetContentType(t *testing.T) {
 }
 
 func TestResponseWrapperMatchesOutputType(t *testing.T) {
+	registry := testRegistry(t)
 	// Common mediaSpecs for all caps - resolution requires this table
 	// Use the constant values directly since the cap URNs reference these specific media URN strings
 	mediaSpecs := []MediaSpecDef{
@@ -182,37 +183,37 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 
 	// Test text response with string output type
 	textResponse := NewResponseWrapperFromText([]byte("test"))
-	matchStr, err := textResponse.MatchesOutputType(stringCap)
+	matchStr, err := textResponse.MatchesOutputType(stringCap, registry)
 	assert.NoError(t, err)
 	assert.True(t, matchStr)
-	matchBin, err := textResponse.MatchesOutputType(binaryCap)
+	matchBin, err := textResponse.MatchesOutputType(binaryCap, registry)
 	assert.NoError(t, err)
 	assert.False(t, matchBin)
-	matchJson, err := textResponse.MatchesOutputType(jsonCap)
+	matchJson, err := textResponse.MatchesOutputType(jsonCap, registry)
 	assert.NoError(t, err)
 	assert.False(t, matchJson)
 
 	// Test binary response with binary output type
 	binaryResponse := NewResponseWrapperFromBinary([]byte{1, 2, 3})
-	matchStr, err = binaryResponse.MatchesOutputType(stringCap)
+	matchStr, err = binaryResponse.MatchesOutputType(stringCap, registry)
 	assert.NoError(t, err)
 	assert.False(t, matchStr)
-	matchBin, err = binaryResponse.MatchesOutputType(binaryCap)
+	matchBin, err = binaryResponse.MatchesOutputType(binaryCap, registry)
 	assert.NoError(t, err)
 	assert.True(t, matchBin)
-	matchJson, err = binaryResponse.MatchesOutputType(jsonCap)
+	matchJson, err = binaryResponse.MatchesOutputType(jsonCap, registry)
 	assert.NoError(t, err)
 	assert.False(t, matchJson)
 
 	// Test JSON response (should match JSON types)
 	jsonResponse := NewResponseWrapperFromJSON([]byte(`{"test": "value"}`))
-	matchStr, err = jsonResponse.MatchesOutputType(stringCap)
+	matchStr, err = jsonResponse.MatchesOutputType(stringCap, registry)
 	assert.NoError(t, err)
 	assert.False(t, matchStr)
-	matchBin, err = jsonResponse.MatchesOutputType(binaryCap)
+	matchBin, err = jsonResponse.MatchesOutputType(binaryCap, registry)
 	assert.NoError(t, err)
 	assert.False(t, matchBin)
-	matchJson, err = jsonResponse.MatchesOutputType(jsonCap)
+	matchJson, err = jsonResponse.MatchesOutputType(jsonCap, registry)
 	assert.NoError(t, err)
 	assert.True(t, matchJson)
 
@@ -220,7 +221,7 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	noOutputCapUrn, err := NewCapUrnFromString(respTestUrn("op=test"))
 	require.NoError(t, err)
 	noOutputCap := NewCap(noOutputCapUrn, "No Output Test", "test")
-	_, err = textResponse.MatchesOutputType(noOutputCap)
+	_, err = textResponse.MatchesOutputType(noOutputCap, registry)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no output definition")
 
@@ -229,12 +230,13 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	require.NoError(t, err)
 	badSpecCap := NewCap(badSpecCapUrn, "Bad Spec Test", "test")
 	badSpecCap.SetOutput(NewCapOutput("media:unknown", "Unknown output"))
-	_, err = textResponse.MatchesOutputType(badSpecCap)
+	_, err = textResponse.MatchesOutputType(badSpecCap, registry)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to resolve output media URN")
 }
 
 func TestResponseWrapperValidateAgainstCap(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup cap with output schema
 	capUrn, err := NewCapUrnFromString(respTestUrn("op=test"))
 	require.NoError(t, err)
@@ -258,11 +260,11 @@ func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 
 	// Valid JSON response
 	validResponse := NewResponseWrapperFromJSON([]byte(`{"status": "ok"}`))
-	err = validResponse.ValidateAgainstCap(cap)
+	err = validResponse.ValidateAgainstCap(cap, registry)
 	assert.NoError(t, err)
 
 	// Invalid JSON response (missing required field)
 	invalidResponse := NewResponseWrapperFromJSON([]byte(`{"other": "value"}`))
-	err = invalidResponse.ValidateAgainstCap(cap)
+	err = invalidResponse.ValidateAgainstCap(cap, registry)
 	assert.Error(t, err)
 }

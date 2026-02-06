@@ -110,7 +110,7 @@ func TestResolveUnresolvableFailsHard(t *testing.T) {
 	_, err := ResolveMediaUrn("media:completely-unknown-urn-not-in-registry", nil, registry)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "media:completely-unknown-urn-not-in-registry")
-	assert.Contains(t, err.Error(), "cannot be resolved")
+	assert.Contains(t, err.Error(), "cannot resolve")
 }
 
 // TEST094: Test local media_specs definition overrides registry definition for same URN

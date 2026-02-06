@@ -163,7 +163,7 @@ func NewInputValidatorWithSchemaResolver(resolver SchemaResolver) *InputValidato
 }
 
 // ValidateArguments validates arguments against a cap's input schema
-func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) error {
+func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}, registry *MediaUrnRegistry) error {
 	capUrn := cap.UrnString()
 	args := cap.GetArgs()
 
@@ -186,7 +186,7 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 			return NewMissingRequiredArgumentError(capUrn, reqArg.MediaUrn)
 		}
 
-		if err := iv.validateSingleArgument(cap, &reqArg, arguments[index]); err != nil {
+		if err := iv.validateSingleArgument(cap, &reqArg, arguments[index], registry); err != nil {
 			return err
 		}
 	}
@@ -196,7 +196,7 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 	for index, optArg := range optionalArgs {
 		argIndex := requiredCount + index
 		if argIndex < len(arguments) {
-			if err := iv.validateSingleArgument(cap, &optArg, arguments[argIndex]); err != nil {
+			if err := iv.validateSingleArgument(cap, &optArg, arguments[argIndex], registry); err != nil {
 				return err
 			}
 		}
@@ -206,7 +206,7 @@ func (iv *InputValidator) ValidateArguments(cap *Cap, arguments []interface{}) e
 }
 
 // ValidateNamedArguments validates named arguments against a cap's input schema
-func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[string]interface{}) error {
+func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[string]interface{}, registry *MediaUrnRegistry) error {
 	capUrn := cap.UrnString()
 	args := cap.GetArgs()
 
@@ -229,7 +229,7 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 
 		// Validate the provided argument value
 		providedValue := providedArgs[reqArg.MediaUrn]
-		if err := iv.validateSingleArgument(cap, &reqArg, providedValue); err != nil {
+		if err := iv.validateSingleArgument(cap, &reqArg, providedValue, registry); err != nil {
 			return err
 		}
 	}
@@ -238,7 +238,7 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 	optionalArgs := cap.GetOptionalArgs()
 	for _, optArg := range optionalArgs {
 		if providedValue, provided := providedArgs[optArg.MediaUrn]; provided {
-			if err := iv.validateSingleArgument(cap, &optArg, providedValue); err != nil {
+			if err := iv.validateSingleArgument(cap, &optArg, providedValue, registry); err != nil {
 				return err
 			}
 		}
@@ -259,16 +259,7 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 	return nil
 }
 
-func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArg, value interface{}) error {
-	// Get global registry for resolving media URNs
-	registry, err := GetGlobalRegistry()
-	if err != nil {
-		return &ValidationError{
-			Type:    "RegistryInitFailed",
-			Message: fmt.Sprintf("Failed to get global registry: %v", err),
-		}
-	}
-
+func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArg, value interface{}, registry *MediaUrnRegistry) error {
 	// Resolve the media URN to determine the expected type
 	resolved, err := argDef.Resolve(cap.GetMediaSpecs(), registry)
 	if err != nil {
@@ -492,7 +483,7 @@ func NewOutputValidatorWithSchemaResolver(resolver SchemaResolver) *OutputValida
 // Two-pass validation:
 // 1. Type validation + media spec validation rules (inherent to semantic type)
 // 2. Output-level validation rules (context-specific)
-func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
+func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}, registry *MediaUrnRegistry) error {
 	capUrn := cap.UrnString()
 
 	outputDef := cap.GetOutput()
@@ -501,15 +492,6 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 			Type:    "InvalidCapSchema",
 			CapUrn:  capUrn,
 			Message: fmt.Sprintf("Cap '%s' has no output definition specified", capUrn),
-		}
-	}
-
-	// Get global registry for resolving media URNs
-	registry, err := GetGlobalRegistry()
-	if err != nil {
-		return &ValidationError{
-			Type:    "RegistryInitFailed",
-			Message: fmt.Sprintf("Failed to get global registry: %v", err),
 		}
 	}
 
@@ -722,38 +704,29 @@ func (cvc *CapValidationCoordinator) GetCap(capUrn string) *Cap {
 }
 
 // ValidateInputs validates arguments against a cap's input schema
-func (cvc *CapValidationCoordinator) ValidateInputs(capUrn string, arguments []interface{}) error {
+func (cvc *CapValidationCoordinator) ValidateInputs(capUrn string, arguments []interface{}, registry *MediaUrnRegistry) error {
 	cap := cvc.GetCap(capUrn)
 	if cap == nil {
 		return NewUnknownCapError(capUrn)
 	}
 
-	return cvc.inputValidator.ValidateArguments(cap, arguments)
+	return cvc.inputValidator.ValidateArguments(cap, arguments, registry)
 }
 
 // ValidateOutput validates output against a cap's output schema
-func (cvc *CapValidationCoordinator) ValidateOutput(capUrn string, output interface{}) error {
+func (cvc *CapValidationCoordinator) ValidateOutput(capUrn string, output interface{}, registry *MediaUrnRegistry) error {
 	cap := cvc.GetCap(capUrn)
 	if cap == nil {
 		return NewUnknownCapError(capUrn)
 	}
 
-	return cvc.outputValidator.ValidateOutput(cap, output)
+	return cvc.outputValidator.ValidateOutput(cap, output, registry)
 }
 
 // ValidateCapSchema validates a cap definition itself
-func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
+func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap, registry *MediaUrnRegistry) error {
 	capUrn := cap.UrnString()
 	args := cap.GetArgs()
-
-	// Get global registry for resolving media URNs
-	registry, err := GetGlobalRegistry()
-	if err != nil {
-		return &ValidationError{
-			Type:    "RegistryInitFailed",
-			Message: fmt.Sprintf("Failed to get global registry: %v", err),
-		}
-	}
 
 	if len(args) == 0 {
 		// Validate output media URN if present

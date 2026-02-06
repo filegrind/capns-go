@@ -190,6 +190,7 @@ func TestSchemaValidator_ValidateOutputWithSchema_Failure(t *testing.T) {
 }
 
 func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
+	registry := testRegistry(t)
 	validator := NewSchemaValidator()
 
 	// Create a capability with schema-enabled arguments
@@ -235,7 +236,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 		"media:user;textable;form=map": validUser,
 	}
 
-	err = validator.ValidateArguments(cap, []interface{}{}, namedArgs)
+	err = validator.ValidateArguments(cap, []interface{}{}, namedArgs, registry)
 	assert.NoError(t, err)
 
 	// Test invalid arguments
@@ -247,7 +248,7 @@ func TestSchemaValidator_ValidateArguments_Integration(t *testing.T) {
 		"media:user;textable;form=map": invalidUser,
 	}
 
-	err = validator.ValidateArguments(cap, []interface{}{}, namedArgs)
+	err = validator.ValidateArguments(cap, []interface{}{}, namedArgs, registry)
 	assert.Error(t, err)
 }
 
@@ -303,6 +304,7 @@ func TestSchemaValidator_ArraySchemaValidation(t *testing.T) {
 }
 
 func TestInputValidator_WithSchemaValidation(t *testing.T) {
+	registry := testRegistry(t)
 	validator := NewInputValidator()
 
 	// Create a capability with schema-enabled arguments
@@ -341,7 +343,7 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 		"value": "valid string",
 	}
 
-	err = validator.ValidateArguments(cap, []interface{}{validConfig})
+	err = validator.ValidateArguments(cap, []interface{}{validConfig}, registry)
 	assert.NoError(t, err)
 
 	// Test invalid input (violates minLength)
@@ -349,7 +351,7 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 		"value": "ab", // Too short
 	}
 
-	err = validator.ValidateArguments(cap, []interface{}{invalidConfig})
+	err = validator.ValidateArguments(cap, []interface{}{invalidConfig}, registry)
 	assert.Error(t, err)
 
 	// Should get a ValidationError with schema validation type
@@ -359,6 +361,7 @@ func TestInputValidator_WithSchemaValidation(t *testing.T) {
 }
 
 func TestOutputValidator_WithSchemaValidation(t *testing.T) {
+	registry := testRegistry(t)
 	validator := NewOutputValidator()
 
 	// Create a capability with schema-enabled output
@@ -396,7 +399,7 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 		"data":   map[string]interface{}{"result": "ok"},
 	}
 
-	err = validator.ValidateOutput(cap, validOutput)
+	err = validator.ValidateOutput(cap, validOutput, registry)
 	assert.NoError(t, err)
 
 	// Test invalid output (invalid enum value)
@@ -405,7 +408,7 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 		"data":   map[string]interface{}{"result": "ok"},
 	}
 
-	err = validator.ValidateOutput(cap, invalidOutput)
+	err = validator.ValidateOutput(cap, invalidOutput, registry)
 	assert.Error(t, err)
 
 	// Should get a ValidationError
@@ -415,6 +418,7 @@ func TestOutputValidator_WithSchemaValidation(t *testing.T) {
 }
 
 func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
+	registry := testRegistry(t)
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a capability with full schema validation
@@ -489,7 +493,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		},
 	}
 
-	err = coordinator.ValidateInputs(cap.UrnString(), validInput)
+	err = coordinator.ValidateInputs(cap.UrnString(), validInput, registry)
 	assert.NoError(t, err)
 
 	// Test invalid input validation
@@ -500,7 +504,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		},
 	}
 
-	err = coordinator.ValidateInputs(cap.UrnString(), invalidInput)
+	err = coordinator.ValidateInputs(cap.UrnString(), invalidInput, registry)
 	assert.Error(t, err)
 
 	// Test valid output validation
@@ -512,7 +516,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		"total": 2,
 	}
 
-	err = coordinator.ValidateOutput(cap.UrnString(), validOutput)
+	err = coordinator.ValidateOutput(cap.UrnString(), validOutput, registry)
 	assert.NoError(t, err)
 
 	// Test invalid output validation
@@ -523,7 +527,7 @@ func TestCapValidationCoordinator_EndToEnd(t *testing.T) {
 		// Missing required "total" field
 	}
 
-	err = coordinator.ValidateOutput(cap.UrnString(), invalidOutput)
+	err = coordinator.ValidateOutput(cap.UrnString(), invalidOutput, registry)
 	assert.Error(t, err)
 }
 
@@ -617,6 +621,8 @@ func TestComplexNestedSchemaValidation(t *testing.T) {
 }
 
 func TestMediaUrnResolutionWithMediaSpecs(t *testing.T) {
+	registry := testRegistry(t)
+
 	// Media URN resolution requires a mediaSpecs array - no built-in fallback
 	// Test resolution with provided mediaSpecs
 	mediaSpecs := []MediaSpecDef{
@@ -626,32 +632,35 @@ func TestMediaUrnResolutionWithMediaSpecs(t *testing.T) {
 		{Urn: MediaBinary, MediaType: "application/octet-stream"},
 	}
 
-	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs)
+	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileStr, resolved.ProfileURI)
 
-	resolved, err = ResolveMediaUrn(MediaInteger, mediaSpecs)
+	resolved, err = ResolveMediaUrn(MediaInteger, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileInt, resolved.ProfileURI)
 
-	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs)
+	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.Equal(t, ProfileObj, resolved.ProfileURI)
 
-	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs)
+	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/octet-stream", resolved.MediaType)
 	assert.True(t, resolved.IsBinary())
 
-	// Resolution fails without mediaSpecs
-	_, err = ResolveMediaUrn(MediaString, nil)
-	require.Error(t, err, "Resolution should fail without mediaSpecs")
+	// Resolution succeeds from registry when mediaSpecs is nil (fallback to registry)
+	resolved, err = ResolveMediaUrn(MediaString, nil, registry)
+	require.NoError(t, err, "Resolution should succeed from registry")
+	assert.Equal(t, "text/plain", resolved.MediaType)
 }
 
 func TestCustomMediaUrnResolution(t *testing.T) {
+	registry := testRegistry(t)
+
 	mediaSpecs := []MediaSpecDef{
 		{Urn: "media:custom;textable", MediaType: "text/html", ProfileURI: "https://example.com/schema/html"},
 		NewMediaSpecDefWithSchema(
@@ -663,19 +672,19 @@ func TestCustomMediaUrnResolution(t *testing.T) {
 	}
 
 	// Resolution
-	resolved, err := ResolveMediaUrn("media:custom;textable", mediaSpecs)
+	resolved, err := ResolveMediaUrn("media:custom;textable", mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/html", resolved.MediaType)
 	assert.Equal(t, "https://example.com/schema/html", resolved.ProfileURI)
 
 	// Object form resolution with schema
-	resolved, err = ResolveMediaUrn("media:complex;textable;form=map", mediaSpecs)
+	resolved, err = ResolveMediaUrn("media:complex;textable;form=map", mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.NotNil(t, resolved.Schema)
 
 	// Unknown media URN should fail
-	_, err = ResolveMediaUrn("media:unknown", mediaSpecs)
+	_, err = ResolveMediaUrn("media:unknown", mediaSpecs, registry)
 	assert.Error(t, err)
 }
 

@@ -45,6 +45,7 @@ func TestCapCallerCreation(t *testing.T) {
 }
 
 func TestCapCallerResolveOutputSpec(t *testing.T) {
+	registry := testRegistry(t)
 	mockHost := &MockCapSet{}
 
 	// Common mediaSpecs for resolution
@@ -62,7 +63,7 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	capDef.SetMediaSpecs(mediaSpecs)
 	caller := NewCapCaller(`cap:in="media:void";op=generate;out="media:bytes"`, mockHost, capDef)
 
-	resolved, err := caller.resolveOutputSpec()
+	resolved, err := caller.resolveOutputSpec(registry)
 	require.NoError(t, err)
 	assert.True(t, resolved.IsBinary())
 
@@ -74,7 +75,7 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	capDef2.SetMediaSpecs(mediaSpecs)
 	caller2 := NewCapCaller(`cap:in="media:void";op=generate;out="media:textable;form=scalar"`, mockHost, capDef2)
 
-	resolved2, err := caller2.resolveOutputSpec()
+	resolved2, err := caller2.resolveOutputSpec(registry)
 	require.NoError(t, err)
 	assert.False(t, resolved2.IsBinary())
 	assert.True(t, resolved2.IsText())
@@ -87,7 +88,7 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	capDef3.SetMediaSpecs(mediaSpecs)
 	caller3 := NewCapCaller(`cap:in="media:void";op=generate;out="`+MediaObject+`"`, mockHost, capDef3)
 
-	resolved3, err := caller3.resolveOutputSpec()
+	resolved3, err := caller3.resolveOutputSpec(registry)
 	require.NoError(t, err)
 	assert.True(t, resolved3.IsMap())
 
@@ -99,12 +100,13 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	capDef5.SetMediaSpecs(mediaSpecs) // mediaSpecs provided but doesn't contain "media:unknown"
 	caller5 := NewCapCaller(`cap:in="media:void";op=generate;out="media:unknown"`, mockHost, capDef5)
 
-	_, err = caller5.resolveOutputSpec()
+	_, err = caller5.resolveOutputSpec(registry)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to resolve output media URN")
 }
 
 func TestCapCallerCall(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup test data - use MediaString constant for proper resolution
 	capUrnStr := `cap:in="` + MediaVoid + `";op=test;out="` + MediaString + `"`
 	capUrn, err := NewCapUrnFromString(capUrnStr)
@@ -131,7 +133,7 @@ func TestCapCallerCall(t *testing.T) {
 
 	// Test call with no arguments
 	ctx := context.Background()
-	result, err := caller.Call(ctx, []CapArgumentValue{})
+	result, err := caller.Call(ctx, []CapArgumentValue{}, registry)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -142,6 +144,7 @@ func TestCapCallerCall(t *testing.T) {
 }
 
 func TestCapCallerWithArguments(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup test data with arguments - use proper map tag for object
 	capUrn, err := NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable"`)
 	require.NoError(t, err)
@@ -176,7 +179,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 	ctx := context.Background()
 	result, err := caller.Call(ctx, []CapArgumentValue{
 		NewCapArgumentValueFromStr(MediaString, "test.txt"),
-	})
+	}, registry)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -184,6 +187,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 }
 
 func TestCapCallerBinaryResponse(t *testing.T) {
+	registry := testRegistry(t)
 	// Setup binary cap - use raw type with binary tag
 	capUrn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes"`)
 	require.NoError(t, err)
@@ -208,7 +212,7 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 
 	// Test call
 	ctx := context.Background()
-	result, err := caller.Call(ctx, []CapArgumentValue{})
+	result, err := caller.Call(ctx, []CapArgumentValue{}, registry)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

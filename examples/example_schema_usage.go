@@ -64,10 +64,10 @@ func main() {
 		"email": "john@example.com",
 	}
 
-	// Get global registry for resolving media URNs
-	registry, err := capns.GetGlobalRegistry()
+	// Get registry for resolving media URNs
+	registry, err := capns.NewMediaUrnRegistry()
 	if err != nil {
-		fmt.Printf("ERR Failed to get global registry: %v\n", err)
+		fmt.Printf("ERR Failed to create media URN registry: %v\n", err)
 		return
 	}
 

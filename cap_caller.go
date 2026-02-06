@@ -133,6 +133,7 @@ func NewCapCaller(cap string, capSet CapSet, capDefinition *Cap) *CapCaller {
 func (cc *CapCaller) Call(
 	ctx context.Context,
 	arguments []CapArgumentValue,
+	registry *MediaUrnRegistry,
 ) (*ResponseWrapper, error) {
 	// Validate arguments against cap definition
 	if err := cc.validateArguments(arguments); err != nil {
@@ -150,7 +151,7 @@ func (cc *CapCaller) Call(
 	}
 
 	// Resolve output spec to determine response type - fail hard if resolution fails
-	outputSpec, err := cc.resolveOutputSpec()
+	outputSpec, err := cc.resolveOutputSpec(registry)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +180,7 @@ func (cc *CapCaller) Call(
 	}
 
 	// Validate output against cap definition
-	if err := cc.validateOutput(response); err != nil {
+	if err := cc.validateOutput(response, registry); err != nil {
 		return nil, fmt.Errorf("output validation failed for %s: %w", cc.cap, err)
 	}
 
@@ -191,7 +192,7 @@ func (cc *CapCaller) Call(
 // This method fails hard if:
 // - The cap URN is invalid
 // - The media URN cannot be resolved (not in media_specs)
-func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
+func (cc *CapCaller) resolveOutputSpec(registry *MediaUrnRegistry) (*ResolvedMediaSpec, error) {
 	capUrn, err := NewCapUrnFromString(cc.cap)
 	if err != nil {
 		return nil, fmt.Errorf("invalid cap URN '%s': %w", cc.cap, err)
@@ -199,12 +200,6 @@ func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
 
 	// Get the output media URN - now always present since it's required in parsing
 	mediaUrn := capUrn.OutSpec()
-
-	// Get global registry for resolving media URNs
-	registry, err := GetGlobalRegistry()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get global registry: %w", err)
-	}
 
 	// Resolve the media URN using the cap definition's media_specs
 	resolved, err := ResolveMediaUrn(mediaUrn, cc.capDefinition.GetMediaSpecs(), registry)
@@ -249,9 +244,9 @@ func (cc *CapCaller) validateArguments(arguments []CapArgumentValue) error {
 }
 
 // validateOutput validates output against cap definition
-func (cc *CapCaller) validateOutput(response *ResponseWrapper) error {
+func (cc *CapCaller) validateOutput(response *ResponseWrapper, registry *MediaUrnRegistry) error {
 	// Resolve output spec - fail hard if resolution fails
-	outputSpec, err := cc.resolveOutputSpec()
+	outputSpec, err := cc.resolveOutputSpec(registry)
 	if err != nil {
 		return err
 	}
@@ -279,5 +274,5 @@ func (cc *CapCaller) validateOutput(response *ResponseWrapper) error {
 	}
 
 	outputValidator := NewOutputValidator()
-	return outputValidator.ValidateOutput(cc.capDefinition, outputValue)
+	return outputValidator.ValidateOutput(cc.capDefinition, outputValue, registry)
 }

@@ -92,19 +92,10 @@ func (sv *SchemaValidator) ValidateOutputWithSchema(output *CapOutput, schema in
 }
 
 // ValidateArguments validates all arguments for a capability using media specs
-func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, namedArgs map[string]interface{}) error {
+func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, namedArgs map[string]interface{}, registry *MediaUrnRegistry) error {
 	args := cap.GetArgs()
 	if len(args) == 0 {
 		return nil
-	}
-
-	// Get global registry once for all Resolve calls
-	registry, err := GetGlobalRegistry()
-	if err != nil {
-		return &SchemaValidationError{
-			Type:    "RegistryInitFailed",
-			Details: fmt.Sprintf("Failed to get global registry: %v", err),
-		}
 	}
 
 	mediaSpecs := cap.GetMediaSpecs()
