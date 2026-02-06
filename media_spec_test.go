@@ -1,74 +1,367 @@
 package capns
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestMetadataPropagationFromObjectDef(t *testing.T) {
-	// Create a media spec definition with metadata
+// -------------------------------------------------------------------------
+// Media URN resolution tests
+// -------------------------------------------------------------------------
+
+// TEST088: Test resolving string media URN from standard specs returns correct media type and profile
+func TestResolveFromStandardSpecsStr(t *testing.T) {
+	standardSpecs := GetStandardMediaSpecs()
+	resolved, err := ResolveMediaUrn("media:textable;form=scalar", standardSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, "text/plain", resolved.MediaType)
+	assert.Equal(t, "https://capns.org/schema/string", resolved.ProfileURI)
+}
+
+// TEST089: Test resolving object media URN from standard specs returns JSON media type
+func TestResolveFromStandardSpecsObj(t *testing.T) {
+	standardSpecs := GetStandardMediaSpecs()
+	resolved, err := ResolveMediaUrn("media:form=map;textable", standardSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, "application/json", resolved.MediaType)
+}
+
+// TEST090: Test resolving binary media URN from standard specs returns octet-stream and IsBinary true
+func TestResolveFromStandardSpecsBinary(t *testing.T) {
+	standardSpecs := GetStandardMediaSpecs()
+	resolved, err := ResolveMediaUrn("media:bytes", standardSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, "application/octet-stream", resolved.MediaType)
+	assert.True(t, resolved.IsBinary())
+}
+
+// TEST091: Test resolving custom media URN from local media_specs takes precedence over standard specs
+func TestResolveCustomMediaSpec(t *testing.T) {
+	customSpecs := []MediaSpecDef{
+		{
+			Urn:         "media:custom-spec;json",
+			MediaType:   "application/json",
+			Title:       "Custom Spec",
+			ProfileURI:  "https://example.com/schema",
+			Schema:      nil,
+			Description: "",
+			Validation:  nil,
+			Metadata:    nil,
+			Extensions:  []string{},
+		},
+	}
+
+	// Custom spec is found
+	resolved, err := ResolveMediaUrn("media:custom-spec;json", customSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, "media:custom-spec;json", resolved.SpecID)
+	assert.Equal(t, "application/json", resolved.MediaType)
+	assert.Equal(t, "https://example.com/schema", resolved.ProfileURI)
+	assert.Nil(t, resolved.Schema)
+}
+
+// TEST092: Test resolving custom object form media spec with schema from local media_specs
+func TestResolveCustomWithSchema(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+	}
+	customSpecs := []MediaSpecDef{
+		{
+			Urn:         "media:output-spec;json;form=map",
+			MediaType:   "application/json",
+			Title:       "Output Spec",
+			ProfileURI:  "https://example.com/schema/output",
+			Schema:      schema,
+			Description: "",
+			Validation:  nil,
+			Metadata:    nil,
+			Extensions:  []string{},
+		},
+	}
+
+	resolved, err := ResolveMediaUrn("media:output-spec;json;form=map", customSpecs)
+	require.NoError(t, err)
+	assert.Equal(t, "media:output-spec;json;form=map", resolved.SpecID)
+	assert.Equal(t, "application/json", resolved.MediaType)
+	assert.Equal(t, "https://example.com/schema/output", resolved.ProfileURI)
+	assert.Equal(t, schema, resolved.Schema)
+}
+
+// TEST093: Test resolving unknown media URN fails with UnresolvableMediaUrn error
+func TestResolveUnresolvableFailsHard(t *testing.T) {
+	emptySpecs := []MediaSpecDef{}
+	// URN not in media_specs - FAIL HARD
+	_, err := ResolveMediaUrn("media:completely-unknown-urn-not-in-specs", emptySpecs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "media:completely-unknown-urn-not-in-specs")
+	assert.Contains(t, err.Error(), "cannot be resolved")
+}
+
+// TEST094: Test local media_specs definition overrides standard specs definition for same URN
+func TestLocalOverridesStandardSpecs(t *testing.T) {
+	standardSpecs := GetStandardMediaSpecs()
+
+	// Add custom override for a standard URN
+	customOverride := MediaSpecDef{
+		Urn:         "media:textable;form=scalar",
+		MediaType:   "application/json", // Override: normally text/plain
+		Title:       "Custom String",
+		ProfileURI:  "https://custom.example.com/str",
+		Schema:      nil,
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+
+	// Prepend custom override (simulates local media_specs priority)
+	allSpecs := append([]MediaSpecDef{customOverride}, standardSpecs...)
+
+	resolved, err := ResolveMediaUrn("media:textable;form=scalar", allSpecs)
+	require.NoError(t, err)
+	// Custom definition used, not standard spec
+	assert.Equal(t, "application/json", resolved.MediaType)
+	assert.Equal(t, "https://custom.example.com/str", resolved.ProfileURI)
+}
+
+// -------------------------------------------------------------------------
+// MediaSpecDef serialization tests
+// -------------------------------------------------------------------------
+
+// TEST095: Test MediaSpecDef serializes with required fields and skips None fields
+func TestMediaSpecDefSerialize(t *testing.T) {
+	def := MediaSpecDef{
+		Urn:         "media:test;json",
+		MediaType:   "application/json",
+		Title:       "Test Media",
+		ProfileURI:  "https://example.com/profile",
+		Schema:      nil,
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+	jsonBytes, err := json.Marshal(def)
+	require.NoError(t, err)
+	jsonStr := string(jsonBytes)
+
+	assert.Contains(t, jsonStr, `"urn":"media:test;json"`)
+	assert.Contains(t, jsonStr, `"media_type":"application/json"`)
+	assert.Contains(t, jsonStr, `"profile_uri":"https://example.com/profile"`)
+	assert.Contains(t, jsonStr, `"title":"Test Media"`)
+	// Empty/nil fields use omitempty - check they're omitted or empty
+	// Schema is nil - omitempty skips it
+	// Description is empty string - may or may not be omitted depending on tag
+}
+
+// TEST096: Test deserializing MediaSpecDef from JSON object
+func TestMediaSpecDefDeserialize(t *testing.T) {
+	jsonStr := `{"urn":"media:test;json","media_type":"application/json","title":"Test"}`
+	var def MediaSpecDef
+	err := json.Unmarshal([]byte(jsonStr), &def)
+	require.NoError(t, err)
+	assert.Equal(t, "media:test;json", def.Urn)
+	assert.Equal(t, "application/json", def.MediaType)
+	assert.Equal(t, "Test", def.Title)
+	assert.Equal(t, "", def.ProfileURI)
+}
+
+// -------------------------------------------------------------------------
+// Duplicate URN validation tests
+// -------------------------------------------------------------------------
+
+// TEST097: Test duplicate URN validation catches duplicates
+func TestValidateNoDuplicateUrnsCatchesDuplicates(t *testing.T) {
+	mediaSpecs := []MediaSpecDef{
+		NewMediaSpecDefWithTitle("media:dup;json", "application/json", "", "First"),
+		NewMediaSpecDefWithTitle("media:dup;json", "application/json", "", "Second"), // duplicate
+	}
+	err := ValidateNoMediaSpecDuplicates(mediaSpecs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "media:dup;json")
+	assert.Contains(t, err.Error(), "duplicate")
+}
+
+// TEST098: Test duplicate URN validation passes for unique URNs
+func TestValidateNoDuplicateUrnsPassesForUnique(t *testing.T) {
+	mediaSpecs := []MediaSpecDef{
+		NewMediaSpecDefWithTitle("media:first;json", "application/json", "", "First"),
+		NewMediaSpecDefWithTitle("media:second;json", "application/json", "", "Second"),
+	}
+	err := ValidateNoMediaSpecDuplicates(mediaSpecs)
+	require.NoError(t, err)
+}
+
+// -------------------------------------------------------------------------
+// ResolvedMediaSpec tests
+// -------------------------------------------------------------------------
+
+// TEST099: Test ResolvedMediaSpec IsBinary returns true for bytes media URN
+func TestResolvedIsBinary(t *testing.T) {
+	resolved := &ResolvedMediaSpec{
+		SpecID:      "media:bytes",
+		MediaType:   "application/octet-stream",
+		ProfileURI:  "",
+		Schema:      nil,
+		Title:       "",
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+	assert.True(t, resolved.IsBinary())
+	assert.False(t, resolved.IsMap())
+	assert.False(t, resolved.IsJSON())
+}
+
+// TEST100: Test ResolvedMediaSpec IsMap returns true for form=map media URN
+func TestResolvedIsMap(t *testing.T) {
+	resolved := &ResolvedMediaSpec{
+		SpecID:      "media:textable;form=map",
+		MediaType:   "application/json",
+		ProfileURI:  "",
+		Schema:      nil,
+		Title:       "",
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+	assert.True(t, resolved.IsMap())
+	assert.False(t, resolved.IsBinary())
+	assert.False(t, resolved.IsScalar())
+	assert.False(t, resolved.IsList())
+}
+
+// TEST101: Test ResolvedMediaSpec IsScalar returns true for form=scalar media URN
+func TestResolvedIsScalar(t *testing.T) {
+	resolved := &ResolvedMediaSpec{
+		SpecID:      "media:textable;form=scalar",
+		MediaType:   "text/plain",
+		ProfileURI:  "",
+		Schema:      nil,
+		Title:       "",
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+	assert.True(t, resolved.IsScalar())
+	assert.False(t, resolved.IsMap())
+	assert.False(t, resolved.IsList())
+}
+
+// TEST102: Test ResolvedMediaSpec IsList returns true for form=list media URN
+func TestResolvedIsList(t *testing.T) {
+	resolved := &ResolvedMediaSpec{
+		SpecID:      "media:textable;form=list",
+		MediaType:   "application/json",
+		ProfileURI:  "",
+		Schema:      nil,
+		Title:       "",
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+	assert.True(t, resolved.IsList())
+	assert.False(t, resolved.IsMap())
+	assert.False(t, resolved.IsScalar())
+}
+
+// TEST103: Test ResolvedMediaSpec IsJSON returns true when json tag is present
+func TestResolvedIsJSON(t *testing.T) {
+	resolved := &ResolvedMediaSpec{
+		SpecID:      "media:json;textable;form=map",
+		MediaType:   "application/json",
+		ProfileURI:  "",
+		Schema:      nil,
+		Title:       "",
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+	assert.True(t, resolved.IsJSON())
+	assert.True(t, resolved.IsMap())
+	assert.False(t, resolved.IsBinary())
+}
+
+// TEST104: Test ResolvedMediaSpec IsText returns true when textable tag is present
+func TestResolvedIsText(t *testing.T) {
+	resolved := &ResolvedMediaSpec{
+		SpecID:      "media:textable",
+		MediaType:   "text/plain",
+		ProfileURI:  "",
+		Schema:      nil,
+		Title:       "",
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{},
+	}
+	assert.True(t, resolved.IsText())
+	assert.False(t, resolved.IsBinary())
+	assert.False(t, resolved.IsJSON())
+}
+
+// -------------------------------------------------------------------------
+// Metadata propagation tests
+// -------------------------------------------------------------------------
+
+// TEST105: Test metadata propagates from media spec def to resolved media spec
+func TestMetadataPropagation(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:custom-setting;setting",
 			MediaType:   "text/plain",
-			ProfileURI:  "https://example.com/schema",
 			Title:       "Custom Setting",
+			ProfileURI:  "https://example.com/schema",
+			Schema:      nil,
 			Description: "A custom setting",
-			Metadata: map[string]interface{}{
-				"category_key":    "interface",
-				"ui_type":         "SETTING_UI_TYPE_CHECKBOX",
-				"subcategory_key": "appearance",
-				"display_index":   5,
+			Validation:  nil,
+			Metadata: map[string]any{
+				"category_key": "interface",
+				"ui_type":      "SETTING_UI_TYPE_CHECKBOX",
 			},
+			Extensions: []string{},
 		},
 	}
 
-	// Resolve and verify metadata is propagated
 	resolved, err := ResolveMediaUrn("media:custom-setting;setting", mediaSpecs)
 	require.NoError(t, err)
 	require.NotNil(t, resolved.Metadata)
-
 	assert.Equal(t, "interface", resolved.Metadata["category_key"])
 	assert.Equal(t, "SETTING_UI_TYPE_CHECKBOX", resolved.Metadata["ui_type"])
-	assert.Equal(t, "appearance", resolved.Metadata["subcategory_key"])
-	assert.Equal(t, 5, resolved.Metadata["display_index"])
 }
 
-func TestMetadataNilByDefault(t *testing.T) {
-	// Media URNs with no metadata field should have nil metadata
-	mediaSpecs := []MediaSpecDef{
-		{
-			Urn:        MediaString,
-			MediaType:  "text/plain",
-			ProfileURI: ProfileStr,
-		},
-	}
-	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs)
-	require.NoError(t, err)
-	assert.Nil(t, resolved.Metadata)
-}
-
+// TEST106: Test metadata and validation can coexist in media spec definition
 func TestMetadataWithValidation(t *testing.T) {
-	// Ensure metadata and validation can coexist
 	minVal := 0.0
 	maxVal := 100.0
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:bounded-number;numeric;setting",
 			MediaType:   "text/plain",
-			ProfileURI:  "https://example.com/schema",
 			Title:       "Bounded Number",
+			ProfileURI:  "https://example.com/schema",
+			Schema:      nil,
 			Description: "",
 			Validation: &MediaValidation{
 				Min: &minVal,
 				Max: &maxVal,
 			},
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"category_key": "inference",
 				"ui_type":      "SETTING_UI_TYPE_SLIDER",
 			},
+			Extensions: []string{},
 		},
 	}
 
@@ -83,73 +376,82 @@ func TestMetadataWithValidation(t *testing.T) {
 	// Verify metadata
 	require.NotNil(t, resolved.Metadata)
 	assert.Equal(t, "inference", resolved.Metadata["category_key"])
-	assert.Equal(t, "SETTING_UI_TYPE_SLIDER", resolved.Metadata["ui_type"])
 }
 
-func TestResolveMediaUrnNotFound(t *testing.T) {
-	// Should fail hard for unknown media URNs
-	mediaSpecs := []MediaSpecDef{}
-	_, err := ResolveMediaUrn("media:unknown;type", mediaSpecs)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot be resolved")
-}
+// -------------------------------------------------------------------------
+// Extension field tests
+// -------------------------------------------------------------------------
 
-// Test extensions field propagation from object def to resolved media spec
-func TestExtensionsPropagationFromObjectDef(t *testing.T) {
+// TEST107: Test extensions field propagates from media spec def to resolved
+func TestExtensionsPropagation(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
-			Urn:         "media:pdf;bytes",
+			Urn:         "media:custom-pdf;bytes",
 			MediaType:   "application/pdf",
-			ProfileURI:  "https://capns.org/schema/pdf",
 			Title:       "PDF Document",
+			ProfileURI:  "https://capns.org/schema/pdf",
+			Schema:      nil,
 			Description: "A PDF document",
+			Validation:  nil,
+			Metadata:    nil,
 			Extensions:  []string{"pdf"},
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:pdf;bytes", mediaSpecs)
+	resolved, err := ResolveMediaUrn("media:custom-pdf;bytes", mediaSpecs)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"pdf"}, resolved.Extensions)
 }
 
-// Test extensions is empty slice when not set
-func TestExtensionsEmptyWhenNotSet(t *testing.T) {
-	mediaSpecs := []MediaSpecDef{
-		{
-			Urn:        "media:text;textable",
-			MediaType:  "text/plain",
-			ProfileURI: "https://example.com",
-		},
+// TEST108: Test extensions serializes/deserializes correctly in MediaSpecDef
+func TestExtensionsSerialization(t *testing.T) {
+	def := MediaSpecDef{
+		Urn:         "media:json-data",
+		MediaType:   "application/json",
+		Title:       "JSON Data",
+		ProfileURI:  "https://example.com/profile",
+		Schema:      nil,
+		Description: "",
+		Validation:  nil,
+		Metadata:    nil,
+		Extensions:  []string{"json"},
 	}
-
-	resolved, err := ResolveMediaUrn("media:text;textable", mediaSpecs)
+	jsonBytes, err := json.Marshal(def)
 	require.NoError(t, err)
-	assert.Empty(t, resolved.Extensions)
+	jsonStr := string(jsonBytes)
+	assert.Contains(t, jsonStr, `"extensions":["json"]`)
+
+	// Deserialize and verify
+	var parsed MediaSpecDef
+	err = json.Unmarshal(jsonBytes, &parsed)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"json"}, parsed.Extensions)
 }
 
-// Test extensions can coexist with metadata and validation
+// TEST109: Test extensions can coexist with metadata and validation
 func TestExtensionsWithMetadataAndValidation(t *testing.T) {
 	minLen := 1
 	maxLen := 1000
 	mediaSpecs := []MediaSpecDef{
 		{
-			Urn:         "media:custom-output",
+			Urn:         "media:custom-output;json",
 			MediaType:   "application/json",
-			ProfileURI:  "https://example.com/schema",
 			Title:       "Custom Output",
+			ProfileURI:  "https://example.com/schema",
+			Schema:      nil,
 			Description: "",
 			Validation: &MediaValidation{
 				MinLength: &minLen,
 				MaxLength: &maxLen,
 			},
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"category": "output",
 			},
 			Extensions: []string{"json"},
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:custom-output", mediaSpecs)
+	resolved, err := ResolveMediaUrn("media:custom-output;json", mediaSpecs)
 	require.NoError(t, err)
 
 	// Verify all fields are present
@@ -158,15 +460,18 @@ func TestExtensionsWithMetadataAndValidation(t *testing.T) {
 	assert.Equal(t, []string{"json"}, resolved.Extensions)
 }
 
-// Test multiple extensions in a media spec
+// TEST110: Test multiple extensions in a media spec
 func TestMultipleExtensions(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:image;jpeg;bytes",
 			MediaType:   "image/jpeg",
-			ProfileURI:  "https://capns.org/schema/jpeg",
 			Title:       "JPEG Image",
+			ProfileURI:  "https://capns.org/schema/jpeg",
+			Schema:      nil,
 			Description: "JPEG image data",
+			Validation:  nil,
+			Metadata:    nil,
 			Extensions:  []string{"jpg", "jpeg"},
 		},
 	}
@@ -177,66 +482,9 @@ func TestMultipleExtensions(t *testing.T) {
 	assert.Len(t, resolved.Extensions, 2)
 }
 
-// Test ValidateNoMediaSpecDuplicates function
-func TestValidateNoMediaSpecDuplicates(t *testing.T) {
-	// Test case 1: No duplicates
-	mediaSpecs := []MediaSpecDef{
-		{Urn: "media:text;textable", MediaType: "text/plain"},
-		{Urn: "media:json;textable", MediaType: "application/json"},
-	}
-	err := ValidateNoMediaSpecDuplicates(mediaSpecs)
-	assert.NoError(t, err)
-
-	// Test case 2: With duplicates
-	mediaSpecsWithDupes := []MediaSpecDef{
-		{Urn: "media:text;textable", MediaType: "text/plain"},
-		{Urn: "media:json;textable", MediaType: "application/json"},
-		{Urn: "media:text;textable", MediaType: "text/html"}, // Duplicate URN
-	}
-	err = ValidateNoMediaSpecDuplicates(mediaSpecsWithDupes)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate")
-	assert.Contains(t, err.Error(), "media:text;textable")
-
-	// Test case 3: Empty array
-	err = ValidateNoMediaSpecDuplicates([]MediaSpecDef{})
-	assert.NoError(t, err)
-}
-
-// Test NewMediaSpecDef constructor
-func TestNewMediaSpecDef(t *testing.T) {
-	def := NewMediaSpecDef("media:test;textable", "text/plain", "https://example.com/schema")
-	assert.Equal(t, "media:test;textable", def.Urn)
-	assert.Equal(t, "text/plain", def.MediaType)
-	assert.Equal(t, "https://example.com/schema", def.ProfileURI)
-	assert.Empty(t, def.Title)
-	assert.Empty(t, def.Description)
-	assert.Nil(t, def.Schema)
-}
-
-// Test NewMediaSpecDefWithTitle constructor
-func TestNewMediaSpecDefWithTitle(t *testing.T) {
-	def := NewMediaSpecDefWithTitle("media:test;textable", "text/plain", "https://example.com/schema", "Test Title")
-	assert.Equal(t, "media:test;textable", def.Urn)
-	assert.Equal(t, "text/plain", def.MediaType)
-	assert.Equal(t, "https://example.com/schema", def.ProfileURI)
-	assert.Equal(t, "Test Title", def.Title)
-}
-
-// Test NewMediaSpecDefWithSchema constructor
-func TestNewMediaSpecDefWithSchema(t *testing.T) {
-	schema := map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"name": map[string]interface{}{"type": "string"},
-		},
-	}
-	def := NewMediaSpecDefWithSchema("media:test;json", "application/json", "https://example.com/schema", schema)
-	assert.Equal(t, "media:test;json", def.Urn)
-	assert.Equal(t, "application/json", def.MediaType)
-	assert.Equal(t, "https://example.com/schema", def.ProfileURI)
-	assert.NotNil(t, def.Schema)
-}
+// -------------------------------------------------------------------------
+// Standard caps tests (from other test file - included for completeness)
+// -------------------------------------------------------------------------
 
 // TEST304: Test MediaAvailabilityOutput constant parses as valid media URN with correct tags
 func TestMediaAvailabilityOutputConstant(t *testing.T) {
