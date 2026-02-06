@@ -62,11 +62,16 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 		t.Errorf("Expected 1 host, got %d", len(sets))
 	}
 
-	// Test that request with extra tags doesn't match (new semantics)
-	// Under new semantics: pattern has model=gpt-4, instance lacks model -> NO MATCH
-	_, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
-	if err == nil {
-		t.Error("Expected no match when pattern has extra exact values not in instance")
+	// Test that request with extra tags DOES match (cap missing tag = wildcard)
+	// Cap registered: op=test;basic
+	// Request: model=gpt-4;op=test;basic
+	// Cap missing model tag → treated as wildcard → MATCH
+	sets2, err := registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
+	if err != nil {
+		t.Errorf("Expected match (cap missing model tag = wildcard), got error: %v", err)
+	}
+	if len(sets2) != 1 {
+		t.Errorf("Expected 1 host (wildcard match), got %d", len(sets2))
 	}
 
 	// Test no match (different direction specs)
@@ -176,10 +181,11 @@ func TestCanHandle(t *testing.T) {
 	if !registry.CanHandle(matrixTestUrn("op=test")) {
 		t.Error("Registry should handle registered capability")
 	}
-	// Under new semantics: extra=param in pattern requires instance to have it
-	// Instance doesn't have extra, so NO MATCH
-	if registry.CanHandle(matrixTestUrn("extra=param;op=test")) {
-		t.Error("Registry should NOT handle capability when pattern has extra exact values")
+	// Cap registered: op=test
+	// Request: extra=param;op=test
+	// Cap missing extra → wildcard → SHOULD MATCH
+	if !registry.CanHandle(matrixTestUrn("extra=param;op=test")) {
+		t.Error("Registry SHOULD handle capability (cap missing extra tag = wildcard)")
 	}
 	if registry.CanHandle(matrixTestUrn("op=different")) {
 		t.Error("Registry should not handle unregistered capability")

@@ -484,7 +484,10 @@ func valuesMatch(inst, patt *string) bool {
 
 	// Pattern: exact value
 	if inst == nil {
-		return false // Instance missing, pattern wants value
+		// Cap (inst) is missing this tag - treat as wildcard (can handle any value)
+		// This matches Rust semantics: missing tag in cap = wildcard
+		// Enables fallback scenarios where generic cap handles specific requests
+		return true
 	}
 	if *inst == "*" {
 		return true // Instance accepts any, pattern's value is fine

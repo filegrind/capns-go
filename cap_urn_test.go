@@ -207,11 +207,11 @@ func TestMissingTagHandling(t *testing.T) {
 	cap, err := NewCapUrnFromString(testUrn("op=generate"))
 	require.NoError(t, err)
 
-	// Under new semantics: pattern has ext=pdf, instance missing ext → NO MATCH
-	// Instance missing a tag that pattern requires is not a match
+	// Cap missing ext tag → wildcard semantics → MATCH (matches Rust)
+	// This allows generic caps to handle specific requests
 	request1, err := NewCapUrnFromString(testUrn("ext=pdf"))
 	require.NoError(t, err)
-	assert.False(t, cap.Matches(request1)) // pattern requires ext, cap doesn't have it
+	assert.True(t, cap.Matches(request1)) // cap missing ext → wildcard → matches
 
 	// Cap with extra tags can match subset requests (pattern missing = no constraint)
 	cap2, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
@@ -995,17 +995,17 @@ func TestMatchingSemantics_Test1_ExactMatch(t *testing.T) {
 
 // TEST041: Matching semantics - cap missing tag matches (implicit wildcard)
 func TestMatchingSemantics_Test2_CapMissingTag(t *testing.T) {
-	// Test 2: Under new semantics, pattern with specific value requires instance to have it
+	// Test 2: Cap missing tag (implicit wildcard for other tags, not direction)
 	cap, err := NewCapUrnFromString(testUrn("op=generate"))
 	require.NoError(t, err)
 
 	request, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
 	require.NoError(t, err)
 
-	// Pattern has ext=pdf, instance missing ext → NO MATCH
-	assert.False(t, cap.Matches(request), "Test 2: Cap missing tag pattern requires should NOT match")
+	// Cap missing ext tag → treated as implicit wildcard → MATCH
+	assert.True(t, cap.Matches(request), "Test 2: Cap missing tag should match (implicit wildcard)")
 
-	// But cap with explicit wildcard should match
+	// Cap with explicit wildcard also matches
 	cap2, err := NewCapUrnFromString(testUrn("ext=*;op=generate"))
 	require.NoError(t, err)
 	assert.True(t, cap2.Matches(request), "Test 2b: Cap with ext=* should match pattern with ext=pdf")
@@ -1061,16 +1061,15 @@ func TestMatchingSemantics_Test6_ValueMismatch(t *testing.T) {
 
 // TEST046: Matching semantics - fallback pattern (cap missing tag = implicit wildcard)
 func TestMatchingSemantics_Test7_FallbackPattern(t *testing.T) {
-	// Test 7: Under new semantics, fallback requires explicit wildcard
-	// Cap without ext does NOT match pattern with specific ext
+	// Test 7: Cap missing tag (implicit wildcard) matches request with specific tag value
 	cap, err := NewCapUrnFromString(`cap:in="media:binary";op=generate_thumbnail;out="media:binary"`)
 	require.NoError(t, err)
 
 	request, err := NewCapUrnFromString(`cap:ext=wav;in="media:binary";op=generate_thumbnail;out="media:binary"`)
 	require.NoError(t, err)
 
-	// Pattern has ext=wav, instance missing ext → NO MATCH
-	assert.False(t, cap.Matches(request), "Test 7: Cap missing ext should NOT match pattern with ext=wav")
+	// Cap missing ext → treated as wildcard → MATCH (matches Rust semantics)
+	assert.True(t, cap.Matches(request), "Test 7: Cap missing ext should match request with ext=wav")
 }
 
 // TEST047: Matching semantics - thumbnail fallback with void input
@@ -1090,16 +1089,16 @@ func TestMatchingSemantics_Test7b_ThumbnailVoidInput(t *testing.T) {
 
 // TEST048: Matching semantics - wildcard direction matches anything
 func TestMatchingSemantics_Test8_WildcardDirectionMatchesAnything(t *testing.T) {
-	// Test 8: Wildcard direction matches any direction, but other tags still matter
+	// Test 8: Wildcard direction matches any direction, cap missing tags = wildcard
 	cap, err := NewCapUrnFromString("cap:in=*;out=*")
 	require.NoError(t, err)
 
-	// Request with tags cap doesn't have - under new semantics, cap missing op/ext → NO MATCH
+	// Request with tags cap doesn't have - cap missing op/ext → treated as wildcard → MATCH
 	request, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="media:object";ext=pdf`)
 	require.NoError(t, err)
 
-	// Cap doesn't have op or ext, pattern requires specific values → NO MATCH
-	assert.False(t, cap.Matches(request), "Test 8: Cap missing op/ext should NOT match pattern with them")
+	// Cap missing op/ext → wildcard semantics → MATCH (matches Rust)
+	assert.True(t, cap.Matches(request), "Test 8: Cap missing op/ext should match (wildcard semantics)")
 
 	// But if request only has direction specifiers, it should match
 	request2, err := NewCapUrnFromString(`cap:in="media:string";out="media:object"`)
@@ -1109,7 +1108,7 @@ func TestMatchingSemantics_Test8_WildcardDirectionMatchesAnything(t *testing.T) 
 
 // TEST049: Matching semantics - cross-dimension independence
 func TestMatchingSemantics_Test9_CrossDimensionIndependence(t *testing.T) {
-	// Test 9: Under new semantics, each side's specific values must be satisfied
+	// Test 9: Cap missing tag = wildcard, allows cross-dimension matching
 	// Cap has op=generate, request has ext=pdf
 	cap, err := NewCapUrnFromString(testUrn("op=generate"))
 	require.NoError(t, err)
@@ -1117,8 +1116,8 @@ func TestMatchingSemantics_Test9_CrossDimensionIndependence(t *testing.T) {
 	request, err := NewCapUrnFromString(testUrn("ext=pdf"))
 	require.NoError(t, err)
 
-	// Pattern has ext=pdf (specific), instance missing ext → NO MATCH
-	assert.False(t, cap.Matches(request), "Test 9: Pattern with ext=pdf, cap missing ext → NO MATCH")
+	// Cap missing ext → wildcard semantics → MATCH (matches Rust)
+	assert.True(t, cap.Matches(request), "Test 9: Cap missing ext should match request with ext (wildcard)")
 
 	// If neither has the other's tag, both missing means no constraint
 	cap2, err := NewCapUrnFromString(testUrn("op=generate"))
