@@ -343,7 +343,8 @@ func TestMetadataPropagation(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:custom-setting;setting", mediaSpecs)
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:custom-setting;setting", mediaSpecs, registry)
 	require.NoError(t, err)
 	require.NotNil(t, resolved.Metadata)
 	assert.Equal(t, "interface", resolved.Metadata["category_key"])
@@ -374,7 +375,8 @@ func TestMetadataWithValidation(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:bounded-number;numeric;setting", mediaSpecs)
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:bounded-number;numeric;setting", mediaSpecs, registry)
 	require.NoError(t, err)
 
 	// Verify validation
@@ -407,7 +409,8 @@ func TestExtensionsPropagation(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:custom-pdf;bytes", mediaSpecs)
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:custom-pdf;bytes", mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"pdf"}, resolved.Extensions)
 }
@@ -460,7 +463,8 @@ func TestExtensionsWithMetadataAndValidation(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:custom-output;json", mediaSpecs)
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:custom-output;json", mediaSpecs, registry)
 	require.NoError(t, err)
 
 	// Verify all fields are present
@@ -485,7 +489,8 @@ func TestMultipleExtensions(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:image;jpeg;bytes", mediaSpecs)
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:image;jpeg;bytes", mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"jpg", "jpeg"}, resolved.Extensions)
 	assert.Len(t, resolved.Extensions, 2)

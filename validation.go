@@ -260,8 +260,17 @@ func (iv *InputValidator) ValidateNamedArguments(cap *Cap, namedArgs []map[strin
 }
 
 func (iv *InputValidator) validateSingleArgument(cap *Cap, argDef *CapArg, value interface{}) error {
+	// Get global registry for resolving media URNs
+	registry, err := GetGlobalRegistry()
+	if err != nil {
+		return &ValidationError{
+			Type:    "RegistryInitFailed",
+			Message: fmt.Sprintf("Failed to get global registry: %v", err),
+		}
+	}
+
 	// Resolve the media URN to determine the expected type
-	resolved, err := argDef.Resolve(cap.GetMediaSpecs())
+	resolved, err := argDef.Resolve(cap.GetMediaSpecs(), registry)
 	if err != nil {
 		return NewUnresolvableMediaUrnErrorForValidation(cap.UrnString(), argDef.MediaUrn, argDef.MediaUrn)
 	}
@@ -495,8 +504,17 @@ func (ov *OutputValidator) ValidateOutput(cap *Cap, output interface{}) error {
 		}
 	}
 
+	// Get global registry for resolving media URNs
+	registry, err := GetGlobalRegistry()
+	if err != nil {
+		return &ValidationError{
+			Type:    "RegistryInitFailed",
+			Message: fmt.Sprintf("Failed to get global registry: %v", err),
+		}
+	}
+
 	// Resolve the media URN
-	resolved, err := outputDef.Resolve(cap.GetMediaSpecs())
+	resolved, err := outputDef.Resolve(cap.GetMediaSpecs(), registry)
 	if err != nil {
 		return &ValidationError{
 			Type:    "UnresolvableMediaUrn",
@@ -728,10 +746,19 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 	capUrn := cap.UrnString()
 	args := cap.GetArgs()
 
+	// Get global registry for resolving media URNs
+	registry, err := GetGlobalRegistry()
+	if err != nil {
+		return &ValidationError{
+			Type:    "RegistryInitFailed",
+			Message: fmt.Sprintf("Failed to get global registry: %v", err),
+		}
+	}
+
 	if len(args) == 0 {
 		// Validate output media URN if present
 		if cap.Output != nil {
-			if _, err := cap.Output.Resolve(cap.GetMediaSpecs()); err != nil {
+			if _, err := cap.Output.Resolve(cap.GetMediaSpecs(), registry); err != nil {
 				return &ValidationError{
 					Type:    "InvalidCapSchema",
 					CapUrn:  capUrn,
@@ -755,7 +782,7 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 
 	// Validate that all argument media URNs can be resolved
 	for _, arg := range args {
-		if _, err := arg.Resolve(cap.GetMediaSpecs()); err != nil {
+		if _, err := arg.Resolve(cap.GetMediaSpecs(), registry); err != nil {
 			argType := "optional"
 			if arg.Required {
 				argType = "required"
@@ -771,7 +798,7 @@ func (cvc *CapValidationCoordinator) ValidateCapSchema(cap *Cap) error {
 
 	// Validate output media URN if present
 	if cap.Output != nil {
-		if _, err := cap.Output.Resolve(cap.GetMediaSpecs()); err != nil {
+		if _, err := cap.Output.Resolve(cap.GetMediaSpecs(), registry); err != nil {
 			return &ValidationError{
 				Type:    "InvalidCapSchema",
 				CapUrn:  capUrn,

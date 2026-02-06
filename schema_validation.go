@@ -98,6 +98,15 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 		return nil
 	}
 
+	// Get global registry once for all Resolve calls
+	registry, err := GetGlobalRegistry()
+	if err != nil {
+		return &SchemaValidationError{
+			Type:    "RegistryInitFailed",
+			Details: fmt.Sprintf("Failed to get global registry: %v", err),
+		}
+	}
+
 	mediaSpecs := cap.GetMediaSpecs()
 	requiredArgs := cap.GetRequiredArgs()
 	optionalArgs := cap.GetOptionalArgs()
@@ -130,7 +139,7 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 
 		if found {
 			// Resolve the media URN to get the schema
-			resolved, err := argDef.Resolve(mediaSpecs)
+			resolved, err := argDef.Resolve(mediaSpecs, registry)
 			if err != nil {
 				return &SchemaValidationError{
 					Type:     "UnresolvableMediaUrn",
@@ -172,7 +181,7 @@ func (sv *SchemaValidator) ValidateArguments(cap *Cap, arguments []interface{}, 
 
 		if found {
 			// Resolve the media URN to get the schema
-			resolved, err := argDef.Resolve(mediaSpecs)
+			resolved, err := argDef.Resolve(mediaSpecs, registry)
 			if err != nil {
 				return &SchemaValidationError{
 					Type:     "UnresolvableMediaUrn",

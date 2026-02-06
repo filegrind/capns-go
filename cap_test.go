@@ -176,20 +176,31 @@ func TestCapWithMediaSpecs(t *testing.T) {
 	// Add output
 	cap.SetOutput(NewCapOutput("media:result", "Query result"))
 
+	// Get test registry
+	registry := testRegistry(t)
+
 	// Resolve the argument spec
 	args := cap.GetArgs()
 	require.Len(t, args, 1)
 	arg := args[0]
-	resolved, err := arg.Resolve(cap.GetMediaSpecs())
+	resolved, err := arg.Resolve(cap.GetMediaSpecs(), registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, ProfileStr, resolved.ProfileURI)
 
 	// Resolve the output spec
-	outResolved, err := cap.Output.Resolve(cap.GetMediaSpecs())
+	outResolved, err := cap.Output.Resolve(cap.GetMediaSpecs(), registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", outResolved.MediaType)
 	assert.NotNil(t, outResolved.Schema)
+}
+
+// Helper to create a test registry (matches Rust test_registry() helper)
+func testRegistry(t *testing.T) *MediaUrnRegistry {
+	t.Helper()
+	registry, err := NewMediaUrnRegistry()
+	require.NoError(t, err, "Failed to create test registry")
+	return registry
 }
 
 func TestCapJSONRoundTrip(t *testing.T) {

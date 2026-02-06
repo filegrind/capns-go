@@ -142,13 +142,13 @@ func (a *CapArg) GetCliFlag() *string {
 }
 
 // Resolve resolves the argument's media URN to a ResolvedMediaSpec
-func (a *CapArg) Resolve(mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
-	return ResolveMediaUrn(a.MediaUrn, mediaSpecs)
+func (a *CapArg) Resolve(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (*ResolvedMediaSpec, error) {
+	return ResolveMediaUrn(a.MediaUrn, mediaSpecs, registry)
 }
 
 // IsBinary checks if this argument expects binary data.
-func (a *CapArg) IsBinary(mediaSpecs []MediaSpecDef) (bool, error) {
-	resolved, err := a.Resolve(mediaSpecs)
+func (a *CapArg) IsBinary(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (bool, error) {
+	resolved, err := a.Resolve(mediaSpecs, registry)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
 	}
@@ -157,8 +157,8 @@ func (a *CapArg) IsBinary(mediaSpecs []MediaSpecDef) (bool, error) {
 
 // IsStructured checks if this argument expects structured data (map or list).
 // Structured data can be serialized as JSON when transmitted as text.
-func (a *CapArg) IsStructured(mediaSpecs []MediaSpecDef) (bool, error) {
-	resolved, err := a.Resolve(mediaSpecs)
+func (a *CapArg) IsStructured(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (bool, error) {
+	resolved, err := a.Resolve(mediaSpecs, registry)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
 	}
@@ -166,8 +166,8 @@ func (a *CapArg) IsStructured(mediaSpecs []MediaSpecDef) (bool, error) {
 }
 
 // GetMediaType returns the resolved media type for this argument.
-func (a *CapArg) GetMediaType(mediaSpecs []MediaSpecDef) (string, error) {
-	resolved, err := a.Resolve(mediaSpecs)
+func (a *CapArg) GetMediaType(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (string, error) {
+	resolved, err := a.Resolve(mediaSpecs, registry)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve argument media_urn '%s': %w", a.MediaUrn, err)
 	}
@@ -182,13 +182,13 @@ type CapOutput struct {
 }
 
 // Resolve resolves the output's media URN to a ResolvedMediaSpec
-func (co *CapOutput) Resolve(mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
-	return ResolveMediaUrn(co.MediaUrn, mediaSpecs)
+func (co *CapOutput) Resolve(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (*ResolvedMediaSpec, error) {
+	return ResolveMediaUrn(co.MediaUrn, mediaSpecs, registry)
 }
 
 // IsBinary checks if this output produces binary data.
-func (co *CapOutput) IsBinary(mediaSpecs []MediaSpecDef) (bool, error) {
-	resolved, err := co.Resolve(mediaSpecs)
+func (co *CapOutput) IsBinary(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (bool, error) {
+	resolved, err := co.Resolve(mediaSpecs, registry)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
@@ -197,8 +197,8 @@ func (co *CapOutput) IsBinary(mediaSpecs []MediaSpecDef) (bool, error) {
 
 // IsStructured checks if this output produces structured data (map or list).
 // Structured data can be serialized as JSON when transmitted as text.
-func (co *CapOutput) IsStructured(mediaSpecs []MediaSpecDef) (bool, error) {
-	resolved, err := co.Resolve(mediaSpecs)
+func (co *CapOutput) IsStructured(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (bool, error) {
+	resolved, err := co.Resolve(mediaSpecs, registry)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
@@ -206,8 +206,8 @@ func (co *CapOutput) IsStructured(mediaSpecs []MediaSpecDef) (bool, error) {
 }
 
 // GetMediaType returns the resolved media type for this output.
-func (co *CapOutput) GetMediaType(mediaSpecs []MediaSpecDef) (string, error) {
-	resolved, err := co.Resolve(mediaSpecs)
+func (co *CapOutput) GetMediaType(mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (string, error) {
+	resolved, err := co.Resolve(mediaSpecs, registry)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve output media_urn '%s': %w", co.MediaUrn, err)
 	}
@@ -352,9 +352,9 @@ func (c *Cap) AddMediaSpec(def MediaSpecDef) {
 	c.MediaSpecs = append(c.MediaSpecs, def)
 }
 
-// ResolveMediaUrn resolves a media URN using this cap's media_specs table
-func (c *Cap) ResolveMediaUrn(mediaUrn string) (*ResolvedMediaSpec, error) {
-	return ResolveMediaUrn(mediaUrn, c.GetMediaSpecs())
+// ResolveMediaUrn resolves a media URN using this cap's media_specs table and registry
+func (c *Cap) ResolveMediaUrn(mediaUrn string, registry *MediaUrnRegistry) (*ResolvedMediaSpec, error) {
+	return ResolveMediaUrn(mediaUrn, c.GetMediaSpecs(), registry)
 }
 
 // MatchesRequest checks if this cap matches a request string

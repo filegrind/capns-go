@@ -200,8 +200,14 @@ func (cc *CapCaller) resolveOutputSpec() (*ResolvedMediaSpec, error) {
 	// Get the output media URN - now always present since it's required in parsing
 	mediaUrn := capUrn.OutSpec()
 
+	// Get global registry for resolving media URNs
+	registry, err := GetGlobalRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get global registry: %w", err)
+	}
+
 	// Resolve the media URN using the cap definition's media_specs
-	resolved, err := ResolveMediaUrn(mediaUrn, cc.capDefinition.GetMediaSpecs())
+	resolved, err := ResolveMediaUrn(mediaUrn, cc.capDefinition.GetMediaSpecs(), registry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve output media URN '%s' for cap '%s': %w - ensure media_specs contains this media URN", mediaUrn, cc.cap, err)
 	}

@@ -193,7 +193,11 @@ func (rw *ResponseWrapper) ValidateAgainstCap(cap *Cap) error {
 	case ResponseContentTypeBinary:
 		// Binary outputs can't be validated as JSON, validate the response type instead
 		if output := cap.GetOutput(); output != nil {
-			resolved, err := output.Resolve(cap.GetMediaSpecs())
+			registry, err := GetGlobalRegistry()
+			if err != nil {
+				return fmt.Errorf("failed to get global registry: %w", err)
+			}
+			resolved, err := output.Resolve(cap.GetMediaSpecs(), registry)
 			if err != nil {
 				return fmt.Errorf("failed to resolve output media URN '%s': %w", output.MediaUrn, err)
 			}
@@ -233,8 +237,13 @@ func (rw *ResponseWrapper) MatchesOutputType(cap *Cap) (bool, error) {
 		return false, fmt.Errorf("cap '%s' has no output definition", cap.UrnString())
 	}
 
+	registry, err := GetGlobalRegistry()
+	if err != nil {
+		return false, fmt.Errorf("failed to get global registry: %w", err)
+	}
+
 	// Resolve the output media URN to get the media type - fail hard if resolution fails
-	resolved, err := output.Resolve(cap.GetMediaSpecs())
+	resolved, err := output.Resolve(cap.GetMediaSpecs(), registry)
 	if err != nil {
 		return false, fmt.Errorf("failed to resolve output media URN '%s' for cap '%s': %w", output.MediaUrn, cap.UrnString(), err)
 	}

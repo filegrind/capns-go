@@ -64,10 +64,17 @@ func main() {
 		"email": "john@example.com",
 	}
 
+	// Get global registry for resolving media URNs
+	registry, err := capns.GetGlobalRegistry()
+	if err != nil {
+		fmt.Printf("ERR Failed to get global registry: %v\n", err)
+		return
+	}
+
 	// Resolve the arg and validate
 	args := cap.GetArgs()
 	if len(args) > 0 {
-		resolved, _ := args[0].Resolve(cap.GetMediaSpecs())
+		resolved, _ := args[0].Resolve(cap.GetMediaSpecs(), registry)
 		if resolved != nil && resolved.Schema != nil {
 			err := validator.ValidateArgumentWithSchema(&args[0], resolved.Schema, validUser)
 			if err != nil {
@@ -85,7 +92,7 @@ func main() {
 	}
 
 	if len(args) > 0 {
-		resolved, _ := args[0].Resolve(cap.GetMediaSpecs())
+		resolved, _ := args[0].Resolve(cap.GetMediaSpecs(), registry)
 		if resolved != nil && resolved.Schema != nil {
 			err := validator.ValidateArgumentWithSchema(&args[0], resolved.Schema, invalidUser)
 			if err != nil {
@@ -146,7 +153,7 @@ func main() {
 
 	// Resolve output and validate
 	if cap.Output != nil {
-		resolved, _ := cap.Output.Resolve(cap.GetMediaSpecs())
+		resolved, _ := cap.Output.Resolve(cap.GetMediaSpecs(), registry)
 		if resolved != nil && resolved.Schema != nil {
 			err := validator.ValidateOutputWithSchema(cap.Output, resolved.Schema, validOutput)
 			if err != nil {
@@ -218,7 +225,7 @@ func main() {
 		map[string]interface{}{"id": 2, "name": "Item 2"},
 	}
 
-	resolved, _ := itemsArg.Resolve(cap.GetMediaSpecs())
+	resolved, _ := itemsArg.Resolve(cap.GetMediaSpecs(), registry)
 	if resolved != nil && resolved.Schema != nil {
 		err = validator.ValidateArgumentWithSchema(&itemsArg, resolved.Schema, validArray)
 		if err != nil {
