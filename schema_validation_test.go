@@ -26,6 +26,7 @@ func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
 }
 
 // TEST051: Test input validation succeeds with valid positional argument
+// TEST163: Test argument schema validation succeeds with valid JSON matching schema
 func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 	validator := NewSchemaValidator()
 
@@ -65,6 +66,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 }
 
 // TEST052: Test input validation fails with MissingRequiredArgument when required arg missing
+// TEST164: Test argument schema validation fails with JSON missing required fields
 func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 	validator := NewSchemaValidator()
 
@@ -127,6 +129,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_NilSchema(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TEST165: Test output schema validation succeeds with valid JSON matching schema
 func TestSchemaValidator_ValidateOutputWithSchema_Success(t *testing.T) {
 	validator := NewSchemaValidator()
 
@@ -754,4 +757,61 @@ func TestXV5EmptyMediaSpecsAllowed(t *testing.T) {
 	}
 	result = ValidateNoInlineMediaSpecRedefinition(mediaSpecs, nil)
 	assert.True(t, result.Valid, "Should pass when registry lookup not available (graceful degradation)")
+}
+
+// TEST166: Test validation skipped when resolved media spec has no schema
+func TestSchemaValidator_SkipValidationWithoutSchema(t *testing.T) {
+	registry := testRegistry(t)
+	validator := NewSchemaValidator()
+
+	// Create cap with no custom media specs
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
+	require.NoError(t, err)
+	cap := NewCap(urn, "Test Cap", "test-command")
+
+	// Add argument using built-in MediaString (resolves from registry, has no schema)
+	cliFlag := "--input"
+	pos := 0
+	cap.AddArg(CapArg{
+		MediaUrn:       MediaString,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "String input",
+	})
+
+	// Validate with any string value - should succeed because MediaString has no schema
+	err = validator.ValidateArguments(cap, []interface{}{"any string value"}, nil, registry)
+	assert.NoError(t, err, "Validation should succeed when resolved spec has no schema")
+}
+
+// TEST167: Test validation fails hard when media URN cannot be resolved from any source
+func TestSchemaValidator_UnresolvableMediaUrnFailsHard(t *testing.T) {
+	registry := testRegistry(t)
+	validator := NewSchemaValidator()
+
+	// Create cap with no custom media specs
+	urn, err := NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
+	require.NoError(t, err)
+	cap := NewCap(urn, "Test Cap", "test-command")
+
+	// Add argument with completely unknown media URN (not in media_specs, not in registry)
+	cliFlag := "--input"
+	pos := 0
+	unknownUrn := "media:completely-unknown-urn-that-does-not-exist"
+	cap.AddArg(CapArg{
+		MediaUrn:       unknownUrn,
+		Required:       true,
+		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		ArgDescription: "Unknown type",
+	})
+
+	// Validate with any value - should fail hard because URN cannot be resolved
+	err = validator.ValidateArguments(cap, []interface{}{"test"}, nil, registry)
+	require.Error(t, err, "Validation should fail when media URN cannot be resolved")
+
+	// Check it's the right kind of error
+	schemaErr, ok := err.(*SchemaValidationError)
+	require.True(t, ok, "Error should be SchemaValidationError")
+	assert.Equal(t, "UnresolvableMediaUrn", schemaErr.Type)
+	assert.Equal(t, unknownUrn, schemaErr.Argument)
 }

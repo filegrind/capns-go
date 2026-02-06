@@ -45,6 +45,12 @@ func EncodeFrame(frame *Frame) ([]byte, error) {
 		if frame.Payload != nil {
 			m["payload"] = frame.Payload
 		}
+		if frame.Len != nil {
+			m["len"] = *frame.Len
+		}
+		if frame.Eof != nil {
+			m["eof"] = *frame.Eof
+		}
 
 	case FrameTypeErr:
 		m["code"] = frame.Code
@@ -137,6 +143,13 @@ func DecodeFrame(data []byte) (*Frame, error) {
 		}
 		if payload, ok := m["payload"].([]byte); ok {
 			frame.Payload = payload
+		}
+		if lenVal, ok := m["len"].(uint64); ok {
+			lenInt := int(lenVal)
+			frame.Len = &lenInt
+		}
+		if eofVal, ok := m["eof"].(bool); ok {
+			frame.Eof = &eofVal
 		}
 
 	case FrameTypeErr:

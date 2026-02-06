@@ -28,6 +28,7 @@ func matrixTestUrn(tags string) string {
 	return `cap:in="media:void";out="media:object";` + tags
 }
 
+// TEST117: Test registering cap set and finding by exact and subset matching
 func TestRegisterAndFindCapSet(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -75,6 +76,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 	}
 }
 
+// TEST118: Test selecting best cap set based on specificity ranking
 func TestBestCapSetSelection(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -131,6 +133,7 @@ func TestBestCapSetSelection(t *testing.T) {
 	}
 }
 
+// TEST119: Test invalid URN returns InvalidUrn error
 func TestInvalidUrnHandling(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -147,6 +150,7 @@ func TestInvalidUrnHandling(t *testing.T) {
 	}
 }
 
+// TEST120: Test can_handle checks if registry can handle a capability request
 func TestCanHandle(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -205,6 +209,7 @@ func makeCap(urn string, title string) *Cap {
 	}
 }
 
+// TEST121: Test CapCube selects more specific cap over less specific regardless of registry order
 func TestCapCubeMoreSpecificWins(t *testing.T) {
 	// This is the key test: provider has less specific cap, plugin has more specific
 	// The more specific one should win regardless of registry order
@@ -254,6 +259,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	}
 }
 
+// TEST122: Test CapCube breaks specificity ties by first registered registry
 func TestCapCubeTieGoesToFirst(t *testing.T) {
 	// When specificity is equal, first registry wins
 
@@ -287,6 +293,7 @@ func TestCapCubeTieGoesToFirst(t *testing.T) {
 	}
 }
 
+// TEST123: Test CapCube polls all registries to find most specific match
 func TestCapCubePollsAll(t *testing.T) {
 	// Test that all registries are polled
 
@@ -325,6 +332,7 @@ func TestCapCubePollsAll(t *testing.T) {
 	}
 }
 
+// TEST124: Test CapCube returns error when no registries match the request
 func TestCapCubeNoMatch(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -344,6 +352,7 @@ func TestCapCubeNoMatch(t *testing.T) {
 	}
 }
 
+// TEST125: Test CapCube prefers specific plugin over generic provider fallback
 func TestCapCubeFallbackScenario(t *testing.T) {
 	// Test the exact scenario from the user's issue:
 	// Provider: generic fallback with ext=* (can handle any file type)
@@ -411,6 +420,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	}
 }
 
+// TEST126: Test composite can method returns CapCaller for capability execution
 func TestCapCubeCanMethod(t *testing.T) {
 	// Test the can() method that returns a CapCaller
 
@@ -500,6 +510,7 @@ func makeGraphCap(inSpec, outSpec, title string) *Cap {
 	}
 }
 
+// TEST127: Test CapGraph adds nodes and edges from capability definitions
 func TestCapGraphBasicConstruction(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -539,6 +550,7 @@ func TestCapGraphBasicConstruction(t *testing.T) {
 	}
 }
 
+// TEST128: Test CapGraph tracks outgoing and incoming edges for spec conversions
 func TestCapGraphOutgoingIncoming(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -574,6 +586,7 @@ func TestCapGraphOutgoingIncoming(t *testing.T) {
 	}
 }
 
+// TEST129: Test CapGraph detects direct and indirect conversion paths between specs
 func TestCapGraphCanConvert(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -617,6 +630,7 @@ func TestCapGraphCanConvert(t *testing.T) {
 	}
 }
 
+// TEST130: Test CapGraph finds shortest path for spec conversion chain
 func TestCapGraphFindPath(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -673,6 +687,7 @@ func TestCapGraphFindPath(t *testing.T) {
 	}
 }
 
+// TEST131: Test CapGraph finds all conversion paths sorted by length
 func TestCapGraphFindAllPaths(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -708,6 +723,7 @@ func TestCapGraphFindAllPaths(t *testing.T) {
 	}
 }
 
+// TEST132: Test CapGraph returns direct edges sorted by specificity
 func TestCapGraphGetDirectEdges(t *testing.T) {
 	registry1 := NewCapMatrix()
 	registry2 := NewCapMatrix()
@@ -755,6 +771,7 @@ func TestCapGraphGetDirectEdges(t *testing.T) {
 	}
 }
 
+// TEST134: Test CapGraph stats provides counts of nodes and edges
 func TestCapGraphStats(t *testing.T) {
 	registry := NewCapMatrix()
 
@@ -795,6 +812,7 @@ func TestCapGraphStats(t *testing.T) {
 	}
 }
 
+// TEST133: Test CapCube graph integration with multiple registries and conversion paths
 func TestCapGraphWithCapCube(t *testing.T) {
 	// Integration test: build graph from CapCube
 	providerRegistry := NewCapMatrix()

@@ -1,8 +1,10 @@
 package capns
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -18,10 +20,29 @@ func regTestUrn(tags string) string {
 	return `cap:in="media:void";out="media:object";` + tags
 }
 
+// TEST135: Test registry creation with temporary cache directory succeeds
 func TestRegistryCreation(t *testing.T) {
 	registry, err := NewCapRegistry()
 	require.NoError(t, err)
 	assert.NotNil(t, registry)
+}
+
+// TEST136: Test cache key generation produces consistent hashes for same URN
+func TestCacheKeyGeneration(t *testing.T) {
+	registry, err := NewCapRegistry()
+	require.NoError(t, err)
+
+	// Use URNs with required in/out
+	urn1 := `cap:in="media:void";op=extract;out="media:form=map;target=metadata"`
+	urn2 := `cap:in="media:void";op=extract;out="media:form=map;target=metadata"`
+	urn3 := `cap:in="media:void";op=different;out="media:object"`
+
+	key1 := registry.cacheKey(urn1)
+	key2 := registry.cacheKey(urn2)
+	key3 := registry.cacheKey(urn3)
+
+	assert.Equal(t, key1, key2, "Same URN should produce same cache key")
+	assert.NotEqual(t, key1, key3, "Different URNs should produce different cache keys")
 }
 
 func TestRegistryGetCap(t *testing.T) {
@@ -60,6 +81,40 @@ func TestCacheOperations(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TEST137: Test parsing registry JSON without stdin args verifies cap structure
+func TestParseRegistryJSON(t *testing.T) {
+	// JSON without stdin args - means cap doesn't accept stdin
+	jsonData := `{"urn":"cap:in=\"media:listing-id\";op=use_grinder;out=\"media:task-id\"","command":"grinder_task","title":"Create Grinder Tool Task","cap_description":"Create a task for initial document analysis - first glance phase","metadata":{},"media_specs":[{"urn":"media:listing-id","media_type":"text/plain","title":"Listing ID","profile_uri":"https://filegrind.com/schema/listing-id","schema":{"type":"string","pattern":"[0-9a-f-]{36}","description":"FileGrind listing UUID"}},{"urn":"media:task-id","media_type":"application/json","title":"Task ID","profile_uri":"https://capns.org/schema/grinder_task-output","schema":{"type":"object","additionalProperties":false,"properties":{"task_id":{"type":"string","description":"ID of the created task"},"task_type":{"type":"string","description":"Type of task created"}},"required":["task_id","task_type"]}}],"args":[{"media_urn":"media:listing-id","required":true,"sources":[{"cli_flag":"--listing-id"}],"arg_description":"ID of the listing to analyze"}],"output":{"media_urn":"media:task-id","output_description":"Created task information"},"registered_by":{"username":"joeharshamshiri","registered_at":"2026-01-15T00:44:29.851Z"}}`
+
+	var registryResp RegistryCapResponse
+	err := json.Unmarshal([]byte(jsonData), &registryResp)
+	require.NoError(t, err, "Failed to parse JSON")
+
+	cap, err := registryResp.ToCap()
+	require.NoError(t, err)
+	assert.Equal(t, "Create Grinder Tool Task", cap.Title)
+	assert.Equal(t, "grinder_task", cap.Command)
+	assert.Nil(t, cap.GetStdinMediaUrn(), "No stdin source in args means no stdin support")
+}
+
+// TEST138: Test parsing registry JSON with stdin args verifies stdin media URN extraction
+func TestParseRegistryJSONWithStdin(t *testing.T) {
+	// JSON with stdin args - means cap accepts stdin of specified media type
+	jsonData := `{"urn":"cap:in=\"media:pdf;bytes\";op=extract_metadata;out=\"media:file-metadata;textable;form=map\"","command":"extract-metadata","title":"Extract Metadata","args":[{"media_urn":"media:pdf;bytes","required":true,"sources":[{"stdin":"media:pdf;bytes"}]}]}`
+
+	var registryResp RegistryCapResponse
+	err := json.Unmarshal([]byte(jsonData), &registryResp)
+	require.NoError(t, err, "Failed to parse JSON")
+
+	cap, err := registryResp.ToCap()
+	require.NoError(t, err)
+	assert.Equal(t, "Extract Metadata", cap.Title)
+	assert.True(t, cap.AcceptsStdin())
+	stdinUrn := cap.GetStdinMediaUrn()
+	require.NotNil(t, stdinUrn)
+	assert.Equal(t, "media:pdf;bytes", *stdinUrn)
+}
+
 func TestCapExists(t *testing.T) {
 	registry, err := NewCapRegistry()
 	require.NoError(t, err)
@@ -82,7 +137,7 @@ func buildRegistryURL(urn string) string {
 	return fmt.Sprintf("%s/cap:%s", DefaultRegistryBaseURL, encodedTags)
 }
 
-// TestURLKeepsCapPrefixLiteral tests that "cap:" is NOT URL-encoded
+// TEST139: Test URL construction keeps cap prefix literal and only encodes tags part
 func TestURLKeepsCapPrefixLiteral(t *testing.T) {
 	urn := `cap:in="media:string";op=test;out="media:object"`
 	registryURL := buildRegistryURL(urn)
@@ -93,7 +148,7 @@ func TestURLKeepsCapPrefixLiteral(t *testing.T) {
 	assert.NotContains(t, registryURL, "cap%3A", "URL must not encode 'cap:' as 'cap%3A'")
 }
 
-// TestURLEncodesMediaUrns tests that media URN values are properly handled in URLs
+// TEST140: Test URL encodes media URNs with proper percent encoding for special characters
 func TestURLEncodesMediaUrns(t *testing.T) {
 	// Colons don't need quoting, so the canonical form won't have quotes
 	urn := `cap:in=media:listing-id;op=use_grinder;out=media:task-id`
@@ -105,7 +160,7 @@ func TestURLEncodesMediaUrns(t *testing.T) {
 	// The key requirement is that the URL is valid and the Netlify function can decode it
 }
 
-// TestURLFormatIsValid tests the URL format is valid and can be parsed
+// TEST141: Test exact URL format contains properly encoded media URN components
 func TestURLFormatIsValid(t *testing.T) {
 	// Colons don't need quoting, so the canonical form won't have quotes
 	urn := `cap:in=media:listing-id;op=use_grinder;out=media:task-id`
@@ -122,7 +177,7 @@ func TestURLFormatIsValid(t *testing.T) {
 	assert.True(t, strings.HasPrefix(registryURL, DefaultRegistryBaseURL+"/cap:"), "URL must start with base URL and /cap:")
 }
 
-// TestNormalizeHandlesDifferentTagOrders tests that different tag orders normalize to the same URL
+// TEST142: Test normalize handles different tag orders producing same canonical form
 func TestNormalizeHandlesDifferentTagOrders(t *testing.T) {
 	urn1 := `cap:op=test;in="media:string";out="media:object"`
 	urn2 := `cap:in="media:string";out="media:object";op=test`
@@ -131,4 +186,52 @@ func TestNormalizeHandlesDifferentTagOrders(t *testing.T) {
 	url2 := buildRegistryURL(urn2)
 
 	assert.Equal(t, url1, url2, "Different tag orders should produce the same URL")
+}
+
+// TEST143: Test default config uses capns.org or environment variable values
+func TestDefaultConfig(t *testing.T) {
+	config := DefaultRegistryConfig()
+	// Default should use capns.org (unless env var is set)
+	registryURL := os.Getenv("CAPNS_REGISTRY_URL")
+	if registryURL == "" {
+		assert.Contains(t, config.RegistryBaseURL, "capns.org", "Default registry URL should be capns.org")
+	} else {
+		assert.Equal(t, registryURL, config.RegistryBaseURL, "Registry URL should be from env var")
+	}
+	assert.Contains(t, config.SchemaBaseURL, "/schema", "Schema URL should contain /schema")
+}
+
+// TEST144: Test custom registry URL updates both registry and schema base URLs
+func TestCustomRegistryURL(t *testing.T) {
+	config := DefaultRegistryConfig()
+	WithRegistryURL("https://localhost:8888")(&config)
+	assert.Equal(t, "https://localhost:8888", config.RegistryBaseURL)
+	assert.Equal(t, "https://localhost:8888/schema", config.SchemaBaseURL)
+}
+
+// TEST145: Test custom registry and schema URLs set independently
+func TestCustomRegistryAndSchemaURL(t *testing.T) {
+	config := DefaultRegistryConfig()
+	WithRegistryURL("https://localhost:8888")(&config)
+	WithSchemaURL("https://schemas.example.com")(&config)
+	assert.Equal(t, "https://localhost:8888", config.RegistryBaseURL)
+	assert.Equal(t, "https://schemas.example.com", config.SchemaBaseURL)
+}
+
+// TEST146: Test schema URL not overwritten when set explicitly before registry URL
+func TestSchemaURLNotOverwrittenWhenExplicit(t *testing.T) {
+	// If schema URL is set explicitly first, changing registry URL shouldn't change it
+	config := DefaultRegistryConfig()
+	WithSchemaURL("https://schemas.example.com")(&config)
+	WithRegistryURL("https://localhost:8888")(&config)
+	assert.Equal(t, "https://localhost:8888", config.RegistryBaseURL)
+	assert.Equal(t, "https://schemas.example.com", config.SchemaBaseURL)
+}
+
+// TEST147: Test registry for test with custom config creates registry with specified URLs
+func TestRegistryForTestWithConfig(t *testing.T) {
+	config := DefaultRegistryConfig()
+	WithRegistryURL("https://test-registry.local")(&config)
+	registry := NewCapRegistryForTestWithConfig(config)
+	assert.Equal(t, "https://test-registry.local", registry.Config().RegistryBaseURL)
 }

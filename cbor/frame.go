@@ -156,6 +156,8 @@ type Frame struct {
 	Code        string  // For ERR frames
 	Message     string  // For ERR/LOG frames
 	Level       string  // For LOG frames
+	Len         *int    // For CHUNK frames - total content length
+	Eof         *bool   // For CHUNK frames - end of stream
 }
 
 // NewReq creates a REQ frame

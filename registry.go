@@ -83,6 +83,7 @@ func (e *CacheEntry) isExpired() bool {
 // RegistryCapResponse represents the response format from capns.org registry
 type RegistryCapResponse struct {
 	Urn            string              `json:"urn"`          // URN in canonical string format
+	Title          string              `json:"title"`
 	Version        string              `json:"version"`
 	CapDescription *string             `json:"cap_description,omitempty"`
 	Metadata       map[string]string   `json:"metadata"`
@@ -98,13 +99,13 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid URN string: %w", err)
 	}
-	
-	// Use description as title if available, otherwise use a default based on command
-	title := "Registry Capability"
-	if r.CapDescription != nil && *r.CapDescription != "" {
-		title = *r.CapDescription
+
+	// Use title from the response
+	title := r.Title
+	if title == "" {
+		title = "Registry Capability"
 	}
-	
+
 	cap := NewCap(capUrn, title, r.Command)
 	cap.CapDescription = r.CapDescription
 	if r.Metadata != nil {
@@ -421,4 +422,20 @@ func (r *CapRegistry) fetchFromRegistry(urn string) (*Cap, error) {
 // ValidateCapCanonical validates a cap against its canonical definition
 func ValidateCapCanonical(registry *CapRegistry, cap *Cap) error {
 	return registry.ValidateCap(cap)
+}
+
+// NewCapRegistryForTestWithConfig creates a registry for testing with a custom configuration.
+// This is a synchronous constructor that doesn't perform any initialization.
+// Intended for use in tests only - creates a registry with no network configuration.
+func NewCapRegistryForTestWithConfig(config RegistryConfig) *CapRegistry {
+	client := &http.Client{
+		Timeout: HTTPTimeoutSeconds * time.Second,
+	}
+
+	return &CapRegistry{
+		client:     client,
+		cacheDir:   "/tmp/capns-test-cache",
+		cachedCaps: make(map[string]*Cap),
+		config:     config,
+	}
 }

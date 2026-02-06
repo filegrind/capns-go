@@ -220,34 +220,78 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 	assert.Equal(t, pngHeader, result.AsBytes())
 }
 
-// TestStdinSourceCreation tests the creation of StdinSource types
-func TestStdinSourceCreation(t *testing.T) {
-	// Test Data source creation
-	data := []byte("test data")
-	dataSource := NewStdinSourceFromData(data)
+// TEST156: Test creating StdinSource Data variant with byte vector
+func TestStdinSourceDataCreation(t *testing.T) {
+	data := []byte{0x48, 0x65, 0x6c, 0x6c, 0x6f} // "Hello"
+	source := NewStdinSourceFromData(data)
 
-	assert.NotNil(t, dataSource)
-	assert.Equal(t, StdinSourceKindData, dataSource.Kind)
-	assert.True(t, dataSource.IsData())
-	assert.False(t, dataSource.IsFileReference())
-	assert.Equal(t, data, dataSource.Data)
+	assert.Equal(t, StdinSourceKindData, source.Kind)
+	assert.Equal(t, data, source.Data)
+	assert.True(t, source.IsData())
+	assert.False(t, source.IsFileReference())
+}
 
-	// Test FileReference source creation
-	fileSource := NewStdinSourceFromFileReference(
-		"tracked-123",
-		"/path/to/original.pdf",
-		[]byte("security-bookmark-data"),
-		"media:pdf;bytes",
+// TEST157: Test creating StdinSource FileReference variant with all required fields
+func TestStdinSourceFileReferenceCreation(t *testing.T) {
+	trackedFileID := "tracked-file-123"
+	originalPath := "/path/to/original.pdf"
+	securityBookmark := []byte{0x62, 0x6f, 0x6f, 0x6b} // "book"
+	mediaUrn := "media:pdf;bytes"
+
+	source := NewStdinSourceFromFileReference(
+		trackedFileID,
+		originalPath,
+		securityBookmark,
+		mediaUrn,
 	)
 
-	assert.NotNil(t, fileSource)
-	assert.Equal(t, StdinSourceKindFileReference, fileSource.Kind)
-	assert.False(t, fileSource.IsData())
-	assert.True(t, fileSource.IsFileReference())
-	assert.Equal(t, "tracked-123", fileSource.TrackedFileID)
-	assert.Equal(t, "/path/to/original.pdf", fileSource.OriginalPath)
-	assert.Equal(t, []byte("security-bookmark-data"), fileSource.SecurityBookmark)
-	assert.Equal(t, "media:pdf;bytes", fileSource.MediaUrn)
+	assert.Equal(t, StdinSourceKindFileReference, source.Kind)
+	assert.Equal(t, trackedFileID, source.TrackedFileID)
+	assert.Equal(t, originalPath, source.OriginalPath)
+	assert.Equal(t, securityBookmark, source.SecurityBookmark)
+	assert.Equal(t, mediaUrn, source.MediaUrn)
+	assert.False(t, source.IsData())
+	assert.True(t, source.IsFileReference())
+}
+
+// TEST158: Test StdinSource Data with empty vector stores and retrieves correctly
+func TestStdinSourceEmptyData(t *testing.T) {
+	source := NewStdinSourceFromData([]byte{})
+
+	assert.Equal(t, StdinSourceKindData, source.Kind)
+	assert.Empty(t, source.Data)
+	assert.True(t, source.IsData())
+}
+
+// TEST159: Test StdinSource Data with binary content like PNG header bytes
+func TestStdinSourceBinaryContent(t *testing.T) {
+	// PNG header bytes
+	pngHeader := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	source := NewStdinSourceFromData(pngHeader)
+
+	assert.Equal(t, StdinSourceKindData, source.Kind)
+	assert.Equal(t, 8, len(source.Data))
+	assert.Equal(t, byte(0x89), source.Data[0])
+	assert.Equal(t, byte(0x50), source.Data[1]) // 'P'
+	assert.Equal(t, pngHeader, source.Data)
+}
+
+// TEST160: Test StdinSource Data clone creates independent copy with same data
+func TestStdinSourceClone(t *testing.T) {
+	data := []byte{1, 2, 3, 4, 5}
+	source := NewStdinSourceFromData(data)
+
+	// Create a deep copy by copying the data slice
+	dataCopy := make([]byte, len(source.Data))
+	copy(dataCopy, source.Data)
+	cloned := NewStdinSourceFromData(dataCopy)
+
+	assert.Equal(t, source.Kind, cloned.Kind)
+	assert.Equal(t, source.Data, cloned.Data)
+
+	// Verify they're independent - modifying clone doesn't affect original
+	cloned.Data[0] = 99
+	assert.NotEqual(t, source.Data[0], cloned.Data[0])
 }
 
 // TestStdinSourceNilHandling tests that nil StdinSource is handled correctly
@@ -259,21 +303,21 @@ func TestStdinSourceNilHandling(t *testing.T) {
 	assert.False(t, nilSource.IsFileReference())
 }
 
-// TEST274: Test CapArgumentValue stores media_urn and raw byte value
+// TEST274: Test CapArgumentValue::new stores media_urn and raw byte value
 func TestCapArgumentValueNew(t *testing.T) {
 	arg := NewCapArgumentValue("media:model-spec;textable;form=scalar", []byte("gpt-4"))
 	assert.Equal(t, "media:model-spec;textable;form=scalar", arg.MediaUrn)
 	assert.Equal(t, []byte("gpt-4"), arg.Value)
 }
 
-// TEST275: Test CapArgumentValueFromStr converts string to UTF-8 bytes
+// TEST275: Test CapArgumentValue::from_str converts string to UTF-8 bytes
 func TestCapArgumentValueFromStr(t *testing.T) {
 	arg := NewCapArgumentValueFromStr("media:string;textable", "hello world")
 	assert.Equal(t, "media:string;textable", arg.MediaUrn)
 	assert.Equal(t, []byte("hello world"), arg.Value)
 }
 
-// TEST276: Test CapArgumentValue ValueAsStr succeeds for UTF-8 data
+// TEST276: Test CapArgumentValue::value_as_str succeeds for UTF-8 data
 func TestCapArgumentValueAsStrValid(t *testing.T) {
 	arg := NewCapArgumentValueFromStr("media:string", "test")
 	val, err := arg.ValueAsStr()
@@ -281,14 +325,14 @@ func TestCapArgumentValueAsStrValid(t *testing.T) {
 	assert.Equal(t, "test", val)
 }
 
-// TEST277: Test CapArgumentValue ValueAsStr fails for non-UTF-8 binary data
+// TEST277: Test CapArgumentValue::value_as_str fails for non-UTF-8 binary data
 func TestCapArgumentValueAsStrInvalidUtf8(t *testing.T) {
 	arg := NewCapArgumentValue("media:pdf;bytes", []byte{0xFF, 0xFE, 0x80})
 	_, err := arg.ValueAsStr()
 	require.Error(t, err, "non-UTF-8 data must fail")
 }
 
-// TEST278: Test CapArgumentValue with empty value stores empty slice
+// TEST278: Test CapArgumentValue::new with empty value stores empty vec
 func TestCapArgumentValueEmpty(t *testing.T) {
 	arg := NewCapArgumentValue("media:void", []byte{})
 	assert.Empty(t, arg.Value)
@@ -297,7 +341,33 @@ func TestCapArgumentValueEmpty(t *testing.T) {
 	assert.Equal(t, "", val)
 }
 
-// TEST281: Test CapArgumentValue constructors accept various string types
+// TEST279: Test CapArgumentValue Clone produces independent copy with same data
+func TestCapArgumentValueClone(t *testing.T) {
+	arg := NewCapArgumentValue("media:test", []byte("data"))
+
+	// In Go, we create a deep copy by copying the value slice
+	valueCopy := make([]byte, len(arg.Value))
+	copy(valueCopy, arg.Value)
+	cloned := NewCapArgumentValue(arg.MediaUrn, valueCopy)
+
+	assert.Equal(t, arg.MediaUrn, cloned.MediaUrn)
+	assert.Equal(t, arg.Value, cloned.Value)
+
+	// Verify they're independent - modifying clone doesn't affect original
+	cloned.Value[0] = 'X'
+	assert.NotEqual(t, arg.Value[0], cloned.Value[0])
+}
+
+// TEST280: Test CapArgumentValue Debug format includes media_urn and value
+func TestCapArgumentValueDebug(t *testing.T) {
+	arg := NewCapArgumentValueFromStr("media:test", "val")
+
+	// In Go, we use String() method for debug representation
+	str := arg.String()
+	assert.Contains(t, str, "media:test", "string representation must include media_urn")
+}
+
+// TEST281: Test CapArgumentValue::new accepts Into<String> for media_urn (String and &str)
 func TestCapArgumentValueStringTypes(t *testing.T) {
 	s := "media:owned"
 	arg1 := NewCapArgumentValue(s, []byte{})

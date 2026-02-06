@@ -97,6 +97,14 @@ func (a *CapArgumentValue) ValueAsStr() (string, error) {
 	return string(a.Value), nil
 }
 
+// String returns a string representation of the CapArgumentValue for debugging
+func (a *CapArgumentValue) String() string {
+	if utf8.Valid(a.Value) {
+		return fmt.Sprintf("CapArgumentValue{MediaUrn: %q, Value: %q}", a.MediaUrn, string(a.Value))
+	}
+	return fmt.Sprintf("CapArgumentValue{MediaUrn: %q, Value: %d bytes}", a.MediaUrn, len(a.Value))
+}
+
 // CapCaller executes caps via host service with strict validation
 type CapCaller struct {
 	cap           string

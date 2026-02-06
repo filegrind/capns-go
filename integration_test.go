@@ -2,8 +2,15 @@ package capns
 
 import (
 	"context"
+	"io"
+	"net"
+	"os"
+	"sync"
+	"syscall"
 	"testing"
 
+	cbor2 "github.com/fxamacker/cbor/v2"
+	"github.com/filegrind/cap-sdk-go/cbor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -399,4 +406,1313 @@ func TestIntegrationMediaSpecDefConstruction(t *testing.T) {
 	schema := map[string]interface{}{"type": "object"}
 	schemaDef := NewMediaSpecDefWithSchema("media:test;json", "application/json", "https://example.com/schema", schema)
 	assert.NotNil(t, schemaDef.Schema)
+}
+
+// CBOR Integration Tests (TEST284-303)
+// These tests verify the CBOR plugin communication protocol between host and plugin
+
+const testCBORManifest = `{"name":"TestPlugin","version":"1.0.0","description":"Test plugin","caps":[{"urn":"cap:in=\"media:void\";op=test;out=\"media:void\"","title":"Test","command":"test"}]}`
+
+// createPipePair creates a pair of connected Unix socket streams for testing
+func createPipePair(t *testing.T) (hostWrite, pluginRead, pluginWrite, hostRead net.Conn) {
+	// Create two socket pairs
+	hostWriteConn, pluginReadConn := createSocketPair(t)
+	pluginWriteConn, hostReadConn := createSocketPair(t)
+	return hostWriteConn, pluginReadConn, pluginWriteConn, hostReadConn
+}
+
+func createSocketPair(t *testing.T) (net.Conn, net.Conn) {
+	// Use socketpair for bidirectional communication
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
+	require.NoError(t, err)
+
+	file1 := os.NewFile(uintptr(fds[0]), "socket1")
+	file2 := os.NewFile(uintptr(fds[1]), "socket2")
+
+	conn1, err := net.FileConn(file1)
+	require.NoError(t, err)
+	conn2, err := net.FileConn(file2)
+	require.NoError(t, err)
+
+	file1.Close()
+	file2.Close()
+
+	return conn1, conn2
+}
+
+// TEST284: Test host-plugin handshake exchanges HELLO frames, negotiates limits, and transfers manifest
+func TestHandshakeHostPlugin(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var pluginLimits cbor.Limits
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		assert.True(t, limits.MaxFrame > 0)
+		assert.True(t, limits.MaxChunk > 0)
+		pluginLimits = limits
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	manifest, hostLimits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+
+	// Verify manifest received
+	assert.Equal(t, []byte(testCBORManifest), manifest)
+
+	wg.Wait()
+
+	// Both should have negotiated the same limits
+	assert.Equal(t, hostLimits.MaxFrame, pluginLimits.MaxFrame)
+	assert.Equal(t, hostLimits.MaxChunk, pluginLimits.MaxChunk)
+}
+
+// TEST285: Test simple request-response flow: host sends REQ, plugin sends END with payload
+func TestRequestResponseSimple(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		// Handshake
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, cbor.FrameTypeReq, frame.FrameType)
+		assert.Equal(t, "cap:op=echo", frame.Cap)
+		assert.Equal(t, []byte("hello"), frame.Payload)
+
+		// Send response
+		response := cbor.NewEnd(frame.Id, []byte("hello back"), "")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	manifest, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	assert.Equal(t, []byte(testCBORManifest), manifest)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=echo", []byte("hello"), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeEnd, response.FrameType)
+	assert.Equal(t, []byte("hello back"), response.Payload)
+
+	wg.Wait()
+}
+
+// TEST286: Test streaming response with multiple CHUNK frames collected by host
+func TestStreamingChunks(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		requestID := frame.Id
+
+		// Send 3 chunks
+		chunks := [][]byte{[]byte("chunk1"), []byte("chunk2"), []byte("chunk3")}
+		for i, chunk := range chunks {
+			chunkFrame := cbor.NewChunk(requestID, uint64(i), chunk)
+			if i == 0 {
+				chunkFrame.Len = intPtr(18) // total length
+			}
+			if i == len(chunks)-1 {
+				chunkFrame.Eof = boolPtr(true)
+			}
+			err = writer.WriteFrame(chunkFrame)
+			require.NoError(t, err)
+		}
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=stream", []byte("go"), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Collect chunks
+	var chunks [][]byte
+	for i := 0; i < 3; i++ {
+		chunk, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, cbor.FrameTypeChunk, chunk.FrameType)
+		chunks = append(chunks, chunk.Payload)
+	}
+
+	assert.Equal(t, 3, len(chunks))
+	assert.Equal(t, []byte("chunk1"), chunks[0])
+	assert.Equal(t, []byte("chunk2"), chunks[1])
+	assert.Equal(t, []byte("chunk3"), chunks[2])
+
+	wg.Wait()
+}
+
+// TEST287: Test host-initiated heartbeat is received and responded to by plugin
+func TestHeartbeatFromHost(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	done := make(chan bool)
+
+	// Plugin side
+	go func() {
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read heartbeat
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, cbor.FrameTypeHeartbeat, frame.FrameType)
+
+		// Respond with heartbeat
+		response := cbor.NewHeartbeat(frame.Id)
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+
+		done <- true
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send heartbeat
+	heartbeatID := cbor.NewMessageIdRandom()
+	heartbeat := cbor.NewHeartbeat(heartbeatID)
+	err = writer.WriteFrame(heartbeat)
+	require.NoError(t, err)
+
+	// Wait for plugin to finish
+	<-done
+
+	// Read heartbeat response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeHeartbeat, response.FrameType)
+	assert.Equal(t, heartbeatID.ToString(), response.Id.ToString())
+}
+
+// TEST288: Test plugin ERR frame is received by host as error
+func TestPluginErrorResponse(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// Send error
+		errFrame := cbor.NewErr(frame.Id, "NOT_FOUND", "Cap not found: cap:op=missing")
+		err = writer.WriteFrame(errFrame)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=missing", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read error response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeErr, response.FrameType)
+	assert.Equal(t, "NOT_FOUND", response.Code)
+	assert.Contains(t, response.Message, "Cap not found")
+
+	wg.Wait()
+}
+
+// TEST289: Test LOG frames sent during a request are transparently skipped by host
+func TestLogFramesDuringRequest(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		requestID := frame.Id
+
+		// Send log frames
+		log1 := cbor.NewLog(requestID, "info", "Processing started")
+		err = writer.WriteFrame(log1)
+		require.NoError(t, err)
+
+		log2 := cbor.NewLog(requestID, "debug", "Step 1 complete")
+		err = writer.WriteFrame(log2)
+		require.NoError(t, err)
+
+		// Send final response
+		response := cbor.NewEnd(requestID, []byte("done"), "")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read frames until END (skipping LOG frames)
+	for {
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		if frame.FrameType == cbor.FrameTypeLog {
+			// Skip log frames
+			continue
+		}
+
+		if frame.FrameType == cbor.FrameTypeEnd {
+			assert.Equal(t, []byte("done"), frame.Payload)
+			break
+		}
+	}
+
+	wg.Wait()
+}
+
+// TEST290: Test limit negotiation picks minimum of host and plugin max_frame and max_chunk
+func TestLimitsNegotiation(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	smallLimits := cbor.Limits{
+		MaxFrame: 500_000,
+		MaxChunk: 50_000,
+	}
+
+	var pluginLimits cbor.Limits
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side with custom limits
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		// Read host HELLO
+		hostHello, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, cbor.FrameTypeHello, hostHello.FrameType)
+
+		// Send HELLO with smaller limits (manifest only, limits negotiated separately)
+		ourHello := cbor.NewHello([]byte(testCBORManifest))
+		err = writer.WriteFrame(ourHello)
+		require.NoError(t, err)
+
+		// Negotiate
+		var hostLimits cbor.Limits
+		cbor.DecodeCBOR(hostHello.Payload, &hostLimits)
+		pluginLimits = cbor.NegotiateLimits(smallLimits, hostLimits)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, hostLimits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+
+	wg.Wait()
+
+	// Host should have negotiated to smaller limits
+	assert.Equal(t, 500_000, hostLimits.MaxFrame)
+	assert.Equal(t, 50_000, hostLimits.MaxChunk)
+	assert.Equal(t, hostLimits.MaxFrame, pluginLimits.MaxFrame)
+	assert.Equal(t, hostLimits.MaxChunk, pluginLimits.MaxChunk)
+}
+
+// TEST291: Test binary payload with all 256 byte values roundtrips through host-plugin communication
+func TestBinaryPayloadRoundtrip(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	// Create binary test data with all byte values
+	binaryData := make([]byte, 256)
+	for i := 0; i < 256; i++ {
+		binaryData[i] = byte(i)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		payload := frame.Payload
+
+		// Verify all bytes
+		assert.Equal(t, 256, len(payload))
+		for i := 0; i < 256; i++ {
+			assert.Equal(t, byte(i), payload[i], "Byte mismatch at position %d", i)
+		}
+
+		// Echo back
+		response := cbor.NewEnd(frame.Id, payload, "application/octet-stream")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send binary data
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=binary", binaryData, "application/octet-stream")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	result := response.Payload
+
+	// Verify response
+	assert.Equal(t, 256, len(result))
+	for i := 0; i < 256; i++ {
+		assert.Equal(t, byte(i), result[i], "Response byte mismatch at position %d", i)
+	}
+
+	wg.Wait()
+}
+
+// TEST292: Test three sequential requests get distinct MessageIds on the wire
+func TestMessageIdUniqueness(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var receivedIDs []string
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read 3 requests
+		for i := 0; i < 3; i++ {
+			frame, err := reader.ReadFrame()
+			require.NoError(t, err)
+
+			mu.Lock()
+			receivedIDs = append(receivedIDs, frame.Id.ToString())
+			mu.Unlock()
+
+			response := cbor.NewEnd(frame.Id, []byte("ok"), "")
+			err = writer.WriteFrame(response)
+			require.NoError(t, err)
+		}
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send 3 requests
+	for i := 0; i < 3; i++ {
+		requestID := cbor.NewMessageIdRandom()
+		request := cbor.NewReq(requestID, "cap:op=test", []byte(""), "application/json")
+		err = writer.WriteFrame(request)
+		require.NoError(t, err)
+
+		// Read response
+		_, err = reader.ReadFrame()
+		require.NoError(t, err)
+	}
+
+	wg.Wait()
+
+	// Verify IDs are unique
+	assert.Equal(t, 3, len(receivedIDs))
+	for i := 0; i < len(receivedIDs); i++ {
+		for j := i + 1; j < len(receivedIDs); j++ {
+			assert.NotEqual(t, receivedIDs[i], receivedIDs[j], "IDs should be unique")
+		}
+	}
+}
+
+// TEST293: Test PluginRuntime handler registration and lookup by exact and non-existent cap URN
+func TestPluginRuntimeHandlerRegistration(t *testing.T) {
+	runtime, err := NewPluginRuntime([]byte(testCBORManifest))
+	require.NoError(t, err)
+
+	runtime.Register(`cap:in="media:void";op=echo;out="media:void"`,
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
+			return payload, nil
+		})
+
+	runtime.Register(`cap:in="media:void";op=transform;out="media:void"`,
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
+			return []byte("transformed"), nil
+		})
+
+	// Exact match
+	assert.NotNil(t, runtime.FindHandler(`cap:in="media:void";op=echo;out="media:void"`))
+	assert.NotNil(t, runtime.FindHandler(`cap:in="media:void";op=transform;out="media:void"`))
+
+	// Non-existent
+	assert.Nil(t, runtime.FindHandler(`cap:in="media:void";op=unknown;out="media:void"`))
+}
+
+// TEST294: Test plugin-initiated heartbeat mid-stream is handled transparently by host
+func TestHeartbeatDuringStreaming(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		requestID := frame.Id
+
+		// Send chunk 1
+		chunk1 := cbor.NewChunk(requestID, 0, []byte("part1"))
+		err = writer.WriteFrame(chunk1)
+		require.NoError(t, err)
+
+		// Send heartbeat
+		heartbeatID := cbor.NewMessageIdRandom()
+		heartbeat := cbor.NewHeartbeat(heartbeatID)
+		err = writer.WriteFrame(heartbeat)
+		require.NoError(t, err)
+
+		// Wait for heartbeat response
+		hbResponse, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, cbor.FrameTypeHeartbeat, hbResponse.FrameType)
+		assert.Equal(t, heartbeatID.ToString(), hbResponse.Id.ToString())
+
+		// Send final chunk
+		chunk2 := cbor.NewChunk(requestID, 1, []byte("part2"))
+		chunk2.Eof = boolPtr(true)
+		err = writer.WriteFrame(chunk2)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=stream", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Collect chunks, handling heartbeat mid-stream
+	var chunks [][]byte
+	for {
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		if frame.FrameType == cbor.FrameTypeHeartbeat {
+			// Respond to heartbeat
+			hbResponse := cbor.NewHeartbeat(frame.Id)
+			err = writer.WriteFrame(hbResponse)
+			require.NoError(t, err)
+			continue
+		}
+
+		if frame.FrameType == cbor.FrameTypeChunk {
+			chunks = append(chunks, frame.Payload)
+			if frame.Eof != nil && *frame.Eof {
+				break
+			}
+		}
+	}
+
+	assert.Equal(t, 2, len(chunks))
+	assert.Equal(t, []byte("part1"), chunks[0])
+	assert.Equal(t, []byte("part2"), chunks[1])
+
+	wg.Wait()
+}
+
+// TEST295: Test RES frame (not END) is received correctly as single complete response
+func TestResFrameSingleResponse(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// Send RES frame
+		response := cbor.NewRes(frame.Id, []byte("single response"), "application/octet-stream")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=single", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeRes, response.FrameType)
+	assert.Equal(t, []byte("single response"), response.Payload)
+
+	wg.Wait()
+}
+
+// TEST296: Test host does not echo back plugin's heartbeat response (no infinite ping-pong)
+func TestHostInitiatedHeartbeatNoPingPong(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	done := make(chan bool)
+
+	// Plugin side
+	go func() {
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		requestFrame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, cbor.FrameTypeReq, requestFrame.FrameType)
+		requestID := requestFrame.Id
+
+		// Read heartbeat from host
+		heartbeatFrame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, cbor.FrameTypeHeartbeat, heartbeatFrame.FrameType)
+		heartbeatID := heartbeatFrame.Id
+
+		// Respond to heartbeat
+		hbResponse := cbor.NewHeartbeat(heartbeatID)
+		err = writer.WriteFrame(hbResponse)
+		require.NoError(t, err)
+
+		// Send request response
+		response := cbor.NewRes(requestID, []byte("done"), "text/plain")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+
+		done <- true
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Send heartbeat
+	heartbeatID := cbor.NewMessageIdRandom()
+	heartbeat := cbor.NewHeartbeat(heartbeatID)
+	err = writer.WriteFrame(heartbeat)
+	require.NoError(t, err)
+
+	// Read heartbeat response
+	hbResponse, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeHeartbeat, hbResponse.FrameType)
+
+	// Read request response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeRes, response.FrameType)
+	assert.Equal(t, []byte("done"), response.Payload)
+
+	<-done
+}
+
+// TEST297: Test host call with unified CBOR arguments sends correct content_type and payload
+func TestUnifiedArgumentsRoundtrip(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Equal(t, "application/cbor", frame.ContentType, "unified arguments must use application/cbor")
+
+		// Parse CBOR arguments
+		var args []map[string]interface{}
+		err = DecodeCBORValue(frame.Payload, &args)
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(args), "should have exactly one argument")
+
+		// Extract value from first argument
+		value := args[0]["value"].([]byte)
+
+		// Echo back
+		response := cbor.NewEnd(frame.Id, value, "")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Create unified arguments
+	args := []CapArgumentValue{
+		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
+	}
+
+	// Encode arguments to CBOR
+	argsData, err := EncodeCapArgumentValues(args)
+	require.NoError(t, err)
+
+	// Send request with CBOR arguments
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", argsData, "application/cbor")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, []byte("gpt-4"), response.Payload)
+
+	wg.Wait()
+}
+
+// TEST298: Test host receives error when plugin closes connection unexpectedly
+func TestPluginSuddenDisconnect(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request but don't respond - just close
+		_, err = reader.ReadFrame()
+		require.NoError(t, err)
+
+		// Close connection
+		pluginRead.Close()
+		pluginWrite.Close()
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Try to read response - should fail with EOF
+	_, err = reader.ReadFrame()
+	assert.Error(t, err, "must fail when plugin disconnects")
+	assert.Equal(t, io.EOF, err)
+
+	wg.Wait()
+}
+
+// TEST299: Test empty payload request and response roundtrip through host-plugin communication
+func TestEmptyPayloadRoundtrip(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		assert.Empty(t, frame.Payload, "empty payload must arrive empty")
+
+		// Send empty response
+		response := cbor.NewEnd(frame.Id, []byte{}, "")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send empty request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=empty", []byte{}, "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Empty(t, response.Payload)
+
+	wg.Wait()
+}
+
+// TEST300: Test END frame without payload is handled as complete response with empty data
+func TestEndFrameNoPayload(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// Send END with nil payload
+		response := cbor.NewEnd(frame.Id, nil, "")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeEnd, response.FrameType)
+	// END with nil payload should be handled cleanly
+
+	wg.Wait()
+}
+
+// TEST301: Test streaming response sequence numbers are contiguous and start from 0
+func TestStreamingSequenceNumbers(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		requestID := frame.Id
+
+		// Send 5 chunks with explicit sequence numbers
+		for seq := uint64(0); seq < 5; seq++ {
+			payload := []byte(string(rune('0' + seq)))
+			chunk := cbor.NewChunk(requestID, seq, payload)
+			if seq == 4 {
+				chunk.Eof = boolPtr(true)
+			}
+			err = writer.WriteFrame(chunk)
+			require.NoError(t, err)
+		}
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", []byte(""), "text/plain")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Collect chunks
+	var chunks []*cbor.Frame
+	for i := 0; i < 5; i++ {
+		chunk, err := reader.ReadFrame()
+		require.NoError(t, err)
+		chunks = append(chunks, chunk)
+	}
+
+	// Verify sequence numbers
+	assert.Equal(t, 5, len(chunks))
+	for i, chunk := range chunks {
+		assert.Equal(t, uint64(i), chunk.Seq, "chunk seq must be contiguous from 0")
+	}
+	assert.True(t, *chunks[4].Eof)
+
+	wg.Wait()
+}
+
+// TEST302: Test host request on a closed host returns error
+func TestRequestAfterShutdown(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		_, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+
+		// Close immediately
+		pluginRead.Close()
+		pluginWrite.Close()
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	wg.Wait()
+
+	// Close host connections
+	hostWrite.Close()
+	hostRead.Close()
+
+	// Try to send request on closed connection - should fail
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", []byte(""), "application/json")
+	err = writer.WriteFrame(request)
+	assert.Error(t, err, "must fail on closed connection")
+}
+
+// TEST303: Test multiple unified arguments are correctly serialized in CBOR payload
+func TestUnifiedArgumentsMultiple(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Plugin side
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		// Read request
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// Parse CBOR arguments
+		var args []map[string]interface{}
+		err = DecodeCBORValue(frame.Payload, &args)
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(args), "should have 2 arguments")
+
+		// Send response
+		responseMsg := []byte("got 2 args")
+		response := cbor.NewEnd(frame.Id, responseMsg, "")
+		err = writer.WriteFrame(response)
+		require.NoError(t, err)
+	}()
+
+	// Host side
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	// Create multiple unified arguments
+	args := []CapArgumentValue{
+		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
+		NewCapArgumentValue("media:pdf;bytes", []byte{0x89, 0x50, 0x4E, 0x47}),
+	}
+
+	// Encode arguments to CBOR
+	argsData, err := EncodeCapArgumentValues(args)
+	require.NoError(t, err)
+
+	// Send request
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", argsData, "application/cbor")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Read response
+	response, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, []byte("got 2 args"), response.Payload)
+
+	wg.Wait()
+}
+
+// Helper functions
+
+func intPtr(i int) *int {
+	return &i
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// DecodeCBORValue decodes CBOR bytes to any interface{}
+func DecodeCBORValue(data []byte, v interface{}) error {
+	return cbor2.Unmarshal(data, v)
+}
+
+// EncodeCapArgumentValues encodes CapArgumentValue slice to CBOR
+func EncodeCapArgumentValues(args []CapArgumentValue) ([]byte, error) {
+	// Convert to CBOR-friendly format
+	var cborArgs []map[string]interface{}
+	for _, arg := range args {
+		argMap := map[string]interface{}{
+			"media_urn": arg.MediaUrn,
+			"value":     arg.Value,
+		}
+		cborArgs = append(cborArgs, argMap)
+	}
+
+	return cbor2.Marshal(cborArgs)
 }

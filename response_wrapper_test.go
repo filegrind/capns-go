@@ -16,6 +16,7 @@ func respTestUrn(tags string) string {
 	return `cap:in="media:void";out="media:form=map;textable";` + tags
 }
 
+// TEST168: Test ResponseWrapper from JSON deserializes to correct structured type
 func TestResponseWrapperFromJSON(t *testing.T) {
 	testData := map[string]interface{}{
 		"name":  "test",
@@ -51,6 +52,7 @@ func TestResponseWrapperFromText(t *testing.T) {
 	assert.Equal(t, testText, result)
 }
 
+// TEST170: Test ResponseWrapper from binary stores and retrieves raw bytes correctly
 func TestResponseWrapperFromBinary(t *testing.T) {
 	testData := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header
 	response := NewResponseWrapperFromBinary(testData)
@@ -67,6 +69,7 @@ func TestResponseWrapperFromBinary(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TEST169: Test ResponseWrapper converts to primitive types integer, float, boolean, string
 func TestResponseWrapperAsInt(t *testing.T) {
 	// Test from text
 	response := NewResponseWrapperFromText([]byte("42"))

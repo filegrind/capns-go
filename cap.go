@@ -52,6 +52,26 @@ func (s *ArgSource) IsCliFlag() bool {
 	return s.CliFlag != nil
 }
 
+// StdinMediaUrn returns the stdin media URN if this is a stdin source
+// Matches Rust: pub fn stdin_media_urn(&self) -> Option<&str>
+func (s *ArgSource) StdinMediaUrn() *string {
+	return s.Stdin
+}
+
+// GetPosition returns the position if this is a position source
+// Matches Rust: pub fn position(&self) -> Option<usize>
+// Named GetPosition to avoid conflict with Position field
+func (s *ArgSource) GetPosition() *int {
+	return s.Position
+}
+
+// GetCliFlag returns the CLI flag if this is a cli_flag source
+// Matches Rust: pub fn cli_flag(&self) -> Option<&str>
+// Named GetCliFlag to avoid conflict with CliFlag field
+func (s *ArgSource) GetCliFlag() *string {
+	return s.CliFlag
+}
+
 // CapArg represents an argument definition with sources
 type CapArg struct {
 	MediaUrn       string      `json:"media_urn"`
