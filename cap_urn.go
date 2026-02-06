@@ -15,6 +15,7 @@ package capns
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -312,6 +313,14 @@ func (c *CapUrn) WithTag(key, value string) *CapUrn {
 	}
 	newTags[keyLower] = value
 	return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
+}
+
+// WithTagValidated adds or updates a tag, rejecting empty values (matches Rust with_tag)
+func (c *CapUrn) WithTagValidated(key, value string) (*CapUrn, error) {
+	if value == "" {
+		return nil, errors.New("tag value cannot be empty")
+	}
+	return c.WithTag(key, value), nil
 }
 
 // WithInSpec returns a new cap URN with a different input spec

@@ -2,6 +2,7 @@ package capns
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -815,6 +816,14 @@ func TestWithTagPreservesValue(t *testing.T) {
 	assert.Equal(t, "ValueWithCase", value)
 }
 
+// TEST037: Test with_tag rejects empty value
+func TestWithTagRejectsEmptyValue(t *testing.T) {
+	cap := NewCapUrn(MediaVoid, MediaObject, map[string]string{})
+	modified, err := cap.WithTagValidated("key", "")
+	assert.Error(t, err, "with_tag should reject empty value")
+	assert.Nil(t, modified)
+}
+
 // TEST038: Test semantic equivalence of unquoted and quoted simple lowercase values
 func TestSemanticEquivalence(t *testing.T) {
 	// Unquoted and quoted simple lowercase values are equivalent
@@ -1062,11 +1071,21 @@ func TestMatchingSemantics_Test7_FallbackPattern(t *testing.T) {
 
 	// Pattern has ext=wav, instance missing ext → NO MATCH
 	assert.False(t, cap.Matches(request), "Test 7: Cap missing ext should NOT match pattern with ext=wav")
+}
 
-	// Fallback cap with ext=* matches any ext
-	capFallback, err := NewCapUrnFromString(`cap:ext=*;in="media:binary";op=generate_thumbnail;out="media:binary"`)
+// TEST047: Matching semantics - thumbnail fallback with void input
+func TestMatchingSemantics_Test7b_ThumbnailVoidInput(t *testing.T) {
+	// Test 7b: Thumbnail fallback with void input (real-world scenario)
+	outBin := "media:binary"
+	cap, err := NewCapUrnFromString(fmt.Sprintf(`cap:in="%s";op=generate_thumbnail;out="%s"`, MediaVoid, outBin))
 	require.NoError(t, err)
-	assert.True(t, capFallback.Matches(request), "Test 7b: Cap with ext=* should match pattern with ext=wav")
+
+	request, err := NewCapUrnFromString(fmt.Sprintf(`cap:ext=wav;in="%s";op=generate_thumbnail;out="%s"`, MediaVoid, outBin))
+	require.NoError(t, err)
+
+	// With void input, cap should match request even when request has ext=wav
+	// because cap doesn't have ext tag, so it doesn't constrain ext
+	assert.True(t, cap.Matches(request), "Test 7b: Thumbnail fallback with void input should match")
 }
 
 // TEST048: Matching semantics - wildcard direction matches anything

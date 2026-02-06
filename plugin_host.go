@@ -22,14 +22,132 @@ type PluginHost struct {
 
 // pendingRequest tracks a pending request
 type pendingRequest struct {
-	chunks  [][]byte
-	done    chan error
+	chunks    []*ResponseChunk
+	done      chan error
 	isChunked bool
 }
 
-// PluginResponse represents a response from a plugin
+// ResponseChunk represents a response chunk from a plugin (matches Rust ResponseChunk)
+type ResponseChunk struct {
+	// The binary payload
+	Payload []byte
+	// Sequence number
+	Seq uint64
+	// Offset in the stream (for chunked transfers)
+	Offset *uint64
+	// Total length (set on first chunk of chunked transfer)
+	Len *uint64
+	// Whether this is the final chunk
+	IsEof bool
+}
+
+// PluginResponseType indicates whether a response is single or streaming
+type PluginResponseType int
+
+const (
+	// PluginResponseTypeSingle represents a single complete response
+	PluginResponseTypeSingle PluginResponseType = iota
+	// PluginResponseTypeStreaming represents a streaming response with chunks
+	PluginResponseTypeStreaming
+)
+
+// PluginResponse represents a complete response from a plugin (matches Rust PluginResponse enum)
+// Can be either Single or Streaming
 type PluginResponse struct {
-	Data []byte
+	Type PluginResponseType
+	// Single response data (used when Type == PluginResponseTypeSingle)
+	Single []byte
+	// Streaming chunks (used when Type == PluginResponseTypeStreaming)
+	Streaming []*ResponseChunk
+}
+
+// FinalPayload gets the final payload (single response or last chunk of streaming)
+// Matches Rust PluginResponse::final_payload()
+func (pr *PluginResponse) FinalPayload() []byte {
+	switch pr.Type {
+	case PluginResponseTypeSingle:
+		return pr.Single
+	case PluginResponseTypeStreaming:
+		if len(pr.Streaming) > 0 {
+			return pr.Streaming[len(pr.Streaming)-1].Payload
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+// Concatenated concatenates all payloads into a single buffer
+// Matches Rust PluginResponse::concatenated()
+func (pr *PluginResponse) Concatenated() []byte {
+	switch pr.Type {
+	case PluginResponseTypeSingle:
+		// Clone the data
+		result := make([]byte, len(pr.Single))
+		copy(result, pr.Single)
+		return result
+	case PluginResponseTypeStreaming:
+		// Pre-calculate total length
+		totalLen := 0
+		for _, chunk := range pr.Streaming {
+			totalLen += len(chunk.Payload)
+		}
+		// Pre-allocate result buffer
+		result := make([]byte, 0, totalLen)
+		for _, chunk := range pr.Streaming {
+			result = append(result, chunk.Payload...)
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
+// HostError represents errors from the plugin host (matches Rust AsyncHostError)
+type HostError struct {
+	Type    HostErrorType
+	Message string
+	Code    string // For PluginError type
+}
+
+// HostErrorType represents the type of host error
+type HostErrorType int
+
+const (
+	HostErrorTypeCbor HostErrorType = iota
+	HostErrorTypeIo
+	HostErrorTypePluginError
+	HostErrorTypeUnexpectedFrameType
+	HostErrorTypeProcessExited
+	HostErrorTypeHandshake
+	HostErrorTypeClosed
+	HostErrorTypeSendError
+	HostErrorTypeRecvError
+)
+
+func (e *HostError) Error() string {
+	switch e.Type {
+	case HostErrorTypeCbor:
+		return fmt.Sprintf("CBOR error: %s", e.Message)
+	case HostErrorTypeIo:
+		return fmt.Sprintf("I/O error: %s", e.Message)
+	case HostErrorTypePluginError:
+		return fmt.Sprintf("Plugin returned error: [%s] %s", e.Code, e.Message)
+	case HostErrorTypeUnexpectedFrameType:
+		return fmt.Sprintf("Unexpected frame type: %s", e.Message)
+	case HostErrorTypeProcessExited:
+		return "Plugin process exited unexpectedly"
+	case HostErrorTypeHandshake:
+		return fmt.Sprintf("Handshake failed: %s", e.Message)
+	case HostErrorTypeClosed:
+		return "Host is closed"
+	case HostErrorTypeSendError:
+		return "Send error: channel closed"
+	case HostErrorTypeRecvError:
+		return "Receive error: channel closed"
+	default:
+		return fmt.Sprintf("Unknown error: %s", e.Message)
+	}
 }
 
 // NewPluginHost creates a new plugin host and performs handshake
@@ -95,7 +213,14 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 	case cbor.FrameTypeRes:
 		// Single response
 		if req, ok := ph.pendingRequests[idKey]; ok {
-			req.chunks = append(req.chunks, frame.Payload)
+			chunk := &ResponseChunk{
+				Payload: frame.Payload,
+				Seq:     frame.Seq,
+				Offset:  frame.Offset,
+				Len:     frame.Len,
+				IsEof:   frame.IsEof(),
+			}
+			req.chunks = append(req.chunks, chunk)
 			delete(ph.pendingRequests, idKey)
 			req.done <- nil
 		}
@@ -104,13 +229,27 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 		// Streaming chunk
 		if req, ok := ph.pendingRequests[idKey]; ok {
 			req.isChunked = true
-			req.chunks = append(req.chunks, frame.Payload)
+			chunk := &ResponseChunk{
+				Payload: frame.Payload,
+				Seq:     frame.Seq,
+				Offset:  frame.Offset,
+				Len:     frame.Len,
+				IsEof:   frame.IsEof(),
+			}
+			req.chunks = append(req.chunks, chunk)
 		}
 
 	case cbor.FrameTypeEnd:
 		// Final chunk or end of stream
 		if req, ok := ph.pendingRequests[idKey]; ok {
-			req.chunks = append(req.chunks, frame.Payload)
+			chunk := &ResponseChunk{
+				Payload: frame.Payload,
+				Seq:     frame.Seq,
+				Offset:  frame.Offset,
+				Len:     frame.Len,
+				IsEof:   true, // END frames are always EOF
+			}
+			req.chunks = append(req.chunks, chunk)
 			delete(ph.pendingRequests, idKey)
 			req.done <- nil
 		}
@@ -151,7 +290,7 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 
 	// Create pending request
 	req := &pendingRequest{
-		chunks: make([][]byte, 0),
+		chunks: make([]*ResponseChunk, 0),
 		done:   make(chan error, 1),
 	}
 	idKey := requestID.ToString()
@@ -176,17 +315,26 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 		return nil, err
 	}
 
-	// Concatenate all chunks
-	totalLen := 0
-	for _, chunk := range req.chunks {
-		totalLen += len(chunk)
+	// Build PluginResponse based on whether it was chunked
+	if req.isChunked || len(req.chunks) > 1 {
+		// Streaming response
+		return &PluginResponse{
+			Type:      PluginResponseTypeStreaming,
+			Streaming: req.chunks,
+		}, nil
+	} else if len(req.chunks) == 1 {
+		// Single response
+		return &PluginResponse{
+			Type:   PluginResponseTypeSingle,
+			Single: req.chunks[0].Payload,
+		}, nil
+	} else {
+		// Empty response
+		return &PluginResponse{
+			Type:   PluginResponseTypeSingle,
+			Single: []byte{},
+		}, nil
 	}
-	result := make([]byte, 0, totalLen)
-	for _, chunk := range req.chunks {
-		result = append(result, chunk...)
-	}
-
-	return &PluginResponse{Data: result}, nil
 }
 
 // Manifest returns the plugin manifest received during handshake

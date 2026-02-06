@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"testing"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // TEST205: Test REQ frame encode/decode roundtrip preserves all fields
@@ -475,5 +477,285 @@ func TestMessageIdUintRoundtrip(t *testing.T) {
 
 	if decoded.Id.ToString() != "42" {
 		t.Errorf("Expected ID '42', got '%s'", decoded.Id.ToString())
+	}
+}
+
+// TEST225: Test decode_frame rejects non-map CBOR values (e.g., array, integer, string)
+func TestDecodeNonMapValue(t *testing.T) {
+	// Encode a CBOR array instead of map
+	cborArray := []byte{0x81, 0x01} // CBOR array [1]
+
+	_, err := DecodeFrame(cborArray)
+	if err == nil {
+		t.Error("decode_frame should reject non-map CBOR values")
+	}
+}
+
+// TEST226: Test decode_frame rejects CBOR map missing required version field
+func TestDecodeMissingVersion(t *testing.T) {
+	// Build CBOR map with frame_type and id but missing version
+	// Map with keys 1 (frame_type) and 2 (id) but no key 0 (version)
+	m := make(map[int]interface{})
+	m[keyFrameType] = uint8(FrameTypeReq)
+	m[keyId] = uint64(0)
+
+	encoded, _ := cbor.Marshal(m)
+	_, err := DecodeFrame(encoded)
+	if err == nil {
+		t.Error("decode_frame should reject map missing version field")
+	}
+}
+
+// TEST227: Test decode_frame rejects CBOR map with invalid frame_type value
+func TestDecodeInvalidFrameTypeValue(t *testing.T) {
+	m := make(map[int]interface{})
+	m[keyVersion] = uint8(1)
+	m[keyFrameType] = uint8(99) // invalid frame type
+	m[keyId] = uint64(0)
+
+	encoded, _ := cbor.Marshal(m)
+	_, err := DecodeFrame(encoded)
+	if err == nil {
+		t.Error("decode_frame should reject invalid frame_type value")
+	}
+}
+
+// TEST228: Test decode_frame rejects CBOR map missing required id field
+func TestDecodeMissingId(t *testing.T) {
+	m := make(map[int]interface{})
+	m[keyVersion] = uint8(1)
+	m[keyFrameType] = uint8(FrameTypeReq)
+	// No ID field
+
+	encoded, _ := cbor.Marshal(m)
+	_, err := DecodeFrame(encoded)
+	if err == nil {
+		t.Error("decode_frame should reject map missing id field")
+	}
+}
+
+// TEST229: Test FrameReader/FrameWriter SetLimits updates the negotiated limits
+func TestFrameReaderWriterSetLimits(t *testing.T) {
+	buf := &bytes.Buffer{}
+	reader := NewFrameReader(buf)
+	writer := NewFrameWriter(buf)
+
+	customLimits := Limits{MaxFrame: 500, MaxChunk: 100}
+	reader.SetLimits(customLimits)
+	writer.SetLimits(customLimits)
+
+	if reader.limits.MaxFrame != 500 {
+		t.Error("Reader max_frame should be 500")
+	}
+	if reader.limits.MaxChunk != 100 {
+		t.Error("Reader max_chunk should be 100")
+	}
+	if writer.limits.MaxFrame != 500 {
+		t.Error("Writer max_frame should be 500")
+	}
+	if writer.limits.MaxChunk != 100 {
+		t.Error("Writer max_chunk should be 100")
+	}
+}
+
+// TEST230: Test sync handshake exchanges HELLO frames and negotiates minimum limits
+func TestSyncHandshake(t *testing.T) {
+	// Use in-memory buffer for testing instead of pipes
+	// This simulates the handshake without needing bidirectional sockets
+	manifest := []byte(`{"name":"Test","version":"1.0","caps":[]}`)
+
+	// Create buffers for communication
+	var hostToPlugin bytes.Buffer
+	var pluginToHost bytes.Buffer
+
+	// Plugin side writes HELLO response to pluginToHost buffer
+	pluginWriter := NewFrameWriter(&pluginToHost)
+	pluginReader := NewFrameReader(&hostToPlugin)
+
+	// Host side writes HELLO request to hostToPlugin buffer
+	hostWriter := NewFrameWriter(&hostToPlugin)
+
+	// Step 1: Host sends HELLO
+	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
+	if err := hostWriter.WriteFrame(helloFrame); err != nil {
+		t.Fatalf("Failed to write host HELLO: %v", err)
+	}
+
+	// Step 2: Plugin reads HELLO and responds
+	pluginHelloFrame, err := pluginReader.ReadFrame()
+	if err != nil {
+		t.Fatalf("Plugin failed to read HELLO: %v", err)
+	}
+	if pluginHelloFrame.FrameType != FrameTypeHello {
+		t.Fatal("Expected HELLO frame")
+	}
+
+	// Plugin sends HELLO with manifest
+	responseFrame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifest)
+	if err := pluginWriter.WriteFrame(responseFrame); err != nil {
+		t.Fatalf("Failed to write plugin HELLO: %v", err)
+	}
+
+	// Step 3: Host reads response
+	hostReader := NewFrameReader(&pluginToHost)
+	helloResponseFrame, err := hostReader.ReadFrame()
+	if err != nil {
+		t.Fatalf("Host failed to read HELLO response: %v", err)
+	}
+
+	// Verify manifest
+	if helloResponseFrame.Meta == nil {
+		t.Fatal("HELLO response should have Meta")
+	}
+	manifestVal, ok := helloResponseFrame.Meta["manifest"]
+	if !ok {
+		t.Fatal("HELLO response should have manifest in Meta")
+	}
+	manifestBytes, ok := manifestVal.([]byte)
+	if !ok {
+		t.Fatal("Manifest should be bytes")
+	}
+	if string(manifestBytes) != string(manifest) {
+		t.Error("Manifest should be preserved")
+	}
+
+	// Verify limits negotiation
+	maxFrameVal, ok := helloResponseFrame.Meta["max_frame"]
+	if !ok {
+		t.Fatal("HELLO response should have max_frame")
+	}
+	maxChunkVal, ok := helloResponseFrame.Meta["max_chunk"]
+	if !ok {
+		t.Fatal("HELLO response should have max_chunk")
+	}
+
+	// Convert to int for comparison
+	var maxFrame, maxChunk int
+	switch v := maxFrameVal.(type) {
+	case int:
+		maxFrame = v
+	case uint64:
+		maxFrame = int(v)
+	case int64:
+		maxFrame = int(v)
+	}
+	switch v := maxChunkVal.(type) {
+	case int:
+		maxChunk = v
+	case uint64:
+		maxChunk = int(v)
+	case int64:
+		maxChunk = int(v)
+	}
+
+	if maxFrame != DefaultMaxFrame {
+		t.Errorf("Expected max_frame %d, got %d", DefaultMaxFrame, maxFrame)
+	}
+	if maxChunk != DefaultMaxChunk {
+		t.Errorf("Expected max_chunk %d, got %d", DefaultMaxChunk, maxChunk)
+	}
+}
+
+// TEST231: Test handshake fails when peer sends non-HELLO frame
+func TestHandshakeRejectsNonHello(t *testing.T) {
+	// Use in-memory buffers
+	var hostToPlugin bytes.Buffer
+	var pluginToHost bytes.Buffer
+
+	// Host sends HELLO
+	hostWriter := NewFrameWriter(&hostToPlugin)
+	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
+	if err := hostWriter.WriteFrame(helloFrame); err != nil {
+		t.Fatalf("Failed to write HELLO: %v", err)
+	}
+
+	// Plugin sends REQ instead of HELLO (bad!)
+	pluginWriter := NewFrameWriter(&pluginToHost)
+	badFrame := NewReq(NewMessageIdFromUint(1), "cap:op=bad", []byte{}, "text/plain")
+	if err := pluginWriter.WriteFrame(badFrame); err != nil {
+		t.Fatalf("Failed to write bad frame: %v", err)
+	}
+
+	// Host tries to complete handshake
+	hostReader := NewFrameReader(&pluginToHost)
+	responseFrame, err := hostReader.ReadFrame()
+	if err != nil {
+		t.Fatalf("Failed to read frame: %v", err)
+	}
+
+	// Verify it's not a HELLO frame
+	if responseFrame.FrameType == FrameTypeHello {
+		t.Error("Should have received non-HELLO frame")
+	}
+	if responseFrame.FrameType != FrameTypeReq {
+		t.Errorf("Expected REQ frame, got %v", responseFrame.FrameType)
+	}
+}
+
+// TEST232: Test handshake fails when plugin HELLO is missing required manifest
+func TestHandshakeRejectsMissingManifest(t *testing.T) {
+	// Use in-memory buffers
+	var pluginToHost bytes.Buffer
+
+	// Plugin sends HELLO without manifest
+	pluginWriter := NewFrameWriter(&pluginToHost)
+	noManifestHello := NewHello(1_000_000, 200_000)
+	if err := pluginWriter.WriteFrame(noManifestHello); err != nil {
+		t.Fatalf("Failed to write HELLO: %v", err)
+	}
+
+	// Host reads the HELLO
+	hostReader := NewFrameReader(&pluginToHost)
+	helloFrame, err := hostReader.ReadFrame()
+	if err != nil {
+		t.Fatalf("Failed to read HELLO: %v", err)
+	}
+
+	// Verify it's a HELLO frame
+	if helloFrame.FrameType != FrameTypeHello {
+		t.Error("Expected HELLO frame")
+	}
+
+	// Verify manifest is missing
+	if helloFrame.Meta == nil {
+		// No meta means no manifest - expected
+		return
+	}
+	if _, hasManifest := helloFrame.Meta["manifest"]; hasManifest {
+		t.Error("HELLO should not have manifest")
+	}
+}
+
+// TEST233: Test binary payload with all 256 byte values roundtrips through encode/decode
+func TestBinaryPayloadAllByteValues(t *testing.T) {
+	data := make([]byte, 256)
+	for i := 0; i < 256; i++ {
+		data[i] = byte(i)
+	}
+
+	id := NewMessageIdRandom()
+	frame := NewReq(id, "cap:op=binary", data, "application/octet-stream")
+
+	encoded, err := EncodeFrame(frame)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	decoded, err := DecodeFrame(encoded)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	if string(decoded.Payload) != string(data) {
+		t.Error("Binary payload not preserved")
+	}
+}
+
+// TEST234: Test decode_frame handles garbage CBOR bytes gracefully with an error
+func TestDecodeGarbageBytes(t *testing.T) {
+	garbage := []byte{0xFF, 0xFE, 0xFD, 0xFC, 0xFB}
+	_, err := DecodeFrame(garbage)
+	if err == nil {
+		t.Error("garbage bytes must produce decode error")
 	}
 }

@@ -2,6 +2,7 @@ package cbor
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
 )
@@ -94,11 +95,18 @@ func DecodeFrame(data []byte) (*Frame, error) {
 
 	frame := &Frame{}
 
-	// 0: version (should be 1)
-	if verVal, ok := m[keyVersion]; ok {
-		if ver, ok := verVal.(uint64); ok {
-			frame.Version = uint8(ver)
+	// 0: version (required - must be PROTOCOL_VERSION)
+	verVal, ok := m[keyVersion]
+	if !ok {
+		return nil, errors.New("missing version (key 0)")
+	}
+	if ver, ok := verVal.(uint64); ok {
+		frame.Version = uint8(ver)
+		if frame.Version != ProtocolVersion {
+			return nil, fmt.Errorf("invalid version %d, expected %d", frame.Version, ProtocolVersion)
 		}
+	} else {
+		return nil, errors.New("version must be uint")
 	}
 
 	// 1: frame_type (required)
@@ -107,7 +115,12 @@ func DecodeFrame(data []byte) (*Frame, error) {
 		return nil, errors.New("missing frame_type (key 1)")
 	}
 	if ft, ok := ftVal.(uint64); ok {
-		frame.FrameType = FrameType(ft)
+		frameType := FrameType(ft)
+		// Validate frame type is in valid range
+		if frameType < FrameTypeHello || frameType > FrameTypeHeartbeat {
+			return nil, fmt.Errorf("invalid frame_type %d", ft)
+		}
+		frame.FrameType = frameType
 	} else {
 		return nil, errors.New("frame_type must be uint")
 	}

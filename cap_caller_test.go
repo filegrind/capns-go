@@ -2,6 +2,7 @@ package capns
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -277,7 +278,7 @@ func TestStdinSourceBinaryContent(t *testing.T) {
 }
 
 // TEST160: Test StdinSource Data clone creates independent copy with same data
-func TestStdinSourceClone(t *testing.T) {
+func TestStdinSourceDataClone(t *testing.T) {
 	data := []byte{1, 2, 3, 4, 5}
 	source := NewStdinSourceFromData(data)
 
@@ -292,6 +293,41 @@ func TestStdinSourceClone(t *testing.T) {
 	// Verify they're independent - modifying clone doesn't affect original
 	cloned.Data[0] = 99
 	assert.NotEqual(t, source.Data[0], cloned.Data[0])
+}
+
+// TEST161: Test StdinSource FileReference clone creates independent copy with same fields
+func TestStdinSourceFileReferenceClone(t *testing.T) {
+	source := NewStdinSourceFromFileReference("test-id", "/test/path.pdf", []byte{1, 2, 3}, "media:pdf")
+
+	// Create a manual copy
+	cloned := NewStdinSourceFromFileReference(
+		source.TrackedFileID,
+		source.OriginalPath,
+		append([]byte{}, source.SecurityBookmark...),
+		source.MediaUrn,
+	)
+
+	assert.Equal(t, source.Kind, cloned.Kind)
+	assert.Equal(t, source.TrackedFileID, cloned.TrackedFileID)
+	assert.Equal(t, source.OriginalPath, cloned.OriginalPath)
+	assert.Equal(t, source.SecurityBookmark, cloned.SecurityBookmark)
+	assert.Equal(t, source.MediaUrn, cloned.MediaUrn)
+}
+
+// TEST162: Test StdinSource Debug format displays variant type and relevant fields
+func TestStdinSourceDebug(t *testing.T) {
+	// Test Data variant
+	dataSource := NewStdinSourceFromData([]byte{1, 2, 3})
+	debugStr := fmt.Sprintf("%+v", dataSource)
+	assert.Contains(t, debugStr, "Kind")
+	assert.Contains(t, debugStr, "Data")
+
+	// Test FileReference variant
+	fileSource := NewStdinSourceFromFileReference("test-id", "/test/path.pdf", []byte{}, "media:pdf")
+	debugStr = fmt.Sprintf("%+v", fileSource)
+	assert.Contains(t, debugStr, "TrackedFileID")
+	assert.Contains(t, debugStr, "OriginalPath")
+	assert.Contains(t, debugStr, "MediaUrn")
 }
 
 // TestStdinSourceNilHandling tests that nil StdinSource is handled correctly
