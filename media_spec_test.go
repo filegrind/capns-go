@@ -12,34 +12,43 @@ import (
 // Media URN resolution tests
 // -------------------------------------------------------------------------
 
-// TEST088: Test resolving string media URN from standard specs returns correct media type and profile
-func TestResolveFromStandardSpecsStr(t *testing.T) {
-	standardSpecs := GetStandardMediaSpecs()
-	resolved, err := ResolveMediaUrn("media:textable;form=scalar", standardSpecs)
+// Helper to create a test registry (matches Rust test_registry() helper)
+func testRegistry(t *testing.T) *MediaUrnRegistry {
+	t.Helper()
+	registry, err := NewMediaUrnRegistry()
+	require.NoError(t, err, "Failed to create test registry")
+	return registry
+}
+
+// TEST088: Test resolving string media URN from registry returns correct media type and profile
+func TestResolveFromRegistryStr(t *testing.T) {
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:textable;form=scalar", nil, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, "https://capns.org/schema/string", resolved.ProfileURI)
 }
 
-// TEST089: Test resolving object media URN from standard specs returns JSON media type
-func TestResolveFromStandardSpecsObj(t *testing.T) {
-	standardSpecs := GetStandardMediaSpecs()
-	resolved, err := ResolveMediaUrn("media:form=map;textable", standardSpecs)
+// TEST089: Test resolving object media URN from registry returns JSON media type
+func TestResolveFromRegistryObj(t *testing.T) {
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:form=map;textable", nil, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 }
 
-// TEST090: Test resolving binary media URN from standard specs returns octet-stream and IsBinary true
-func TestResolveFromStandardSpecsBinary(t *testing.T) {
-	standardSpecs := GetStandardMediaSpecs()
-	resolved, err := ResolveMediaUrn("media:bytes", standardSpecs)
+// TEST090: Test resolving binary media URN from registry returns octet-stream and IsBinary true
+func TestResolveFromRegistryBinary(t *testing.T) {
+	registry := testRegistry(t)
+	resolved, err := ResolveMediaUrn("media:bytes", nil, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/octet-stream", resolved.MediaType)
 	assert.True(t, resolved.IsBinary())
 }
 
-// TEST091: Test resolving custom media URN from local media_specs takes precedence over standard specs
+// TEST091: Test resolving custom media URN from local media_specs takes precedence over registry
 func TestResolveCustomMediaSpec(t *testing.T) {
+	registry := testRegistry(t)
 	customSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:custom-spec;json",
@@ -54,8 +63,8 @@ func TestResolveCustomMediaSpec(t *testing.T) {
 		},
 	}
 
-	// Custom spec is found
-	resolved, err := ResolveMediaUrn("media:custom-spec;json", customSpecs)
+	// Local media_specs takes precedence over registry
+	resolved, err := ResolveMediaUrn("media:custom-spec;json", customSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "media:custom-spec;json", resolved.SpecID)
 	assert.Equal(t, "application/json", resolved.MediaType)
@@ -65,6 +74,7 @@ func TestResolveCustomMediaSpec(t *testing.T) {
 
 // TEST092: Test resolving custom object form media spec with schema from local media_specs
 func TestResolveCustomWithSchema(t *testing.T) {
+	registry := testRegistry(t)
 	schema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -85,7 +95,7 @@ func TestResolveCustomWithSchema(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:output-spec;json;form=map", customSpecs)
+	resolved, err := ResolveMediaUrn("media:output-spec;json;form=map", customSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "media:output-spec;json;form=map", resolved.SpecID)
 	assert.Equal(t, "application/json", resolved.MediaType)
@@ -95,37 +105,36 @@ func TestResolveCustomWithSchema(t *testing.T) {
 
 // TEST093: Test resolving unknown media URN fails with UnresolvableMediaUrn error
 func TestResolveUnresolvableFailsHard(t *testing.T) {
-	emptySpecs := []MediaSpecDef{}
-	// URN not in media_specs - FAIL HARD
-	_, err := ResolveMediaUrn("media:completely-unknown-urn-not-in-specs", emptySpecs)
+	registry := testRegistry(t)
+	// URN not in local media_specs and not in registry - FAIL HARD
+	_, err := ResolveMediaUrn("media:completely-unknown-urn-not-in-registry", nil, registry)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "media:completely-unknown-urn-not-in-specs")
+	assert.Contains(t, err.Error(), "media:completely-unknown-urn-not-in-registry")
 	assert.Contains(t, err.Error(), "cannot be resolved")
 }
 
-// TEST094: Test local media_specs definition overrides standard specs definition for same URN
-func TestLocalOverridesStandardSpecs(t *testing.T) {
-	standardSpecs := GetStandardMediaSpecs()
+// TEST094: Test local media_specs definition overrides registry definition for same URN
+func TestLocalOverridesRegistry(t *testing.T) {
+	registry := testRegistry(t)
 
-	// Add custom override for a standard URN
-	customOverride := MediaSpecDef{
-		Urn:         "media:textable;form=scalar",
-		MediaType:   "application/json", // Override: normally text/plain
-		Title:       "Custom String",
-		ProfileURI:  "https://custom.example.com/str",
-		Schema:      nil,
-		Description: "",
-		Validation:  nil,
-		Metadata:    nil,
-		Extensions:  []string{},
+	// Custom definition in media_specs takes precedence over registry
+	customOverride := []MediaSpecDef{
+		{
+			Urn:         "media:textable;form=scalar",
+			MediaType:   "application/json", // Override: normally text/plain
+			Title:       "Custom String",
+			ProfileURI:  "https://custom.example.com/str",
+			Schema:      nil,
+			Description: "",
+			Validation:  nil,
+			Metadata:    nil,
+			Extensions:  []string{},
+		},
 	}
 
-	// Prepend custom override (simulates local media_specs priority)
-	allSpecs := append([]MediaSpecDef{customOverride}, standardSpecs...)
-
-	resolved, err := ResolveMediaUrn("media:textable;form=scalar", allSpecs)
+	resolved, err := ResolveMediaUrn("media:textable;form=scalar", customOverride, registry)
 	require.NoError(t, err)
-	// Custom definition used, not standard spec
+	// Custom definition used, not registry
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.Equal(t, "https://custom.example.com/str", resolved.ProfileURI)
 }

@@ -341,22 +341,64 @@ func ValidateNoMediaSpecDuplicates(mediaSpecs []MediaSpecDef) error {
 }
 
 // ResolveMediaUrn resolves a media URN to a ResolvedMediaSpec
-// Resolution: Iterate media_specs array and find by URN, FAIL HARD if not found
-func ResolveMediaUrn(mediaUrn string, mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
+//
+// This is the SINGLE resolution path for all media URN lookups.
+//
+// Resolution order (matches Rust implementation):
+//  1. Cap's local media_specs array (HIGHEST - cap-specific definitions)
+//  2. Registry's bundled standard specs
+//  3. (Future: Registry's cache and online fetch)
+//  4. If none resolve → FAIL HARD
+//
+// Arguments:
+//   - mediaUrn: The media URN to resolve (e.g., "media:textable;form=scalar")
+//   - mediaSpecs: Optional media_specs array from the cap definition (nil = none)
+//   - registry: The MediaUrnRegistry for standard spec lookups
+//
+// Returns:
+//   - ResolvedMediaSpec if found
+//   - Error if media URN cannot be resolved from any source
+func ResolveMediaUrn(mediaUrn string, mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (*ResolvedMediaSpec, error) {
 	// Validate it's a media URN
 	if !strings.HasPrefix(mediaUrn, "media:") {
 		return nil, ErrInvalidMediaUrn
 	}
 
-	// Find in the provided media_specs array
-	for i := range mediaSpecs {
-		if mediaSpecs[i].Urn == mediaUrn {
-			return resolveMediaSpecDef(&mediaSpecs[i])
+	// 1. First, try cap's local media_specs (highest priority - cap-specific definitions)
+	if mediaSpecs != nil {
+		for i := range mediaSpecs {
+			if mediaSpecs[i].Urn == mediaUrn {
+				return resolveMediaSpecDef(&mediaSpecs[i])
+			}
 		}
 	}
 
-	// FAIL HARD - media URN must be in media_specs
-	return nil, NewUnresolvableMediaUrnError(mediaUrn)
+	// 2. Try registry (checks bundled standard specs, then cache, then online)
+	if registry != nil {
+		storedSpec, err := registry.GetMediaSpec(mediaUrn)
+		if err == nil {
+			return &ResolvedMediaSpec{
+				SpecID:      mediaUrn,
+				MediaType:   storedSpec.MediaType,
+				ProfileURI:  storedSpec.ProfileURI,
+				Schema:      storedSpec.Schema,
+				Title:       storedSpec.Title,
+				Description: storedSpec.Description,
+				Validation:  storedSpec.Validation,
+				Metadata:    storedSpec.Metadata,
+				Extensions:  storedSpec.Extensions,
+			}, nil
+		}
+		// Registry lookup failed - log warning and continue to error
+		fmt.Printf("[WARN] Media URN '%s' not found in registry: %v - "+
+			"ensure it's defined in capns_dot_org/standard/media/\n",
+			mediaUrn, err)
+	}
+
+	// Fail - not found in any source
+	return nil, &MediaSpecError{
+		Message: fmt.Sprintf("cannot resolve media URN '%s' - not found in cap's media_specs or registry", mediaUrn),
+	}
 }
 
 // resolveMediaSpecDef resolves a MediaSpecDef to a ResolvedMediaSpec
@@ -449,10 +491,10 @@ func GetTypeFromResolvedMediaSpec(resolved *ResolvedMediaSpec) string {
 
 // GetMediaSpecFromCapUrn extracts media spec from a CapUrn using the 'out' tag
 // The 'out' tag contains a media URN
-func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs []MediaSpecDef) (*ResolvedMediaSpec, error) {
+func GetMediaSpecFromCapUrn(urn *CapUrn, mediaSpecs []MediaSpecDef, registry *MediaUrnRegistry) (*ResolvedMediaSpec, error) {
 	outUrn := urn.OutSpec()
 	if outUrn == "" {
 		return nil, errors.New("no 'out' tag found in cap URN")
 	}
-	return ResolveMediaUrn(outUrn, mediaSpecs)
+	return ResolveMediaUrn(outUrn, mediaSpecs, registry)
 }

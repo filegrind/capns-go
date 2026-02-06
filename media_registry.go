@@ -1,22 +1,21 @@
 package capns
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 )
 
 // StoredMediaSpec represents a media spec from the registry (matches Rust StoredMediaSpec)
 type StoredMediaSpec struct {
-	Urn         string                 `json:"urn"`
-	MediaType   string                 `json:"media_type"`
-	Title       string                 `json:"title"`
-	ProfileURI  string                 `json:"profile_uri,omitempty"`
-	Schema      interface{}            `json:"schema,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Validation  *MediaValidation       `json:"validation,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Extensions  []string               `json:"extensions,omitempty"`
+	Urn         string           `json:"urn"`
+	MediaType   string           `json:"media_type"`
+	Title       string           `json:"title"`
+	ProfileURI  string           `json:"profile_uri,omitempty"`
+	Schema      any              `json:"schema,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Validation  *MediaValidation `json:"validation,omitempty"`
+	Metadata    map[string]any   `json:"metadata,omitempty"`
+	Extensions  []string         `json:"extensions,omitempty"`
 }
 
 // ToMediaSpecDef converts StoredMediaSpec to MediaSpecDef
