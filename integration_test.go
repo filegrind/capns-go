@@ -1681,6 +1681,308 @@ func TestUnifiedArgumentsMultiple(t *testing.T) {
 	wg.Wait()
 }
 
+// TEST313: Test auto-chunking splits payload larger than max_chunk into CHUNK frames + END frame,
+// and host concatenated() reassembles the full original data
+func TestAutoChunkingReassembly(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// Simulate auto-chunking: 250 bytes with max_chunk=100
+		maxChunk := 100
+		data := make([]byte, 250)
+		for i := range data {
+			data[i] = byte(i % 256)
+		}
+
+		// Use WriteResponseWithChunking to do the splitting
+		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: maxChunk})
+		err = writer.WriteResponseWithChunking(frame.Id, data)
+		require.NoError(t, err)
+	}()
+
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", nil, "text/plain")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Collect all frames until END
+	var chunks []*cbor.Frame
+	for {
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		chunks = append(chunks, frame)
+		if frame.FrameType == cbor.FrameTypeEnd {
+			break
+		}
+	}
+
+	// Should have CHUNK + CHUNK + END (100 + 100 + 50)
+	assert.Equal(t, 3, len(chunks), "250 bytes / 100 max_chunk = 2 CHUNK + 1 END")
+	assert.Equal(t, cbor.FrameTypeChunk, chunks[0].FrameType)
+	assert.Equal(t, cbor.FrameTypeChunk, chunks[1].FrameType)
+	assert.Equal(t, cbor.FrameTypeEnd, chunks[2].FrameType)
+
+	// Reassemble and verify
+	var reassembled []byte
+	for _, c := range chunks {
+		reassembled = append(reassembled, c.Payload...)
+	}
+	expected := make([]byte, 250)
+	for i := range expected {
+		expected[i] = byte(i % 256)
+	}
+	assert.Equal(t, expected, reassembled, "concatenated chunks must match original data")
+
+	wg.Wait()
+}
+
+// TEST314: Test payload exactly equal to max_chunk produces single END frame (no CHUNK frames)
+func TestExactMaxChunkSingleEnd(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// Payload exactly max_chunk → single END
+		data := make([]byte, 100)
+		for i := range data {
+			data[i] = 0xAB
+		}
+		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: 100})
+		err = writer.WriteResponseWithChunking(frame.Id, data)
+		require.NoError(t, err)
+	}()
+
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", nil, "text/plain")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	frame, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeEnd, frame.FrameType, "exact max_chunk must produce single END")
+	assert.Equal(t, 100, len(frame.Payload))
+
+	wg.Wait()
+}
+
+// TEST315: Test payload of max_chunk + 1 produces exactly one CHUNK frame + one END frame
+func TestMaxChunkPlusOneSplitsIntoTwo(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// max_chunk=100, payload=101 → CHUNK(100) + END(1)
+		data := make([]byte, 101)
+		for i := range data {
+			data[i] = byte(i)
+		}
+		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: 100})
+		err = writer.WriteResponseWithChunking(frame.Id, data)
+		require.NoError(t, err)
+	}()
+
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", nil, "text/plain")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Should get exactly CHUNK + END
+	chunk, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeChunk, chunk.FrameType)
+	assert.Equal(t, 100, len(chunk.Payload))
+
+	end, err := reader.ReadFrame()
+	require.NoError(t, err)
+	assert.Equal(t, cbor.FrameTypeEnd, end.FrameType)
+	assert.Equal(t, 1, len(end.Payload))
+
+	// Verify reassembled data
+	reassembled := append(chunk.Payload, end.Payload...)
+	expected := make([]byte, 101)
+	for i := range expected {
+		expected[i] = byte(i)
+	}
+	assert.Equal(t, expected, reassembled)
+
+	wg.Wait()
+}
+
+// TEST316: Test that concatenated() returns full payload while final_payload() returns only last chunk
+func TestConcatenatedVsFinalPayloadDivergence(t *testing.T) {
+	chunks := []*ResponseChunk{
+		{Payload: []byte("AAAA"), Seq: 0, IsEof: false},
+		{Payload: []byte("BBBB"), Seq: 1, IsEof: false},
+		{Payload: []byte("CCCC"), Seq: 2, IsEof: true},
+	}
+
+	response := &PluginResponse{
+		Type:      PluginResponseTypeStreaming,
+		Streaming: chunks,
+	}
+
+	// concatenated() returns ALL chunk data joined
+	assert.Equal(t, "AAAABBBBCCCC", string(response.Concatenated()))
+
+	// FinalPayload() returns ONLY the last chunk's data
+	assert.Equal(t, "CCCC", string(response.FinalPayload()))
+
+	// They must NOT be equal (this is the divergence the large_payload bug exposed)
+	assert.NotEqual(t, response.Concatenated(), response.FinalPayload(),
+		"concatenated and final_payload must diverge for multi-chunk responses")
+}
+
+// TEST317: Test auto-chunking preserves data integrity across chunk boundaries for 3x max_chunk payload
+func TestChunkingDataIntegrity3x(t *testing.T) {
+	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
+	defer hostWrite.Close()
+	defer pluginRead.Close()
+	defer pluginWrite.Close()
+	defer hostRead.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	pattern := []byte("ABCDEFGHIJ")
+	expected := make([]byte, 300)
+	for i := range expected {
+		expected[i] = pattern[i%len(pattern)]
+	}
+
+	go func() {
+		defer wg.Done()
+		reader := cbor.NewFrameReader(pluginRead)
+		writer := cbor.NewFrameWriter(pluginWrite)
+
+		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		require.NoError(t, err)
+		reader.SetLimits(limits)
+		writer.SetLimits(limits)
+
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+
+		// 300 bytes with max_chunk=100 → CHUNK(100) + CHUNK(100) + END(100)
+		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: 100})
+		err = writer.WriteResponseWithChunking(frame.Id, expected)
+		require.NoError(t, err)
+	}()
+
+	reader := cbor.NewFrameReader(hostRead)
+	writer := cbor.NewFrameWriter(hostWrite)
+
+	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	require.NoError(t, err)
+	reader.SetLimits(limits)
+	writer.SetLimits(limits)
+
+	requestID := cbor.NewMessageIdRandom()
+	request := cbor.NewReq(requestID, "cap:op=test", nil, "text/plain")
+	err = writer.WriteFrame(request)
+	require.NoError(t, err)
+
+	// Collect all frames
+	var frames []*cbor.Frame
+	for {
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		frames = append(frames, frame)
+		if frame.FrameType == cbor.FrameTypeEnd {
+			break
+		}
+	}
+
+	assert.Equal(t, 3, len(frames), "300/100 = 2 CHUNK + 1 END")
+
+	var reassembled []byte
+	for _, f := range frames {
+		reassembled = append(reassembled, f.Payload...)
+	}
+	assert.Equal(t, 300, len(reassembled))
+	assert.Equal(t, expected, reassembled, "pattern must be preserved across chunk boundaries")
+
+	wg.Wait()
+}
+
 // Helper functions
 
 // DecodeCBORValue decodes CBOR bytes to any interface{}
