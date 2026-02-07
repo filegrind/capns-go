@@ -195,7 +195,7 @@ func stringPtr(s string) *string {
 }
 
 // ============================================================================
-// CapCube Tests
+// CapBlock Tests
 // ============================================================================
 
 // Helper to create a Cap for testing
@@ -212,8 +212,8 @@ func makeCap(urn string, title string) *Cap {
 	}
 }
 
-// TEST121: Test CapCube selects more specific cap over less specific regardless of registry order
-func TestCapCubeMoreSpecificWins(t *testing.T) {
+// TEST121: Test CapBlock selects more specific cap over less specific regardless of registry order
+func TestCapBlockMoreSpecificWins(t *testing.T) {
 	// This is the key test: provider has less specific cap, plugin has more specific
 	// The more specific one should win regardless of registry order
 
@@ -237,7 +237,7 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	pluginRegistry.RegisterCapSet("plugin", pluginHost, []*Cap{pluginCap})
 
 	// Create composite with provider first (normally would have priority on ties)
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("providers", providerRegistry)
 	composite.AddRegistry("plugins", pluginRegistry)
 
@@ -262,8 +262,8 @@ func TestCapCubeMoreSpecificWins(t *testing.T) {
 	}
 }
 
-// TEST122: Test CapCube breaks specificity ties by first registered registry
-func TestCapCubeTieGoesToFirst(t *testing.T) {
+// TEST122: Test CapBlock breaks specificity ties by first registered registry
+func TestCapBlockTieGoesToFirst(t *testing.T) {
 	// When specificity is equal, first registry wins
 
 	registry1 := NewCapMatrix()
@@ -278,7 +278,7 @@ func TestCapCubeTieGoesToFirst(t *testing.T) {
 	cap2 := makeCap(matrixTestUrn("ext=pdf;op=generate"), "Registry 2 Cap")
 	registry2.RegisterCapSet("host2", host2, []*Cap{cap2})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("first", registry1)
 	composite.AddRegistry("second", registry2)
 
@@ -296,8 +296,8 @@ func TestCapCubeTieGoesToFirst(t *testing.T) {
 	}
 }
 
-// TEST123: Test CapCube polls all registries to find most specific match
-func TestCapCubePollsAll(t *testing.T) {
+// TEST123: Test CapBlock polls all registries to find most specific match
+func TestCapBlockPollsAll(t *testing.T) {
 	// Test that all registries are polled
 
 	registry1 := NewCapMatrix()
@@ -319,7 +319,7 @@ func TestCapCubePollsAll(t *testing.T) {
 	cap3 := makeCap(matrixTestUrn("ext=pdf;format=thumbnail;op=generate"), "Registry 3")
 	registry3.RegisterCapSet("host3", host3, []*Cap{cap3})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("r1", registry1)
 	composite.AddRegistry("r2", registry2)
 	composite.AddRegistry("r3", registry3)
@@ -335,11 +335,11 @@ func TestCapCubePollsAll(t *testing.T) {
 	}
 }
 
-// TEST124: Test CapCube returns error when no registries match the request
-func TestCapCubeNoMatch(t *testing.T) {
+// TEST124: Test CapBlock returns error when no registries match the request
+func TestCapBlockNoMatch(t *testing.T) {
 	registry := NewCapMatrix()
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("empty", registry)
 
 	_, err := composite.FindBestCapSet(matrixTestUrn("op=nonexistent"))
@@ -355,8 +355,8 @@ func TestCapCubeNoMatch(t *testing.T) {
 	}
 }
 
-// TEST125: Test CapCube prefers specific plugin over generic provider fallback
-func TestCapCubeFallbackScenario(t *testing.T) {
+// TEST125: Test CapBlock prefers specific plugin over generic provider fallback
+func TestCapBlockFallbackScenario(t *testing.T) {
 	// Test the exact scenario from the user's issue:
 	// Provider: generic fallback with ext=* (can handle any file type)
 	// Plugin:   PDF-specific handler
@@ -383,7 +383,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 	pluginRegistry.RegisterCapSet("pdf_plugin", pluginHost, []*Cap{pluginCap})
 
 	// Providers first (would win on tie)
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("providers", providerRegistry)
 	composite.AddRegistry("plugins", pluginRegistry)
 
@@ -424,7 +424,7 @@ func TestCapCubeFallbackScenario(t *testing.T) {
 }
 
 // TEST126: Test composite can method returns CapCaller for capability execution
-func TestCapCubeCanMethod(t *testing.T) {
+func TestCapBlockCanMethod(t *testing.T) {
 	// Test the can() method that returns a CapCaller
 
 	providerRegistry := NewCapMatrix()
@@ -433,7 +433,7 @@ func TestCapCubeCanMethod(t *testing.T) {
 	providerCap := makeCap(matrixTestUrn("ext=pdf;op=generate"), "Test Provider")
 	providerRegistry.RegisterCapSet("test_provider", providerHost, []*Cap{providerCap})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("providers", providerRegistry)
 
 	// Test can() returns a CapCaller
@@ -454,8 +454,8 @@ func TestCapCubeCanMethod(t *testing.T) {
 	}
 }
 
-func TestCapCubeRegistryManagement(t *testing.T) {
-	composite := NewCapCube()
+func TestCapBlockRegistryManagement(t *testing.T) {
+	composite := NewCapBlock()
 
 	registry1 := NewCapMatrix()
 	registry2 := NewCapMatrix()
@@ -526,7 +526,7 @@ func TestCapGraphBasicConstruction(t *testing.T) {
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("converters", registry)
 
 	graph := composite.Graph()
@@ -565,7 +565,7 @@ func TestCapGraphOutgoingIncoming(t *testing.T) {
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("converters", registry)
 
 	graph := composite.Graph()
@@ -601,7 +601,7 @@ func TestCapGraphCanConvert(t *testing.T) {
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("converters", registry)
 
 	graph := composite.Graph()
@@ -645,7 +645,7 @@ func TestCapGraphFindPath(t *testing.T) {
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("converters", registry)
 
 	graph := composite.Graph()
@@ -705,7 +705,7 @@ func TestCapGraphFindAllPaths(t *testing.T) {
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2, cap3})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("converters", registry)
 
 	graph := composite.Graph()
@@ -752,7 +752,7 @@ func TestCapGraphGetDirectEdges(t *testing.T) {
 	registry1.RegisterCapSet("converter1", host1, []*Cap{cap1})
 	registry2.RegisterCapSet("converter2", host2, []*Cap{cap2})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("reg1", registry1)
 	composite.AddRegistry("reg2", registry2)
 
@@ -788,7 +788,7 @@ func TestCapGraphStats(t *testing.T) {
 
 	registry.RegisterCapSet("converter", host, []*Cap{cap1, cap2, cap3})
 
-	composite := NewCapCube()
+	composite := NewCapBlock()
 	composite.AddRegistry("converters", registry)
 
 	graph := composite.Graph()
@@ -815,9 +815,9 @@ func TestCapGraphStats(t *testing.T) {
 	}
 }
 
-// TEST133: Test CapCube graph integration with multiple registries and conversion paths
-func TestCapGraphWithCapCube(t *testing.T) {
-	// Integration test: build graph from CapCube
+// TEST133: Test CapBlock graph integration with multiple registries and conversion paths
+func TestCapGraphWithCapBlock(t *testing.T) {
+	// Integration test: build graph from CapBlock
 	providerRegistry := NewCapMatrix()
 	pluginRegistry := NewCapMatrix()
 
@@ -832,7 +832,7 @@ func TestCapGraphWithCapCube(t *testing.T) {
 	pluginCap := makeGraphCap(MediaString, MediaObject, "Plugin String to Object")
 	pluginRegistry.RegisterCapSet("plugin", pluginHost, []*Cap{pluginCap})
 
-	cube := NewCapCube()
+	cube := NewCapBlock()
 	cube.AddRegistry("providers", providerRegistry)
 	cube.AddRegistry("plugins", pluginRegistry)
 

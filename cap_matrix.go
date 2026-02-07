@@ -185,7 +185,7 @@ func (r *CapMatrix) Clear() {
 }
 
 // ============================================================================
-// CapCube - Composite Registry
+// CapBlock - Composite Registry
 // ============================================================================
 
 // BestCapSetMatch represents the result of finding the best match across registries
@@ -195,46 +195,46 @@ type BestCapSetMatch struct {
 	RegistryName string // The name of the registry that provided this match
 }
 
-// registryEntry holds a named registry for CapCube
+// registryEntry holds a named registry for CapBlock
 type registryEntry struct {
 	name     string
 	registry *CapMatrix
 }
 
-// CapCube is a composite registry that wraps multiple CapMatrix instances
+// CapBlock is a composite registry that wraps multiple CapMatrix instances
 // and finds the best match across all of them by specificity.
 // When multiple registries can handle a request, this registry compares
 // specificity scores and returns the most specific match.
 // On tie, defaults to the first registry that was added (priority order).
-type CapCube struct {
+type CapBlock struct {
 	registries []registryEntry
 	mu         sync.RWMutex
 }
 
-// CompositeCapSet wraps CapCube registries and implements CapSet interface
+// CompositeCapSet wraps CapBlock registries and implements CapSet interface
 // for execution delegation to the best matching registry
 type CompositeCapSet struct {
 	registries []registryEntry
 	mu         *sync.RWMutex
 }
 
-// NewCapCube creates a new empty composite registry
-func NewCapCube() *CapCube {
-	return &CapCube{
+// NewCapBlock creates a new empty composite registry
+func NewCapBlock() *CapBlock {
+	return &CapBlock{
 		registries: make([]registryEntry, 0),
 	}
 }
 
 // AddRegistry adds a child registry with a name.
 // Registries are checked in order of addition for tie-breaking.
-func (c *CapCube) AddRegistry(name string, registry *CapMatrix) {
+func (c *CapBlock) AddRegistry(name string, registry *CapMatrix) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.registries = append(c.registries, registryEntry{name: name, registry: registry})
 }
 
 // RemoveRegistry removes a child registry by name and returns it
-func (c *CapCube) RemoveRegistry(name string) *CapMatrix {
+func (c *CapBlock) RemoveRegistry(name string) *CapMatrix {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for i, entry := range c.registries {
@@ -248,7 +248,7 @@ func (c *CapCube) RemoveRegistry(name string) *CapMatrix {
 }
 
 // GetRegistry returns a child registry by name
-func (c *CapCube) GetRegistry(name string) *CapMatrix {
+func (c *CapBlock) GetRegistry(name string) *CapMatrix {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for _, entry := range c.registries {
@@ -260,7 +260,7 @@ func (c *CapCube) GetRegistry(name string) *CapMatrix {
 }
 
 // GetRegistryNames returns the names of all child registries
-func (c *CapCube) GetRegistryNames() []string {
+func (c *CapBlock) GetRegistryNames() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	names := make([]string, len(c.registries))
@@ -274,7 +274,7 @@ func (c *CapCube) GetRegistryNames() []string {
 // This is the main entry point for capability lookup - preserves the can().call() pattern.
 // Finds the best (most specific) match across all child registries and returns
 // a CapCaller ready to execute the capability.
-func (c *CapCube) Can(capUrn string) (*CapCaller, error) {
+func (c *CapBlock) Can(capUrn string) (*CapCaller, error) {
 	// Find the best match to get the cap definition
 	bestMatch, err := c.FindBestCapSet(capUrn)
 	if err != nil {
@@ -299,7 +299,7 @@ func (c *CapCube) Can(capUrn string) (*CapCaller, error) {
 // This method polls all registries and compares their best matches by specificity.
 // Returns the cap definition and specificity of the best match.
 // On specificity tie, returns the match from the first registry (priority order).
-func (c *CapCube) FindBestCapSet(requestUrn string) (*BestCapSetMatch, error) {
+func (c *CapBlock) FindBestCapSet(requestUrn string) (*BestCapSetMatch, error) {
 	request, err := NewCapUrnFromString(requestUrn)
 	if err != nil {
 		return nil, NewInvalidUrnError(requestUrn, err.Error())
@@ -338,14 +338,14 @@ func (c *CapCube) FindBestCapSet(requestUrn string) (*BestCapSetMatch, error) {
 }
 
 // AcceptsRequest checks if any registry can handle the specified capability
-func (c *CapCube) AcceptsRequest(requestUrn string) bool {
+func (c *CapBlock) AcceptsRequest(requestUrn string) bool {
 	_, err := c.FindBestCapSet(requestUrn)
 	return err == nil
 }
 
 // findBestInRegistry finds the best match within a single registry
 // Returns (Cap, specificity) for the best match, or (nil, 0) if no match
-func (c *CapCube) findBestInRegistry(registry *CapMatrix, request *CapUrn) (*Cap, int) {
+func (c *CapBlock) findBestInRegistry(registry *CapMatrix, request *CapUrn) (*Cap, int) {
 	var bestCap *Cap
 	bestSpecificity := -1
 
@@ -795,7 +795,7 @@ func (g *CapGraph) Stats() CapGraphStats {
 
 // Graph builds a directed graph from all capabilities across all registries.
 // This enables discovering conversion paths between different media formats.
-func (c *CapCube) Graph() *CapGraph {
+func (c *CapBlock) Graph() *CapGraph {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
