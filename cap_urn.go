@@ -1,5 +1,5 @@
 // Package capns provides the fundamental cap URN system used across
-// all FGND plugins and providers. It defines the formal structure for cap
+// all MACINA plugins and providers. It defines the formal structure for cap
 // identifiers with flat tag-based naming, pattern matching, and graded specificity.
 //
 // Special pattern values (from tagged-urn):
