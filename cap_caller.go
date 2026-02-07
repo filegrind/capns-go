@@ -136,7 +136,7 @@ func NewCapCaller(cap string, capSet CapSet, capDefinition *Cap) *CapCaller {
 	}
 }
 
-// Call executes the cap with unified arguments identified by media_urn.
+// Call executes the cap with arguments identified by media_urn.
 // Validates arguments against cap definition before execution.
 func (cc *CapCaller) Call(
 	ctx context.Context,
@@ -217,7 +217,7 @@ func (cc *CapCaller) resolveOutputSpec(registry *MediaUrnRegistry) (*ResolvedMed
 	return resolved, nil
 }
 
-// validateArguments validates unified arguments against cap definition.
+// validateArguments validates arguments against cap definition.
 // Checks that all required arguments are provided (by media_urn) and rejects unknown arguments.
 func (cc *CapCaller) validateArguments(arguments []CapArgumentValue) error {
 	argDefs := cc.capDefinition.GetArgs()

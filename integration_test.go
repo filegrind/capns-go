@@ -1252,7 +1252,7 @@ func TestHostInitiatedHeartbeatNoPingPong(t *testing.T) {
 }
 
 // TEST297: Test host call with unified CBOR arguments sends correct content_type and payload
-func TestUnifiedArgumentsRoundtrip(t *testing.T) {
+func TestArgumentsRoundtrip(t *testing.T) {
 	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
 	defer hostWrite.Close()
 	defer pluginRead.Close()
@@ -1279,7 +1279,7 @@ func TestUnifiedArgumentsRoundtrip(t *testing.T) {
 
 		// Verify content type
 		require.NotNil(t, frame.ContentType)
-		assert.Equal(t, "application/cbor", *frame.ContentType, "unified arguments must use application/cbor")
+		assert.Equal(t, "application/cbor", *frame.ContentType, "arguments must use application/cbor")
 
 		// Parse CBOR arguments
 		var args []map[string]interface{}
@@ -1305,7 +1305,7 @@ func TestUnifiedArgumentsRoundtrip(t *testing.T) {
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
 
-	// Create unified arguments
+	// Create arguments
 	args := []CapArgumentValue{
 		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
 	}
@@ -1609,8 +1609,8 @@ func TestRequestAfterShutdown(t *testing.T) {
 	assert.Error(t, err, "must fail on closed connection")
 }
 
-// TEST303: Test multiple unified arguments are correctly serialized in CBOR payload
-func TestUnifiedArgumentsMultiple(t *testing.T) {
+// TEST303: Test multiple arguments are correctly serialized in CBOR payload
+func TestArgumentsMultiple(t *testing.T) {
 	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
 	defer hostWrite.Close()
 	defer pluginRead.Close()
@@ -1657,7 +1657,7 @@ func TestUnifiedArgumentsMultiple(t *testing.T) {
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
 
-	// Create multiple unified arguments
+	// Create multiple arguments
 	args := []CapArgumentValue{
 		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
 		NewCapArgumentValue("media:pdf;bytes", []byte{0x89, 0x50, 0x4E, 0x47}),

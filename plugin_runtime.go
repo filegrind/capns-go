@@ -208,7 +208,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 				emitter := newThreadSafeEmitter(writer, requestID)
 				peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests)
 
-				// Extract effective payload from unified arguments if content_type is CBOR
+				// Extract effective payload from arguments if content_type is CBOR
 				payload, err := extractEffectivePayload(rawPayload, contentType, capUrn)
 				if err != nil {
 					errFrame := cbor.NewErr(requestID, "PAYLOAD_ERROR", err.Error())
@@ -450,10 +450,10 @@ func (pr *PluginRuntime) printCapHelp(cap *Cap) {
 }
 
 // extractEffectivePayload extracts the effective payload from a REQ frame.
-// When content_type is "application/cbor", decodes the CBOR unified arguments
+// When content_type is "application/cbor", decodes the CBOR arguments
 // and finds the argument whose media_urn semantically matches the cap's input spec.
 func extractEffectivePayload(payload []byte, contentType string, capUrn string) ([]byte, error) {
-	// Not CBOR unified arguments - return raw payload
+	// Not CBOR arguments - return raw payload
 	if contentType != "application/cbor" {
 		return payload, nil
 	}
@@ -522,7 +522,7 @@ func extractEffectivePayload(payload []byte, contentType string, capUrn string) 
 		}
 	}
 
-	return nil, fmt.Errorf("no argument matching in_spec '%s' found in CBOR unified arguments", expectedInSpec)
+	return nil, fmt.Errorf("no argument matching in_spec '%s' found in CBOR arguments", expectedInSpec)
 }
 
 // toBytes converts a CBOR-decoded value to []byte
@@ -657,7 +657,7 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<
 	// Register the pending request before sending (use string key since MessageId is not comparable)
 	p.pendingRequests.Store(requestID.ToString(), &pendingPeerRequest{sender: sender})
 
-	// Serialize arguments as CBOR unified arguments:
+	// Serialize arguments as CBOR arguments:
 	// Array of maps, each with "media_urn" (text) and "value" (bytes)
 	cborArgs := make([]interface{}, len(arguments))
 	for i, arg := range arguments {
