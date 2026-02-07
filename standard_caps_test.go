@@ -50,7 +50,7 @@ func TestLlmConversationUrnSpecs(t *testing.T) {
 	require.NoError(t, err, "in_spec must parse")
 	expectedIn, err := taggedurn.NewTaggedUrnFromString(MediaString)
 	require.NoError(t, err, "MediaString must parse")
-	matches, err := inSpec.Matches(expectedIn)
+	matches, err := inSpec.ConformsTo(expectedIn)
 	require.NoError(t, err)
 	assert.True(t, matches,
 		"in_spec '%s' must match MediaString '%s'", urn.InSpec(), MediaString)
@@ -59,7 +59,7 @@ func TestLlmConversationUrnSpecs(t *testing.T) {
 	require.NoError(t, err, "out_spec must parse")
 	expectedOut, err := taggedurn.NewTaggedUrnFromString(MediaLlmInferenceOutput)
 	require.NoError(t, err, "MediaLlmInferenceOutput must parse")
-	matches, err = outSpec.Matches(expectedOut)
+	matches, err = outSpec.ConformsTo(expectedOut)
 	require.NoError(t, err)
 	assert.True(t, matches,
 		"out_spec '%s' must match '%s'", urn.OutSpec(), MediaLlmInferenceOutput)

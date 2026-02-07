@@ -383,12 +383,12 @@ func (c *Cap) MatchesRequest(request string) bool {
 	if err != nil {
 		return false
 	}
-	return c.Urn.CanHandle(requestId)
+	return c.Urn.Accepts(requestId)
 }
 
-// CanHandleRequest checks if this cap can handle a request
-func (c *Cap) CanHandleRequest(request *CapUrn) bool {
-	return c.Urn.CanHandle(request)
+// AcceptsRequest checks if this cap accepts a request
+func (c *Cap) AcceptsRequest(request *CapUrn) bool {
+	return c.Urn.Accepts(request)
 }
 
 // IsMoreSpecificThan checks if this cap is more specific than another

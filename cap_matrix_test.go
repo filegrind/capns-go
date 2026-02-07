@@ -62,16 +62,13 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 		t.Errorf("Expected 1 host, got %d", len(sets))
 	}
 
-	// Test that request with extra tags DOES match (cap missing tag = wildcard)
+	// Test that request with extra tags does NOT match (cap missing tag is NOT a wildcard)
 	// Cap registered: op=test;basic
 	// Request: model=gpt-4;op=test;basic
-	// Cap missing model tag → treated as wildcard → MATCH
-	sets2, err := registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
-	if err != nil {
-		t.Errorf("Expected match (cap missing model tag = wildcard), got error: %v", err)
-	}
-	if len(sets2) != 1 {
-		t.Errorf("Expected 1 host (wildcard match), got %d", len(sets2))
+	// Cap missing model tag → NO MATCH (must use model=* to accept any model)
+	_, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
+	if err == nil {
+		t.Error("Expected error (cap missing model tag is NOT a wildcard)")
 	}
 
 	// Test no match (different direction specs)
@@ -155,12 +152,12 @@ func TestInvalidUrnHandling(t *testing.T) {
 	}
 }
 
-// TEST120: Test can_handle checks if registry can handle a capability request
-func TestCanHandle(t *testing.T) {
+// TEST120: Test accepts_request checks if registry can handle a capability request
+func TestAcceptsRequest(t *testing.T) {
 	registry := NewCapMatrix()
 
 	// Empty registry
-	if registry.CanHandle(matrixTestUrn("op=test")) {
+	if registry.AcceptsRequest(matrixTestUrn("op=test")) {
 		t.Error("Empty registry should not handle any capability")
 	}
 
@@ -178,16 +175,16 @@ func TestCanHandle(t *testing.T) {
 
 	registry.RegisterCapSet("test", host, []*Cap{cap})
 
-	if !registry.CanHandle(matrixTestUrn("op=test")) {
+	if !registry.AcceptsRequest(matrixTestUrn("op=test")) {
 		t.Error("Registry should handle registered capability")
 	}
 	// Cap registered: op=test
 	// Request: extra=param;op=test
-	// Cap missing extra → wildcard → SHOULD MATCH
-	if !registry.CanHandle(matrixTestUrn("extra=param;op=test")) {
-		t.Error("Registry SHOULD handle capability (cap missing extra tag = wildcard)")
+	// Cap missing extra → NOT a wildcard → SHOULD NOT MATCH
+	if registry.AcceptsRequest(matrixTestUrn("extra=param;op=test")) {
+		t.Error("Registry should NOT handle capability (cap missing extra tag is NOT a wildcard)")
 	}
-	if registry.CanHandle(matrixTestUrn("op=different")) {
+	if registry.AcceptsRequest(matrixTestUrn("op=different")) {
 		t.Error("Registry should not handle unregistered capability")
 	}
 }
@@ -448,12 +445,12 @@ func TestCapCubeCanMethod(t *testing.T) {
 		t.Error("Expected CapCaller, got nil")
 	}
 
-	// Verify we got the right cap via CanHandle checks
-	if !composite.CanHandle(matrixTestUrn("ext=pdf;op=generate")) {
-		t.Error("Expected CanHandle to return true for matching cap")
+	// Verify we got the right cap via AcceptsRequest checks
+	if !composite.AcceptsRequest(matrixTestUrn("ext=pdf;op=generate")) {
+		t.Error("Expected AcceptsRequest to return true for matching cap")
 	}
-	if composite.CanHandle(matrixTestUrn("op=nonexistent")) {
-		t.Error("Expected CanHandle to return false for non-matching cap")
+	if composite.AcceptsRequest(matrixTestUrn("op=nonexistent")) {
+		t.Error("Expected AcceptsRequest to return false for non-matching cap")
 	}
 }
 

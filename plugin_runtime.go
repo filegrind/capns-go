@@ -108,7 +108,7 @@ func (pr *PluginRuntime) FindHandler(capUrn string) HandlerFunc {
 		if err != nil {
 			continue
 		}
-		if patternUrn.CanHandle(requestUrn) {
+		if patternUrn.Accepts(requestUrn) {
 			return handler
 		}
 	}

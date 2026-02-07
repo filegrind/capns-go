@@ -359,11 +359,11 @@ func (c *CapUrn) WithoutTag(key string) *CapUrn {
 	return &CapUrn{inSpec: c.inSpec, outSpec: c.outSpec, tags: newTags}
 }
 
-// Matches checks if this cap (instance) matches a request based on tag compatibility
+// Accepts checks if this cap (handler) accepts a request based on tag compatibility.
 //
-// Direction (in/out) uses `TaggedUrn.Matches()` semantics:
-//   - Input: `request_input.Matches(&cap_input)` — does request's data satisfy cap's requirement?
-//   - Output: `cap_output.Matches(&request_output)` — does cap's output satisfy what request expects?
+// Direction (in/out) uses TaggedUrn semantics:
+//   - Input: capIn.Accepts(requestIn) -- cap's input pattern accepts request's input data
+//   - Output: capOut.ConformsTo(requestOut) -- cap's output conforms to what request expects
 //
 // For other tags:
 //   - (missing) or K=?: no constraint - matches anything
@@ -372,13 +372,13 @@ func (c *CapUrn) WithoutTag(key string) *CapUrn {
 //   - K=v: must-have-exact - instance must have this key with exact value v
 //
 // Special values work symmetrically on both instance and pattern sides.
-func (c *CapUrn) Matches(request *CapUrn) bool {
+func (c *CapUrn) Accepts(request *CapUrn) bool {
 	if request == nil {
 		return true
 	}
 
 	// Direction specs: TaggedUrn semantic matching
-	// Check in_urn: request's input must satisfy cap's input requirement
+	// Check in_urn: cap's input pattern accepts request's input data
 	if c.inSpec != "*" && request.inSpec != "*" {
 		capIn, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
 		if err != nil {
@@ -388,16 +388,16 @@ func (c *CapUrn) Matches(request *CapUrn) bool {
 		if err != nil {
 			panic(fmt.Sprintf("CU2: request in_spec '%s' is not a valid media URN: %v", request.inSpec, err))
 		}
-		matches, err := requestIn.Matches(capIn)
+		accepts, err := capIn.Accepts(requestIn)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec matching: %v", err))
 		}
-		if !matches {
+		if !accepts {
 			return false
 		}
 	}
 
-	// Check out_urn: cap's output must satisfy what the request expects
+	// Check out_urn: cap's output conforms to what the request expects
 	if c.outSpec != "*" && request.outSpec != "*" {
 		capOut, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
 		if err != nil {
@@ -407,11 +407,11 @@ func (c *CapUrn) Matches(request *CapUrn) bool {
 		if err != nil {
 			panic(fmt.Sprintf("CU2: request out_spec '%s' is not a valid media URN: %v", request.outSpec, err))
 		}
-		matches, err := capOut.Matches(requestOut)
+		conforms, err := capOut.ConformsTo(requestOut)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec matching: %v", err))
 		}
-		if !matches {
+		if !conforms {
 			return false
 		}
 	}
@@ -445,8 +445,49 @@ func (c *CapUrn) Matches(request *CapUrn) bool {
 	return true
 }
 
-// valuesMatch checks if instance value matches pattern constraint
-// Uses the same semantics as tagged-urn matching
+// ConformsTo checks if this cap conforms to another cap's constraints.
+// Equivalent to cap.Accepts(self).
+func (c *CapUrn) ConformsTo(cap *CapUrn) bool {
+	return cap.Accepts(c)
+}
+
+// AcceptsStr checks if this cap (handler) accepts a request given as a string.
+func (c *CapUrn) AcceptsStr(requestStr string) bool {
+	request, err := NewCapUrnFromString(requestStr)
+	if err != nil {
+		return false
+	}
+	return c.Accepts(request)
+}
+
+// valuesMatch checks if instance value matches pattern constraint.
+// Uses the same semantics as tagged-urn matching.
+//
+// Full cross-product truth table (instance = cap, pattern = request):
+// | Instance | Pattern | Match? | Reason |
+// |----------|---------|--------|--------|
+// | (none)   | (none)  | OK     | No constraint either side |
+// | (none)   | K=?     | OK     | Pattern doesn't care |
+// | (none)   | K=!     | OK     | Pattern wants absent, it is |
+// | (none)   | K=*     | NO     | Pattern wants present |
+// | (none)   | K=v     | NO     | Instance missing, pattern wants exact value -- NO MATCH |
+// | K=?      | (any)   | OK     | Instance doesn't care |
+// | K=!      | (none)  | OK     | Symmetric: absent |
+// | K=!      | K=?     | OK     | Pattern doesn't care |
+// | K=!      | K=!     | OK     | Both want absent |
+// | K=!      | K=*     | NO     | Conflict: absent vs present |
+// | K=!      | K=v     | NO     | Conflict: absent vs value |
+// | K=*      | (none)  | OK     | Pattern has no constraint |
+// | K=*      | K=?     | OK     | Pattern doesn't care |
+// | K=*      | K=!     | NO     | Conflict: present vs absent |
+// | K=*      | K=*     | OK     | Both accept any presence |
+// | K=*      | K=v     | OK     | Instance accepts any, v is fine |
+// | K=v      | (none)  | OK     | Pattern has no constraint |
+// | K=v      | K=?     | OK     | Pattern doesn't care |
+// | K=v      | K=!     | NO     | Conflict: value vs absent |
+// | K=v      | K=*     | OK     | Pattern wants any, v satisfies |
+// | K=v      | K=v     | OK     | Exact match |
+// | K=v      | K=w     | NO     | Value mismatch (v != w) |
 func valuesMatch(inst, patt *string) bool {
 	// Pattern has no constraint (no entry or explicit ?)
 	if patt == nil || *patt == "?" {
@@ -484,20 +525,12 @@ func valuesMatch(inst, patt *string) bool {
 
 	// Pattern: exact value
 	if inst == nil {
-		// Cap (inst) is missing this tag - treat as wildcard (can handle any value)
-		// This matches Rust semantics: missing tag in cap = wildcard
-		// Enables fallback scenarios where generic cap handles specific requests
-		return true
+		return false // Instance missing, pattern wants exact value -- NO MATCH
 	}
 	if *inst == "*" {
 		return true // Instance accepts any, pattern's value is fine
 	}
 	return *inst == *patt // Both have values, must match exactly
-}
-
-// CanHandle checks if this cap can handle a request
-func (c *CapUrn) CanHandle(request *CapUrn) bool {
-	return c.Matches(request)
 }
 
 // Specificity returns the specificity score for cap matching.
@@ -571,7 +604,7 @@ func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
 		return true
 	}
 
-	// Check inSpec compatibility: either direction of Matches succeeds
+	// Check inSpec compatibility: either direction of ConformsTo succeeds
 	if c.inSpec != "*" && other.inSpec != "*" {
 		selfIn, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
 		if err != nil {
@@ -581,11 +614,11 @@ func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
 		if err != nil {
 			panic(fmt.Sprintf("CU2: other in_spec '%s' is not a valid media URN: %v", other.inSpec, err))
 		}
-		fwd, err := selfIn.Matches(otherIn)
+		fwd, err := selfIn.ConformsTo(otherIn)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
 		}
-		rev, err := otherIn.Matches(selfIn)
+		rev, err := otherIn.ConformsTo(selfIn)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
 		}
@@ -604,11 +637,11 @@ func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
 		if err != nil {
 			panic(fmt.Sprintf("CU2: other out_spec '%s' is not a valid media URN: %v", other.outSpec, err))
 		}
-		fwd, err := selfOut.Matches(otherOut)
+		fwd, err := selfOut.ConformsTo(otherOut)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
 		}
-		rev, err := otherOut.Matches(selfOut)
+		rev, err := otherOut.ConformsTo(selfOut)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
 		}
@@ -775,13 +808,13 @@ func (c *CapUrn) UnmarshalJSON(data []byte) error {
 // CapMatcher provides utility methods for matching caps
 type CapMatcher struct{}
 
-// FindBestMatch finds the most specific cap that can handle a request
+// FindBestMatch finds the most specific cap that accepts a request
 func (m *CapMatcher) FindBestMatch(caps []*CapUrn, request *CapUrn) *CapUrn {
 	var best *CapUrn
 	bestSpecificity := -1
 
 	for _, cap := range caps {
-		if cap.CanHandle(request) {
+		if cap.Accepts(request) {
 			specificity := cap.Specificity()
 			if specificity > bestSpecificity {
 				best = cap
@@ -793,12 +826,12 @@ func (m *CapMatcher) FindBestMatch(caps []*CapUrn, request *CapUrn) *CapUrn {
 	return best
 }
 
-// FindAllMatches finds all caps that can handle a request, sorted by specificity
+// FindAllMatches finds all caps that accept a request, sorted by specificity
 func (m *CapMatcher) FindAllMatches(caps []*CapUrn, request *CapUrn) []*CapUrn {
 	var matches []*CapUrn
 
 	for _, cap := range caps {
-		if cap.CanHandle(request) {
+		if cap.Accepts(request) {
 			matches = append(matches, cap)
 		}
 	}

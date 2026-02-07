@@ -198,11 +198,17 @@ func TestMediaUrnMatching(t *testing.T) {
 	generic, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
 
-	// Specific can handle generic requests (has all required tags)
-	assert.True(t, specific.Matches(generic))
+	// Specific pattern does NOT accept generic instance (generic missing textable and form)
+	assert.False(t, specific.Accepts(generic))
 
-	// Generic might not handle specific requests (depends on implementation)
-	// This tests the direction: handler.Matches(request)
+	// Generic pattern DOES accept specific instance (generic has no constraints on extra tags)
+	assert.True(t, generic.Accepts(specific))
+
+	// Specific instance conforms to generic pattern
+	assert.True(t, specific.ConformsTo(generic))
+
+	// Generic instance does NOT conform to specific pattern
+	assert.False(t, generic.ConformsTo(specific))
 }
 
 // TEST075: Test matching with implicit wildcards
@@ -214,7 +220,7 @@ func TestMediaUrnImplicitWildcards(t *testing.T) {
 	require.NoError(t, err)
 
 	// Handler with fewer tags can match requests with more tags (wildcard semantics)
-	assert.True(t, handler.Matches(request))
+	assert.True(t, handler.Accepts(request))
 }
 
 // TEST076: Test specificity increases with more tags
@@ -258,11 +264,11 @@ func TestMediaUrnMatchingBehavior(t *testing.T) {
 	require.NoError(t, err)
 
 	// Different base types should not match
-	assert.False(t, void.Matches(string))
-	assert.False(t, string.Matches(bytes))
-	assert.False(t, bytes.Matches(void))
+	assert.False(t, void.Accepts(string))
+	assert.False(t, string.Accepts(bytes))
+	assert.False(t, bytes.Accepts(void))
 
 	// Same type should match
 	void2, _ := NewMediaUrnFromString("media:void")
-	assert.True(t, void.Matches(void2))
+	assert.True(t, void.Accepts(void2))
 }

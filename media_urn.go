@@ -77,13 +77,26 @@ func (m *MediaUrn) IsJson() bool {
 	return m.HasTag("json")
 }
 
-// Matches checks if this MediaUrn can handle the given request
-// Uses TaggedUrn semantics: fewer tags = more general (wildcard)
-func (m *MediaUrn) Matches(other *MediaUrn) bool {
-	if m.inner == nil || other == nil || other.inner == nil {
+// Accepts checks if this MediaUrn (pattern/handler) accepts the given instance (request).
+// Uses TaggedUrn.Accepts semantics: pattern accepts instance if instance satisfies pattern's constraints.
+func (m *MediaUrn) Accepts(instance *MediaUrn) bool {
+	if m.inner == nil || instance == nil || instance.inner == nil {
 		return false
 	}
-	match, err := m.inner.Matches(other.inner)
+	match, err := m.inner.Accepts(instance.inner)
+	if err != nil {
+		return false
+	}
+	return match
+}
+
+// ConformsTo checks if this MediaUrn (instance) conforms to the given pattern's constraints.
+// Equivalent to pattern.Accepts(self).
+func (m *MediaUrn) ConformsTo(pattern *MediaUrn) bool {
+	if m.inner == nil || pattern == nil || pattern.inner == nil {
+		return false
+	}
+	match, err := m.inner.ConformsTo(pattern.inner)
 	if err != nil {
 		return false
 	}

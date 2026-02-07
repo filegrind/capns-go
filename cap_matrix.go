@@ -93,7 +93,7 @@ func (r *CapMatrix) FindCapSets(requestUrn string) ([]CapSet, error) {
 				)
 			}
 			
-			if capUrn.Matches(request) {
+			if capUrn.Accepts(request) {
 				matchingHosts = append(matchingHosts, entry.host)
 				break // Found a matching capability for this host, no need to check others
 			}
@@ -127,7 +127,7 @@ func (r *CapMatrix) FindBestCapSet(requestUrn string) (CapSet, *Cap, error) {
 				)
 			}
 			
-			if capUrn.Matches(request) {
+			if capUrn.Accepts(request) {
 				specificity := capUrn.Specificity()
 				if bestSpecificity == -1 || specificity > bestSpecificity {
 					bestHost = entry.host
@@ -164,8 +164,8 @@ func (r *CapMatrix) GetAllCapabilities() []*Cap {
 	return capabilities
 }
 
-// CanHandle checks if any host can handle the specified capability
-func (r *CapMatrix) CanHandle(requestUrn string) bool {
+// AcceptsRequest checks if any host can handle the specified capability
+func (r *CapMatrix) AcceptsRequest(requestUrn string) bool {
 	_, err := r.FindCapSets(requestUrn)
 	return err == nil
 }
@@ -337,8 +337,8 @@ func (c *CapCube) FindBestCapSet(requestUrn string) (*BestCapSetMatch, error) {
 	return bestOverall, nil
 }
 
-// CanHandle checks if any registry can handle the specified capability
-func (c *CapCube) CanHandle(requestUrn string) bool {
+// AcceptsRequest checks if any registry can handle the specified capability
+func (c *CapCube) AcceptsRequest(requestUrn string) bool {
 	_, err := c.FindBestCapSet(requestUrn)
 	return err == nil
 }
@@ -351,7 +351,7 @@ func (c *CapCube) findBestInRegistry(registry *CapMatrix, request *CapUrn) (*Cap
 
 	for _, entry := range registry.sets {
 		for _, cap := range entry.capabilities {
-			if cap.Urn.Matches(request) {
+			if cap.Urn.Accepts(request) {
 				specificity := cap.Urn.Specificity()
 				if bestSpecificity == -1 || specificity > bestSpecificity {
 					bestCap = cap
@@ -388,7 +388,7 @@ func (cs *CompositeCapSet) ExecuteCap(
 	for _, entry := range cs.registries {
 		for _, setEntry := range entry.registry.sets {
 			for _, cap := range setEntry.capabilities {
-				if cap.Urn.Matches(request) {
+				if cap.Urn.Accepts(request) {
 					specificity := cap.Urn.Specificity()
 					if bestSpecificity == -1 || specificity > bestSpecificity {
 						bestHost = setEntry.host
@@ -529,7 +529,7 @@ func (g *CapGraph) GetOutgoing(spec string) []*CapGraphEdge {
 		if err != nil {
 			continue // Invalid requirement URN, skip
 		}
-		matches, err := providedUrn.Matches(requirementUrn)
+		matches, err := providedUrn.ConformsTo(requirementUrn)
 		if err == nil && matches {
 			edges = append(edges, edge)
 		}

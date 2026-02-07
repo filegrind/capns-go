@@ -51,7 +51,7 @@ func main() {
 
     // Check matching
     pattern, _ := capns.NewCapUrnFromString(`cap:in="media:binary";op=extract;out="media:object"`)
-    if cap.Matches(pattern) {
+    if cap.Accepts(pattern) {
         fmt.Println("Cap matches pattern")
     }
 
@@ -107,7 +107,8 @@ host, cap, err := matrix.FindBestCapSet(requestUrn)
 | `WithTag(key, value)` | Return new CapUrn with tag added/updated |
 | `WithInSpec(spec)` | Return new CapUrn with changed input spec |
 | `WithOutSpec(spec)` | Return new CapUrn with changed output spec |
-| `Matches(pattern)` | Check if Cap matches a pattern |
+| `Accepts(request)` | Check if Cap (as pattern) accepts a request |
+| `ConformsTo(pattern)` | Check if Cap conforms to a pattern |
 | `Specificity()` | Get graded specificity score |
 | `ToString()` | Get canonical string representation |
 

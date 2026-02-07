@@ -231,13 +231,13 @@ func TestCapRequestHandling(t *testing.T) {
 	cap1 := NewCap(id, "Extract Metadata", "extract-cmd")
 	cap2 := NewCap(id, "Extract Metadata", "extract-cmd")
 
-	assert.True(t, cap1.CanHandleRequest(cap2.Urn))
+	assert.True(t, cap1.AcceptsRequest(cap2.Urn))
 
 	otherId, err := NewCapUrnFromString(capTestUrn("op=generate;image"))
 	require.NoError(t, err)
 	cap3 := NewCap(otherId, "Generate Image", "generate-cmd")
 
-	assert.False(t, cap1.CanHandleRequest(cap3.Urn))
+	assert.False(t, cap1.AcceptsRequest(cap3.Urn))
 }
 
 func TestCapDescription(t *testing.T) {
