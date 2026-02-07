@@ -8,7 +8,10 @@ import (
 	"os"
 	"sync"
 
+	cborlib "github.com/fxamacker/cbor/v2"
+
 	"github.com/filegrind/cap-sdk-go/cbor"
+	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
 // StreamEmitter allows handlers to emit chunked responses and logs
@@ -132,23 +135,28 @@ func (pr *PluginRuntime) Run() error {
 // runCBORMode runs in Plugin CBOR mode - binary frame protocol via stdin/stdout
 func (pr *PluginRuntime) runCBORMode() error {
 	reader := cbor.NewFrameReader(os.Stdin)
-	writer := cbor.NewFrameWriter(os.Stdout)
+	rawWriter := cbor.NewFrameWriter(os.Stdout)
 
 	// Perform handshake - send our manifest in the HELLO response
-	negotiatedLimits, err := cbor.HandshakeAccept(reader, writer, pr.manifestData)
+	// Handshake is single-threaded so raw writer is safe here
+	negotiatedLimits, err := cbor.HandshakeAccept(reader, rawWriter, pr.manifestData)
 	if err != nil {
 		return fmt.Errorf("handshake failed: %w", err)
 	}
 
 	reader.SetLimits(negotiatedLimits)
-	writer.SetLimits(negotiatedLimits)
+	rawWriter.SetLimits(negotiatedLimits)
+
+	// Wrap writer for thread-safe concurrent access from handler goroutines
+	writer := newSyncFrameWriter(rawWriter)
 
 	pr.mu.Lock()
 	pr.limits = negotiatedLimits
 	pr.mu.Unlock()
 
 	// Track pending peer requests (plugin invoking host caps)
-	pendingPeerRequests := &sync.Map{} // map[MessageId]*pendingPeerRequest
+	// Key is MessageId.ToString() because MessageId contains []byte which is not comparable
+	pendingPeerRequests := &sync.Map{} // map[string]*pendingPeerRequest
 
 	// Track active handler goroutines for cleanup
 	var activeHandlers sync.WaitGroup
@@ -277,14 +285,15 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 		case cbor.FrameTypeRes, cbor.FrameTypeChunk, cbor.FrameTypeEnd:
 			// Response frames from host - route to pending peer request by frame.Id
-			if pending, ok := pendingPeerRequests.Load(frame.Id); ok {
+			idKey := frame.Id.ToString()
+			if pending, ok := pendingPeerRequests.Load(idKey); ok {
 				pendingReq := pending.(*pendingPeerRequest)
 				pendingReq.sender <- InvokeResult{Data: frame.Payload, Error: nil}
 			}
 
 			// Remove completed requests (RES or END frame marks completion)
 			if frame.FrameType == cbor.FrameTypeRes || frame.FrameType == cbor.FrameTypeEnd {
-				if pending, ok := pendingPeerRequests.LoadAndDelete(frame.Id); ok {
+				if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
 					pendingReq := pending.(*pendingPeerRequest)
 					close(pendingReq.sender)
 				}
@@ -292,7 +301,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 		case cbor.FrameTypeErr:
 			// Error frame from host - could be response to peer request
-			if pending, ok := pendingPeerRequests.LoadAndDelete(frame.Id); ok {
+			idKey := frame.Id.ToString()
+			if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
 				pendingReq := pending.(*pendingPeerRequest)
 				code := frame.ErrorCode()
 				message := frame.ErrorMessage()
@@ -439,11 +449,17 @@ func (pr *PluginRuntime) printCapHelp(cap *Cap) {
 	fmt.Fprintf(os.Stderr, "    plugin %s [OPTIONS]\n\n", cap.Command)
 }
 
-// extractEffectivePayload extracts the effective payload from a REQ frame
+// extractEffectivePayload extracts the effective payload from a REQ frame.
+// When content_type is "application/cbor", decodes the CBOR unified arguments
+// and finds the argument whose media_urn semantically matches the cap's input spec.
 func extractEffectivePayload(payload []byte, contentType string, capUrn string) ([]byte, error) {
-	// Check if this is CBOR unified arguments
+	// Not CBOR unified arguments - return raw payload
 	if contentType != "application/cbor" {
-		// Not CBOR unified arguments - return raw payload
+		return payload, nil
+	}
+
+	// Empty payload with CBOR content type — no arguments
+	if len(payload) == 0 {
 		return payload, nil
 	}
 
@@ -452,24 +468,113 @@ func extractEffectivePayload(payload []byte, contentType string, capUrn string) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cap URN '%s': %w", capUrn, err)
 	}
-	_ = capUrnParsed.InSpec()
+	expectedInSpec := capUrnParsed.InSpec()
 
-	// Parse the CBOR payload as an array of argument maps
-	// For now, simplified - just return raw payload
-	// Full implementation would decode CBOR and match media URNs
-	// This will be implemented when we add CBOR decoding logic
-	return payload, nil
+	// Parse expected input as a TaggedUrn for semantic matching
+	var expectedUrn *taggedurn.TaggedUrn
+	if expectedInSpec != "*" {
+		expectedUrn, err = taggedurn.NewTaggedUrnFromString(expectedInSpec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse expected in_spec '%s': %w", expectedInSpec, err)
+		}
+	}
+
+	// Decode CBOR payload as array of argument maps
+	var args []map[string]interface{}
+	if err := cborlib.Unmarshal(payload, &args); err != nil {
+		// Not a valid CBOR arguments array - fall back to raw payload
+		return payload, nil
+	}
+
+	// Search for the argument matching the expected input media URN
+	for _, arg := range args {
+		mediaUrnStr, ok := arg["media_urn"].(string)
+		if !ok {
+			continue
+		}
+		value, hasValue := arg["value"]
+		if !hasValue {
+			continue
+		}
+
+		// If wildcard input, take the first argument
+		if expectedUrn == nil {
+			return toBytes(value), nil
+		}
+
+		// Semantic match: try both directions of conforms_to
+		argUrn, parseErr := taggedurn.NewTaggedUrnFromString(mediaUrnStr)
+		if parseErr != nil {
+			continue
+		}
+
+		fwd, _ := argUrn.ConformsTo(expectedUrn)
+		rev, _ := expectedUrn.ConformsTo(argUrn)
+		if fwd || rev {
+			return toBytes(value), nil
+		}
+	}
+
+	// No matching argument found - if there's exactly one argument, use it
+	if len(args) == 1 {
+		if value, ok := args[0]["value"]; ok {
+			return toBytes(value), nil
+		}
+	}
+
+	return nil, fmt.Errorf("no argument matching in_spec '%s' found in CBOR unified arguments", expectedInSpec)
+}
+
+// toBytes converts a CBOR-decoded value to []byte
+func toBytes(v interface{}) []byte {
+	switch val := v.(type) {
+	case []byte:
+		return val
+	case string:
+		return []byte(val)
+	default:
+		// Try JSON encoding as fallback
+		data, err := json.Marshal(v)
+		if err != nil {
+			return nil
+		}
+		return data
+	}
+}
+
+// syncFrameWriter wraps FrameWriter with a mutex for concurrent access.
+// FrameWriter.WriteFrame does two Write() calls (length prefix + CBOR data)
+// which interleave when called from multiple goroutines.
+type syncFrameWriter struct {
+	mu     sync.Mutex
+	writer *cbor.FrameWriter
+}
+
+func newSyncFrameWriter(w *cbor.FrameWriter) *syncFrameWriter {
+	return &syncFrameWriter{writer: w}
+}
+
+func (s *syncFrameWriter) WriteFrame(frame *cbor.Frame) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.writer.WriteFrame(frame)
+}
+
+func (s *syncFrameWriter) SetLimits(limits cbor.Limits) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.writer.SetLimits(limits)
 }
 
 // threadSafeEmitter implements StreamEmitter with thread-safe writes
 type threadSafeEmitter struct {
-	writer    *cbor.FrameWriter
+	writer    *syncFrameWriter
 	requestID cbor.MessageId
 	seq       uint64
 	seqMu     sync.Mutex
 }
 
-func newThreadSafeEmitter(writer *cbor.FrameWriter, requestID cbor.MessageId) *threadSafeEmitter {
+func newThreadSafeEmitter(writer *syncFrameWriter, requestID cbor.MessageId) *threadSafeEmitter {
 	return &threadSafeEmitter{
 		writer:    writer,
 		requestID: requestID,
@@ -531,11 +636,11 @@ type pendingPeerRequest struct {
 
 // peerInvokerImpl implements PeerInvoker
 type peerInvokerImpl struct {
-	writer          *cbor.FrameWriter
+	writer          *syncFrameWriter
 	pendingRequests *sync.Map
 }
 
-func newPeerInvokerImpl(writer *cbor.FrameWriter, pendingRequests *sync.Map) *peerInvokerImpl {
+func newPeerInvokerImpl(writer *syncFrameWriter, pendingRequests *sync.Map) *peerInvokerImpl {
 	return &peerInvokerImpl{
 		writer:          writer,
 		pendingRequests: pendingRequests,
@@ -549,19 +654,30 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<
 	// Create a buffered channel for responses (buffer up to 64 chunks)
 	sender := make(chan InvokeResult, 64)
 
-	// Register the pending request before sending
-	p.pendingRequests.Store(requestID, &pendingPeerRequest{sender: sender})
+	// Register the pending request before sending (use string key since MessageId is not comparable)
+	p.pendingRequests.Store(requestID.ToString(), &pendingPeerRequest{sender: sender})
 
-	// Serialize arguments as CBOR - binary values stay binary (no base64 needed)
-	// For now, simplified - just send empty payload
-	// Full implementation would encode CBOR unified arguments
-	payload := []byte{}
+	// Serialize arguments as CBOR unified arguments:
+	// Array of maps, each with "media_urn" (text) and "value" (bytes)
+	cborArgs := make([]interface{}, len(arguments))
+	for i, arg := range arguments {
+		cborArgs[i] = map[string]interface{}{
+			"media_urn": arg.MediaUrn,
+			"value":     arg.Value,
+		}
+	}
+
+	payload, err := cborlib.Marshal(cborArgs)
+	if err != nil {
+		p.pendingRequests.Delete(requestID.ToString())
+		return nil, fmt.Errorf("failed to serialize arguments as CBOR: %w", err)
+	}
 
 	// Create and send the REQ frame with CBOR payload
 	frame := cbor.NewReq(requestID, capUrn, payload, "application/cbor")
 
 	if err := p.writer.WriteFrame(frame); err != nil {
-		p.pendingRequests.Delete(requestID)
+		p.pendingRequests.Delete(requestID.ToString())
 		return nil, fmt.Errorf("failed to send REQ frame: %w", err)
 	}
 
