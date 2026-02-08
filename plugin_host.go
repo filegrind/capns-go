@@ -295,22 +295,98 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 	}
 	idKey := requestID.ToString()
 	ph.pendingRequests[idKey] = req
+	maxChunk := ph.limits.MaxChunk
 	ph.mu.Unlock()
 
-	// Send request frame
-	frame := cbor.NewReq(requestID, capUrn, payload, contentType)
-	ph.writerMu.Lock()
-	err := ph.writer.WriteFrame(frame)
-	ph.writerMu.Unlock()
-	if err != nil {
-		ph.mu.Lock()
-		delete(ph.pendingRequests, idKey)
-		ph.mu.Unlock()
-		return nil, fmt.Errorf("failed to send request: %w", err)
+	// Automatic chunking for large request payloads (or empty payloads to avoid ambiguity)
+	if len(payload) > 0 && len(payload) <= maxChunk {
+		// Small non-empty payload: send single REQ frame with full payload
+		frame := cbor.NewReq(requestID, capUrn, payload, contentType)
+		ph.writerMu.Lock()
+		err := ph.writer.WriteFrame(frame)
+		ph.writerMu.Unlock()
+		if err != nil {
+			ph.mu.Lock()
+			delete(ph.pendingRequests, idKey)
+			ph.mu.Unlock()
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+	} else {
+		// Empty or large payload: send REQ + CHUNK frames + END
+		fmt.Printf("[PluginHost] Call: large payload (%d bytes), chunking with max_chunk=%d\n", len(payload), maxChunk)
+
+		// Send initial REQ frame with cap_urn and content_type, but empty payload
+		frame := cbor.NewReq(requestID, capUrn, []byte{}, contentType)
+		ph.writerMu.Lock()
+		err := ph.writer.WriteFrame(frame)
+		ph.writerMu.Unlock()
+		if err != nil {
+			ph.mu.Lock()
+			delete(ph.pendingRequests, idKey)
+			ph.mu.Unlock()
+			return nil, fmt.Errorf("failed to send request: %w", err)
+		}
+
+		// Send payload in CHUNK frames
+		offset := 0
+		seq := uint64(0)
+
+		if len(payload) == 0 {
+			// Empty payload: send END frame immediately with no chunks
+			ph.writerMu.Lock()
+			endFrame := cbor.NewEnd(requestID, []byte{})
+			err := ph.writer.WriteFrame(endFrame)
+			ph.writerMu.Unlock()
+			if err != nil {
+				ph.mu.Lock()
+				delete(ph.pendingRequests, idKey)
+				ph.mu.Unlock()
+				return nil, fmt.Errorf("failed to send end: %w", err)
+			}
+		} else {
+			// Non-empty payload: send CHUNK frames + END
+			for offset < len(payload) {
+				remaining := len(payload) - offset
+				chunkSize := remaining
+				if chunkSize > maxChunk {
+					chunkSize = maxChunk
+				}
+				chunkData := payload[offset : offset+chunkSize]
+				offset += chunkSize
+
+				ph.writerMu.Lock()
+				if offset < len(payload) {
+					// Not the last chunk - send CHUNK frame
+					chunkFrame := cbor.NewChunk(requestID, seq, chunkData)
+					err := ph.writer.WriteFrame(chunkFrame)
+					ph.writerMu.Unlock()
+					if err != nil {
+						ph.mu.Lock()
+						delete(ph.pendingRequests, idKey)
+						ph.mu.Unlock()
+						return nil, fmt.Errorf("failed to send chunk: %w", err)
+					}
+					seq++
+				} else {
+					// Last chunk - send END frame
+					endFrame := cbor.NewEnd(requestID, chunkData)
+					err := ph.writer.WriteFrame(endFrame)
+					ph.writerMu.Unlock()
+					if err != nil {
+						ph.mu.Lock()
+						delete(ph.pendingRequests, idKey)
+						ph.mu.Unlock()
+						return nil, fmt.Errorf("failed to send end: %w", err)
+					}
+				}
+			}
+		}
+
+		fmt.Printf("[PluginHost] Call: sent %d chunk frames + END for request_id=%s\n", seq, idKey)
 	}
 
 	// Wait for response
-	err = <-req.done
+	err := <-req.done
 	if err != nil {
 		return nil, err
 	}

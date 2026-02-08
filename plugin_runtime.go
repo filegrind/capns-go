@@ -1,11 +1,13 @@
 package capns
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 
 	cborlib "github.com/fxamacker/cbor/v2"
@@ -158,6 +160,15 @@ func (pr *PluginRuntime) runCBORMode() error {
 	// Key is MessageId.ToString() because MessageId contains []byte which is not comparable
 	pendingPeerRequests := &sync.Map{} // map[string]*pendingPeerRequest
 
+	// Track incoming requests that are being chunked
+	type pendingIncomingRequest struct {
+		capUrn      string
+		contentType *string
+		chunks      [][]byte
+	}
+	pendingIncoming := make(map[string]*pendingIncomingRequest)
+	pendingIncomingMu := &sync.Mutex{}
+
 	// Track active handler goroutines for cleanup
 	var activeHandlers sync.WaitGroup
 
@@ -181,9 +192,26 @@ func (pr *PluginRuntime) runCBORMode() error {
 				continue
 			}
 
-			handler := pr.FindHandler(*frame.Cap)
+			capUrn := *frame.Cap
+			rawPayload := frame.Payload
+
+			// Check if this is a chunked request (empty payload means chunks will follow)
+			if len(rawPayload) == 0 {
+				// Start accumulating chunks for this request
+				pendingIncomingMu.Lock()
+				pendingIncoming[frame.Id.ToString()] = &pendingIncomingRequest{
+					capUrn:      capUrn,
+					contentType: frame.ContentType,
+					chunks:      [][]byte{},
+				}
+				pendingIncomingMu.Unlock()
+				continue // Wait for CHUNK/END frames
+			}
+
+			// Complete payload in REQ frame - invoke handler immediately
+			handler := pr.FindHandler(capUrn)
 			if handler == nil {
-				errFrame := cbor.NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", *frame.Cap))
+				errFrame := cbor.NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", capUrn))
 				if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
 				}
@@ -192,8 +220,6 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 			// Clone what we need for the handler goroutine
 			requestID := frame.Id
-			capUrn := *frame.Cap
-			rawPayload := frame.Payload
 			var contentType string
 			if frame.ContentType != nil {
 				contentType = *frame.ContentType
@@ -283,20 +309,152 @@ func (pr *PluginRuntime) runCBORMode() error {
 				return fmt.Errorf("failed to write error: %w", err)
 			}
 
-		case cbor.FrameTypeRes, cbor.FrameTypeChunk, cbor.FrameTypeEnd:
-			// Response frames from host - route to pending peer request by frame.Id
+		case cbor.FrameTypeChunk:
+			// Check if this is a chunk for an incoming request
+			pendingIncomingMu.Lock()
+			if pendingReq, exists := pendingIncoming[frame.Id.ToString()]; exists {
+				if frame.Payload != nil {
+					pendingReq.chunks = append(pendingReq.chunks, frame.Payload)
+				}
+				pendingIncomingMu.Unlock()
+				continue // Wait for more chunks or END
+			}
+			pendingIncomingMu.Unlock()
+
+			// Not an incoming request chunk - must be a response chunk
 			idKey := frame.Id.ToString()
 			if pending, ok := pendingPeerRequests.Load(idKey); ok {
 				pendingReq := pending.(*pendingPeerRequest)
 				pendingReq.sender <- InvokeResult{Data: frame.Payload, Error: nil}
 			}
 
-			// Remove completed requests (RES or END frame marks completion)
-			if frame.FrameType == cbor.FrameTypeRes || frame.FrameType == cbor.FrameTypeEnd {
-				if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
-					pendingReq := pending.(*pendingPeerRequest)
-					close(pendingReq.sender)
+		case cbor.FrameTypeEnd:
+			// Check if this is the end of an incoming chunked request
+			pendingIncomingMu.Lock()
+			pendingReq, exists := pendingIncoming[frame.Id.ToString()]
+			if exists {
+				delete(pendingIncoming, frame.Id.ToString())
+			}
+			pendingIncomingMu.Unlock()
+
+			if exists {
+				// Concatenate all chunks into final payload
+				if frame.Payload != nil {
+					pendingReq.chunks = append(pendingReq.chunks, frame.Payload)
 				}
+				rawPayload := bytes.Join(pendingReq.chunks, nil)
+
+				// Find handler
+				handler := pr.FindHandler(pendingReq.capUrn)
+				if handler == nil {
+					errFrame := cbor.NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", pendingReq.capUrn))
+					if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
+						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
+					}
+					continue
+				}
+
+				// Spawn goroutine to invoke handler (same pattern as REQ handling)
+				requestID := frame.Id
+				capUrn := pendingReq.capUrn
+				var contentType string
+				if pendingReq.contentType != nil {
+					contentType = *pendingReq.contentType
+				}
+				maxChunk := negotiatedLimits.MaxChunk
+
+				activeHandlers.Add(1)
+				go func() {
+					defer activeHandlers.Done()
+
+					emitter := newThreadSafeEmitter(writer, requestID)
+					peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests)
+
+					// Extract effective payload from arguments if content_type is CBOR
+					payload, err := extractEffectivePayload(rawPayload, contentType, capUrn)
+					if err != nil {
+						errFrame := cbor.NewErr(requestID, "PAYLOAD_ERROR", err.Error())
+						if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
+							fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
+						}
+						return
+					}
+
+					result, err := handler(payload, emitter, peerInvoker)
+
+					// Send response with automatic chunking for large payloads
+					if err != nil {
+						errFrame := cbor.NewErr(requestID, "HANDLER_ERROR", err.Error())
+						if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
+							fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
+						}
+						return
+					}
+
+					// Automatic chunking: split large payloads into CHUNK frames
+					if len(result) <= maxChunk {
+						// Small payload: send single END frame
+						endFrame := cbor.NewEnd(requestID, result)
+						if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
+							fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
+						}
+					} else {
+						// Large payload: send CHUNK frames + final END
+						offset := 0
+						seq := uint64(0)
+
+						for offset < len(result) {
+							remaining := len(result) - offset
+							chunkSize := remaining
+							if chunkSize > maxChunk {
+								chunkSize = maxChunk
+							}
+							chunkData := result[offset : offset+chunkSize]
+							offset += chunkSize
+
+							if offset < len(result) {
+								// Not the last chunk - send CHUNK frame
+								chunkFrame := cbor.NewChunk(requestID, seq, chunkData)
+								if writeErr := writer.WriteFrame(chunkFrame); writeErr != nil {
+									fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write CHUNK frame: %v\n", writeErr)
+									return
+								}
+								seq++
+							} else {
+								// Last chunk - send END frame with remaining data
+								endFrame := cbor.NewEnd(requestID, chunkData)
+								if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
+									fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
+								}
+							}
+						}
+					}
+				}()
+
+				continue
+			}
+
+			// Not an incoming request end - must be a response end
+			idKey := frame.Id.ToString()
+			if pending, ok := pendingPeerRequests.Load(idKey); ok {
+				pendingReq := pending.(*pendingPeerRequest)
+				pendingReq.sender <- InvokeResult{Data: frame.Payload, Error: nil}
+			}
+			if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
+				pendingReq := pending.(*pendingPeerRequest)
+				close(pendingReq.sender)
+			}
+
+		case cbor.FrameTypeRes:
+			// Response frame from host - route to pending peer request by frame.Id
+			idKey := frame.Id.ToString()
+			if pending, ok := pendingPeerRequests.Load(idKey); ok {
+				pendingReq := pending.(*pendingPeerRequest)
+				pendingReq.sender <- InvokeResult{Data: frame.Payload, Error: nil}
+			}
+			if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
+				pendingReq := pending.(*pendingPeerRequest)
+				close(pendingReq.sender)
 			}
 
 		case cbor.FrameTypeErr:
@@ -374,9 +532,17 @@ func (pr *PluginRuntime) runCLIMode(args []string) error {
 		return fmt.Errorf("no handler registered for cap '%s'", cap.UrnString())
 	}
 
-	// Build arguments from CLI (not implemented yet - simplified version)
-	// For now, just pass empty payload
-	payload := []byte("{}")
+	// Build CBOR payload from CLI args
+	rawPayload, err := pr.buildPayloadFromCLI(cap, args[2:])
+	if err != nil {
+		return fmt.Errorf("failed to build payload: %w", err)
+	}
+
+	// Extract effective payload (same as CBOR mode does)
+	payload, err := extractEffectivePayload(rawPayload, "application/cbor", cap.UrnString())
+	if err != nil {
+		return fmt.Errorf("failed to extract payload: %w", err)
+	}
 
 	// Create CLI-mode emitter and no-op peer invoker
 	emitter := &cliStreamEmitter{}
@@ -696,4 +862,368 @@ func (pr *PluginRuntime) Limits() cbor.Limits {
 	pr.mu.RLock()
 	defer pr.mu.RUnlock()
 	return pr.limits
+}
+
+// buildPayloadFromCLI builds CBOR payload from CLI arguments based on cap's arg definitions.
+// Returns CBOR-encoded array of CapArgumentValue objects.
+func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte, error) {
+	// Read stdin if available (non-blocking check)
+	stdinData, err := pr.readStdinIfAvailable()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read stdin: %w", err)
+	}
+
+	// If no args defined, check for stdin data
+	if len(cap.Args) == 0 {
+		if stdinData != nil {
+			return stdinData, nil
+		}
+		// No args and no stdin - return empty payload
+		return []byte{}, nil
+	}
+
+	// Build CBOR arguments array (same format as CBOR mode)
+	var arguments []CapArgumentValue
+
+	for i := range cap.Args {
+		argDef := &cap.Args[i]
+
+		// Extract argument value (handles file-path conversion)
+		value, err := pr.extractArgValue(argDef, cliArgs, stdinData)
+		if err != nil {
+			return nil, err
+		}
+
+		if value != nil {
+			// Determine media URN for this argument value
+			// If file-path with stdin source, use stdin source's media URN (the target type)
+			mediaUrn := argDef.MediaUrn
+
+			// Check if this is a file-path arg with stdin source
+			argMediaUrn, parseErr := NewMediaUrnFromString(argDef.MediaUrn)
+			if parseErr == nil {
+				filePathPattern, _ := NewMediaUrnFromString(MediaFilePath)
+				filePathArrayPattern, _ := NewMediaUrnFromString(MediaFilePathArray)
+
+				isFilePath := false
+				if filePathPattern != nil {
+					if filePathPattern.Accepts(argMediaUrn) {
+						isFilePath = true
+					}
+				}
+				if !isFilePath && filePathArrayPattern != nil {
+					if filePathArrayPattern.Accepts(argMediaUrn) {
+						isFilePath = true
+					}
+				}
+
+				// If file-path type, check for stdin source and use its media URN
+				if isFilePath {
+					for i := range argDef.Sources {
+						source := &argDef.Sources[i]
+						if source.Stdin != nil {
+							mediaUrn = *source.Stdin
+							break
+						}
+					}
+				}
+			}
+
+			arguments = append(arguments, CapArgumentValue{
+				MediaUrn: mediaUrn,
+				Value:    value,
+			})
+		} else if argDef.Required {
+			return nil, fmt.Errorf("required argument missing: %s", argDef.MediaUrn)
+		}
+	}
+
+	if len(arguments) > 0 {
+		// Encode as CBOR array
+		cborArgs := make([]interface{}, len(arguments))
+		for i, arg := range arguments {
+			cborArgs[i] = map[string]interface{}{
+				"media_urn": arg.MediaUrn,
+				"value":     arg.Value,
+			}
+		}
+
+		payload, err := cborlib.Marshal(cborArgs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode CBOR payload: %w", err)
+		}
+		return payload, nil
+	}
+
+	// No arguments and no stdin
+	return []byte{}, nil
+}
+
+// extractArgValue extracts a single argument value from CLI args or stdin.
+// Handles automatic file-path to bytes conversion when appropriate.
+func (pr *PluginRuntime) extractArgValue(argDef *CapArg, cliArgs []string, stdinData []byte) ([]byte, error) {
+	// Check if this arg requires file-path to bytes conversion using proper URN matching
+	argMediaUrn, err := NewMediaUrnFromString(argDef.MediaUrn)
+	if err != nil {
+		return nil, fmt.Errorf("invalid media URN '%s': %w", argDef.MediaUrn, err)
+	}
+
+	filePathPattern, err := NewMediaUrnFromString(MediaFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse MediaFilePath constant: %w", err)
+	}
+	filePathArrayPattern, err := NewMediaUrnFromString(MediaFilePathArray)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse MediaFilePathArray constant: %w", err)
+	}
+
+	// Check array first (more specific), then single file-path
+	isArray := false
+	isFilePath := false
+
+	if filePathArrayPattern.Accepts(argMediaUrn) {
+		isArray = true
+		isFilePath = true
+	} else if filePathPattern.Accepts(argMediaUrn) {
+		isFilePath = true
+	}
+
+	// Get stdin source media URN if it exists (tells us target type)
+	hasStdinSource := false
+	for i := range argDef.Sources {
+		if argDef.Sources[i].Stdin != nil {
+			hasStdinSource = true
+			break
+		}
+	}
+
+	// Try each source in order
+	for i := range argDef.Sources {
+		source := &argDef.Sources[i]
+
+		if source.CliFlag != nil {
+			if value, found := pr.getCliFlagValue(cliArgs, *source.CliFlag); found {
+				// If file-path type with stdin source, read file(s)
+				if isFilePath && hasStdinSource {
+					return pr.readFilePathToBytes(value, isArray)
+				}
+				return []byte(value), nil
+			}
+		} else if source.Position != nil {
+			// Positional args: filter out flags and their values
+			positional := pr.getPositionalArgs(cliArgs)
+			if *source.Position < len(positional) {
+				value := positional[*source.Position]
+				// If file-path type with stdin source, read file(s)
+				if isFilePath && hasStdinSource {
+					return pr.readFilePathToBytes(value, isArray)
+				}
+				return []byte(value), nil
+			}
+		} else if source.Stdin != nil {
+			if stdinData != nil && len(stdinData) > 0 {
+				return stdinData, nil
+			}
+		}
+	}
+
+	// Try default value
+	if argDef.DefaultValue != nil {
+		bytes, err := json.Marshal(argDef.DefaultValue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize default value: %w", err)
+		}
+		return bytes, nil
+	}
+
+	return nil, nil
+}
+
+// getCliFlagValue gets the value for a CLI flag (e.g., --model "value")
+func (pr *PluginRuntime) getCliFlagValue(args []string, flag string) (string, bool) {
+	for i := 0; i < len(args); i++ {
+		if args[i] == flag {
+			if i+1 < len(args) {
+				return args[i+1], true
+			}
+			return "", false
+		}
+		// Handle --flag=value format
+		if len(args[i]) > len(flag) && args[i][:len(flag)] == flag && args[i][len(flag)] == '=' {
+			return args[i][len(flag)+1:], true
+		}
+	}
+	return "", false
+}
+
+// getPositionalArgs gets positional arguments (non-flag arguments)
+func (pr *PluginRuntime) getPositionalArgs(args []string) []string {
+	var positional []string
+	skipNext := false
+
+	for _, arg := range args {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		if len(arg) > 0 && arg[0] == '-' {
+			// This is a flag - skip its value too if not --flag=value format
+			if !contains(arg, '=') {
+				skipNext = true
+			}
+		} else {
+			positional = append(positional, arg)
+		}
+	}
+	return positional
+}
+
+// contains checks if a string contains a character
+func contains(s string, c byte) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] == c {
+			return true
+		}
+	}
+	return false
+}
+
+// readStdinIfAvailable reads stdin if data is available (non-blocking check)
+func (pr *PluginRuntime) readStdinIfAvailable() ([]byte, error) {
+	// Check if stdin is a terminal (interactive)
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	// Don't read from stdin if it's a terminal (interactive)
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		return nil, nil
+	}
+
+	// Read all data from stdin
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return nil, nil
+	}
+
+	return data, nil
+}
+
+// readFilePathToBytes reads file(s) for file-path arguments and returns bytes.
+//
+// This method implements automatic file-path to bytes conversion when:
+// - arg.media_urn is "media:file-path" or "media:file-path-array"
+// - arg has a stdin source (indicating bytes are the canonical type)
+//
+// # Arguments
+// * pathValue - File path string (single path or JSON array of path patterns)
+// * isArray - True if media:file-path-array (read multiple files with glob expansion)
+//
+// # Returns
+// - For single file: []byte containing raw file bytes
+// - For array: CBOR-encoded array of file bytes (each element is one file's contents)
+//
+// # Errors
+// Returns error if file cannot be read with clear error message.
+func (pr *PluginRuntime) readFilePathToBytes(pathValue string, isArray bool) ([]byte, error) {
+	if isArray {
+		// Parse JSON array of path patterns
+		var pathPatterns []string
+		if err := json.Unmarshal([]byte(pathValue), &pathPatterns); err != nil {
+			return nil, fmt.Errorf(
+				"failed to parse file-path-array: expected JSON array of path patterns, got '%s': %w",
+				pathValue, err,
+			)
+		}
+
+		// Expand globs and collect all file paths
+		var allFiles []string
+		for _, pattern := range pathPatterns {
+			// Check if this is a literal path (no glob metacharacters) or a glob pattern
+			isGlob := containsAny(pattern, "*?[")
+
+			if !isGlob {
+				// Literal path - verify it exists and is a file
+				info, err := os.Stat(pattern)
+				if err != nil {
+					if os.IsNotExist(err) {
+						return nil, fmt.Errorf(
+							"failed to read file '%s' from file-path-array: No such file or directory",
+							pattern,
+						)
+					}
+					return nil, fmt.Errorf(
+						"failed to read file '%s' from file-path-array: %w",
+						pattern, err,
+					)
+				}
+				if info.Mode().IsRegular() {
+					allFiles = append(allFiles, pattern)
+				}
+				// Skip directories silently for consistency with glob behavior
+			} else {
+				// Glob pattern - expand it
+				matches, err := filepath.Glob(pattern)
+				if err != nil {
+					return nil, fmt.Errorf("invalid glob pattern '%s': %w", pattern, err)
+				}
+
+				for _, path := range matches {
+					info, err := os.Stat(path)
+					if err != nil {
+						continue
+					}
+					// Only include files (skip directories)
+					if info.Mode().IsRegular() {
+						allFiles = append(allFiles, path)
+					}
+				}
+			}
+		}
+
+		// Read each file sequentially
+		var filesData []interface{}
+		for _, path := range allFiles {
+			bytes, err := os.ReadFile(path)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"failed to read file '%s' from file-path-array: %w",
+					path, err,
+				)
+			}
+			filesData = append(filesData, bytes)
+		}
+
+		// Encode as CBOR array
+		cborBytes, err := cborlib.Marshal(filesData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode CBOR array: %w", err)
+		}
+
+		return cborBytes, nil
+	} else {
+		// Single file path - read and return raw bytes
+		bytes, err := os.ReadFile(pathValue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file '%s': %w", pathValue, err)
+		}
+		return bytes, nil
+	}
+}
+
+// containsAny checks if string contains any of the given characters
+func containsAny(s string, chars string) bool {
+	for i := 0; i < len(s); i++ {
+		for j := 0; j < len(chars); j++ {
+			if s[i] == chars[j] {
+				return true
+			}
+		}
+	}
+	return false
 }

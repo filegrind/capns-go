@@ -56,6 +56,9 @@ const (
 	// Semantic input types
 	MediaModelSpec = "media:model-spec;textable;form=scalar"
 	MediaModelRepo = "media:model-repo;textable;form=map"
+	// File path types
+	MediaFilePath      = "media:file-path;textable;form=scalar"
+	MediaFilePathArray = "media:file-path;textable;form=list"
 	// Semantic output types
 	MediaModelDim      = "media:model-dim;integer;textable;numeric;form=scalar"
 	MediaDecision      = "media:decision;bool;textable;form=scalar"
