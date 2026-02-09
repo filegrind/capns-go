@@ -26,13 +26,19 @@ type streamState struct {
 	active   bool // false after StreamEnd
 }
 
+// hostStreamEntry maintains ordered stream tracking (insertion order preserved)
+type hostStreamEntry struct {
+	streamID string
+	state    *streamState
+}
+
 // pendingRequest tracks a pending request with stream multiplexing
 type pendingRequest struct {
 	chunks    []*ResponseChunk
 	done      chan error
 	isChunked bool
-	streams   map[string]*streamState // stream_id -> state
-	ended     bool                    // true after END frame - any stream activity after is FATAL
+	streams   []hostStreamEntry // Ordered — maintains insertion order per Protocol v2
+	ended     bool              // true after END frame - any stream activity after is FATAL
 }
 
 // ResponseChunk represents a response chunk from a plugin (matches Rust ResponseChunk)
@@ -246,17 +252,22 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 			}
 
 			// FAIL HARD: Duplicate stream ID
-			if _, exists := req.streams[streamId]; exists {
-				delete(ph.pendingRequests, idKey)
-				req.done <- fmt.Errorf("protocol violation: duplicate stream ID '%s'", streamId)
-				return
+			for _, entry := range req.streams {
+				if entry.streamID == streamId {
+					delete(ph.pendingRequests, idKey)
+					req.done <- fmt.Errorf("protocol violation: duplicate stream ID '%s'", streamId)
+					return
+				}
 			}
 
-			// Track new stream
-			req.streams[streamId] = &streamState{
-				mediaUrn: mediaUrn,
-				active:   true,
-			}
+			// Track new stream (ordered append)
+			req.streams = append(req.streams, hostStreamEntry{
+				streamID: streamId,
+				state: &streamState{
+					mediaUrn: mediaUrn,
+					active:   true,
+				},
+			})
 		}
 
 	case cbor.FrameTypeChunk:
@@ -281,13 +292,19 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 			}
 
 			// FAIL HARD: Unknown or inactive stream
-			stream, exists := req.streams[streamId]
-			if !exists {
+			var chunkStream *streamState
+			for _, entry := range req.streams {
+				if entry.streamID == streamId {
+					chunkStream = entry.state
+					break
+				}
+			}
+			if chunkStream == nil {
 				delete(ph.pendingRequests, idKey)
 				req.done <- fmt.Errorf("protocol violation: chunk for unknown stream ID '%s'", streamId)
 				return
 			}
-			if !stream.active {
+			if !chunkStream.active {
 				delete(ph.pendingRequests, idKey)
 				req.done <- fmt.Errorf("protocol violation: chunk for ended stream ID '%s'", streamId)
 				return
@@ -317,15 +334,21 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 			streamId := *frame.StreamId
 
 			// FAIL HARD: Unknown stream
-			stream, exists := req.streams[streamId]
-			if !exists {
+			var endStream *streamState
+			for _, entry := range req.streams {
+				if entry.streamID == streamId {
+					endStream = entry.state
+					break
+				}
+			}
+			if endStream == nil {
 				delete(ph.pendingRequests, idKey)
 				req.done <- fmt.Errorf("protocol violation: StreamEnd for unknown stream ID '%s'", streamId)
 				return
 			}
 
 			// Mark stream as ended
-			stream.active = false
+			endStream.active = false
 		}
 
 	case cbor.FrameTypeEnd:
@@ -389,7 +412,7 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 	req := &pendingRequest{
 		chunks:  make([]*ResponseChunk, 0),
 		done:    make(chan error, 1),
-		streams: make(map[string]*streamState),
+		streams: nil,
 		ended:   false,
 	}
 	idKey := requestID.ToString()
