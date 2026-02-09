@@ -20,11 +20,19 @@ type PluginHost struct {
 	closed          bool
 }
 
-// pendingRequest tracks a pending request
+// streamState tracks a single stream within a request
+type streamState struct {
+	mediaUrn string
+	active   bool // false after StreamEnd
+}
+
+// pendingRequest tracks a pending request with stream multiplexing
 type pendingRequest struct {
 	chunks    []*ResponseChunk
 	done      chan error
 	isChunked bool
+	streams   map[string]*streamState // stream_id -> state
+	ended     bool                    // true after END frame - any stream activity after is FATAL
 }
 
 // ResponseChunk represents a response chunk from a plugin (matches Rust ResponseChunk)
@@ -202,7 +210,7 @@ func (ph *PluginHost) readerLoop() {
 	}
 }
 
-// handleFrame processes an incoming frame
+// handleFrame processes an incoming frame using stream multiplexing protocol
 func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 	ph.mu.Lock()
 	defer ph.mu.Unlock()
@@ -210,25 +218,82 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 	idKey := frame.Id.ToString()
 
 	switch frame.FrameType {
-	case cbor.FrameTypeRes:
-		// Single response
+	// RES frame REMOVED - old protocol no longer supported
+
+	case cbor.FrameTypeStreamStart:
+		// STREAM_START: Announce new stream
 		if req, ok := ph.pendingRequests[idKey]; ok {
-			chunk := &ResponseChunk{
-				Payload: frame.Payload,
-				Seq:     frame.Seq,
-				Offset:  frame.Offset,
-				Len:     frame.Len,
-				IsEof:   frame.IsEof(),
+			// STRICT validation: must have stream_id and media_urn
+			if frame.StreamId == nil {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: StreamStart missing stream_id")
+				return
 			}
-			req.chunks = append(req.chunks, chunk)
-			delete(ph.pendingRequests, idKey)
-			req.done <- nil
+			if frame.MediaUrn == nil {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: StreamStart missing media_urn")
+				return
+			}
+
+			streamId := *frame.StreamId
+			mediaUrn := *frame.MediaUrn
+
+			// FAIL HARD: Request already ended
+			if req.ended {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: stream activity after request END")
+				return
+			}
+
+			// FAIL HARD: Duplicate stream ID
+			if _, exists := req.streams[streamId]; exists {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: duplicate stream ID '%s'", streamId)
+				return
+			}
+
+			// Track new stream
+			req.streams[streamId] = &streamState{
+				mediaUrn: mediaUrn,
+				active:   true,
+			}
 		}
 
 	case cbor.FrameTypeChunk:
-		// Streaming chunk
+		// CHUNK: Data chunk for a stream
 		if req, ok := ph.pendingRequests[idKey]; ok {
 			req.isChunked = true
+
+			// STRICT validation: must have stream_id
+			if frame.StreamId == nil {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: Chunk missing stream_id")
+				return
+			}
+
+			streamId := *frame.StreamId
+
+			// FAIL HARD: Request already ended
+			if req.ended {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: chunk after request END")
+				return
+			}
+
+			// FAIL HARD: Unknown or inactive stream
+			stream, exists := req.streams[streamId]
+			if !exists {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: chunk for unknown stream ID '%s'", streamId)
+				return
+			}
+			if !stream.active {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: chunk for ended stream ID '%s'", streamId)
+				return
+			}
+
+			// Valid chunk for active stream
 			chunk := &ResponseChunk{
 				Payload: frame.Payload,
 				Seq:     frame.Seq,
@@ -239,17 +304,47 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 			req.chunks = append(req.chunks, chunk)
 		}
 
-	case cbor.FrameTypeEnd:
-		// Final chunk or end of stream
+	case cbor.FrameTypeStreamEnd:
+		// STREAM_END: End a specific stream
 		if req, ok := ph.pendingRequests[idKey]; ok {
-			chunk := &ResponseChunk{
-				Payload: frame.Payload,
-				Seq:     frame.Seq,
-				Offset:  frame.Offset,
-				Len:     frame.Len,
-				IsEof:   true, // END frames are always EOF
+			// STRICT validation: must have stream_id
+			if frame.StreamId == nil {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: StreamEnd missing stream_id")
+				return
 			}
-			req.chunks = append(req.chunks, chunk)
+
+			streamId := *frame.StreamId
+
+			// FAIL HARD: Unknown stream
+			stream, exists := req.streams[streamId]
+			if !exists {
+				delete(ph.pendingRequests, idKey)
+				req.done <- fmt.Errorf("protocol violation: StreamEnd for unknown stream ID '%s'", streamId)
+				return
+			}
+
+			// Mark stream as ended
+			stream.active = false
+		}
+
+	case cbor.FrameTypeEnd:
+		// END: Close entire request
+		if req, ok := ph.pendingRequests[idKey]; ok {
+			// Mark request as ended - any stream activity after is FATAL
+			req.ended = true
+
+			if frame.Payload != nil {
+				chunk := &ResponseChunk{
+					Payload: frame.Payload,
+					Seq:     frame.Seq,
+					Offset:  frame.Offset,
+					Len:     frame.Len,
+					IsEof:   true,
+				}
+				req.chunks = append(req.chunks, chunk)
+			}
+
 			delete(ph.pendingRequests, idKey)
 			req.done <- nil
 		}
@@ -257,6 +352,7 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 	case cbor.FrameTypeErr:
 		// Error response
 		if req, ok := ph.pendingRequests[idKey]; ok {
+			req.ended = true
 			delete(ph.pendingRequests, idKey)
 			req.done <- fmt.Errorf("[%s] %s", frame.ErrorCode(), frame.ErrorMessage())
 		}
@@ -278,6 +374,7 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 }
 
 // Call invokes a capability on the plugin and waits for the response
+// Call invokes a capability on the plugin and waits for the response using stream multiplexing
 func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*PluginResponse, error) {
 	ph.mu.Lock()
 	if ph.closed {
@@ -288,105 +385,106 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 	// Generate new message ID
 	requestID := cbor.NewMessageIdRandom()
 
-	// Create pending request
+	// Create pending request with stream tracking
 	req := &pendingRequest{
-		chunks: make([]*ResponseChunk, 0),
-		done:   make(chan error, 1),
+		chunks:  make([]*ResponseChunk, 0),
+		done:    make(chan error, 1),
+		streams: make(map[string]*streamState),
+		ended:   false,
 	}
 	idKey := requestID.ToString()
 	ph.pendingRequests[idKey] = req
 	maxChunk := ph.limits.MaxChunk
 	ph.mu.Unlock()
 
-	// Automatic chunking for large request payloads (or empty payloads to avoid ambiguity)
-	if len(payload) > 0 && len(payload) <= maxChunk {
-		// Small non-empty payload: send single REQ frame with full payload
-		frame := cbor.NewReq(requestID, capUrn, payload, contentType)
+	// Send request using stream multiplexing protocol:
+	// 1. REQ (empty payload)
+	// 2. STREAM_START + CHUNK(s) + STREAM_END for the payload
+	// 3. END
+
+	// Send REQ frame with cap_urn, empty payload
+	reqFrame := cbor.NewReq(requestID, capUrn, []byte{}, "application/cbor")
+	ph.writerMu.Lock()
+	err := ph.writer.WriteFrame(reqFrame)
+	ph.writerMu.Unlock()
+	if err != nil {
+		ph.mu.Lock()
+		delete(ph.pendingRequests, idKey)
+		ph.mu.Unlock()
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	// Send payload as a single stream
+	streamId := "arg-0" // Single argument stream
+	mediaUrn := contentType
+	if mediaUrn == "" {
+		mediaUrn = "media:bytes"
+	}
+
+	// STREAM_START
+	startFrame := cbor.NewStreamStart(requestID, streamId, mediaUrn)
+	ph.writerMu.Lock()
+	err = ph.writer.WriteFrame(startFrame)
+	ph.writerMu.Unlock()
+	if err != nil {
+		ph.mu.Lock()
+		delete(ph.pendingRequests, idKey)
+		ph.mu.Unlock()
+		return nil, fmt.Errorf("failed to send stream start: %w", err)
+	}
+
+	// CHUNK(s)
+	offset := 0
+	seq := uint64(0)
+	for offset < len(payload) {
+		remaining := len(payload) - offset
+		chunkSize := remaining
+		if chunkSize > maxChunk {
+			chunkSize = maxChunk
+		}
+		chunkData := payload[offset : offset+chunkSize]
+
+		chunkFrame := cbor.NewChunk(requestID, streamId, seq, chunkData)
 		ph.writerMu.Lock()
-		err := ph.writer.WriteFrame(frame)
+		err := ph.writer.WriteFrame(chunkFrame)
 		ph.writerMu.Unlock()
 		if err != nil {
 			ph.mu.Lock()
 			delete(ph.pendingRequests, idKey)
 			ph.mu.Unlock()
-			return nil, fmt.Errorf("failed to send request: %w", err)
-		}
-	} else {
-		// Empty or large payload: send REQ + CHUNK frames + END
-		fmt.Printf("[PluginHost] Call: large payload (%d bytes), chunking with max_chunk=%d\n", len(payload), maxChunk)
-
-		// Send initial REQ frame with cap_urn and content_type, but empty payload
-		frame := cbor.NewReq(requestID, capUrn, []byte{}, contentType)
-		ph.writerMu.Lock()
-		err := ph.writer.WriteFrame(frame)
-		ph.writerMu.Unlock()
-		if err != nil {
-			ph.mu.Lock()
-			delete(ph.pendingRequests, idKey)
-			ph.mu.Unlock()
-			return nil, fmt.Errorf("failed to send request: %w", err)
+			return nil, fmt.Errorf("failed to send chunk: %w", err)
 		}
 
-		// Send payload in CHUNK frames
-		offset := 0
-		seq := uint64(0)
+		offset += chunkSize
+		seq++
+	}
 
-		if len(payload) == 0 {
-			// Empty payload: send END frame immediately with no chunks
-			ph.writerMu.Lock()
-			endFrame := cbor.NewEnd(requestID, []byte{})
-			err := ph.writer.WriteFrame(endFrame)
-			ph.writerMu.Unlock()
-			if err != nil {
-				ph.mu.Lock()
-				delete(ph.pendingRequests, idKey)
-				ph.mu.Unlock()
-				return nil, fmt.Errorf("failed to send end: %w", err)
-			}
-		} else {
-			// Non-empty payload: send CHUNK frames + END
-			for offset < len(payload) {
-				remaining := len(payload) - offset
-				chunkSize := remaining
-				if chunkSize > maxChunk {
-					chunkSize = maxChunk
-				}
-				chunkData := payload[offset : offset+chunkSize]
-				offset += chunkSize
+	// STREAM_END
+	streamEndFrame := cbor.NewStreamEnd(requestID, streamId)
+	ph.writerMu.Lock()
+	err = ph.writer.WriteFrame(streamEndFrame)
+	ph.writerMu.Unlock()
+	if err != nil {
+		ph.mu.Lock()
+		delete(ph.pendingRequests, idKey)
+		ph.mu.Unlock()
+		return nil, fmt.Errorf("failed to send stream end: %w", err)
+	}
 
-				ph.writerMu.Lock()
-				if offset < len(payload) {
-					// Not the last chunk - send CHUNK frame
-					chunkFrame := cbor.NewChunk(requestID, seq, chunkData)
-					err := ph.writer.WriteFrame(chunkFrame)
-					ph.writerMu.Unlock()
-					if err != nil {
-						ph.mu.Lock()
-						delete(ph.pendingRequests, idKey)
-						ph.mu.Unlock()
-						return nil, fmt.Errorf("failed to send chunk: %w", err)
-					}
-					seq++
-				} else {
-					// Last chunk - send END frame
-					endFrame := cbor.NewEnd(requestID, chunkData)
-					err := ph.writer.WriteFrame(endFrame)
-					ph.writerMu.Unlock()
-					if err != nil {
-						ph.mu.Lock()
-						delete(ph.pendingRequests, idKey)
-						ph.mu.Unlock()
-						return nil, fmt.Errorf("failed to send end: %w", err)
-					}
-				}
-			}
-		}
-
-		fmt.Printf("[PluginHost] Call: sent %d chunk frames + END for request_id=%s\n", seq, idKey)
+	// END
+	endFrame := cbor.NewEnd(requestID, nil)
+	ph.writerMu.Lock()
+	err = ph.writer.WriteFrame(endFrame)
+	ph.writerMu.Unlock()
+	if err != nil {
+		ph.mu.Lock()
+		delete(ph.pendingRequests, idKey)
+		ph.mu.Unlock()
+		return nil, fmt.Errorf("failed to send end: %w", err)
 	}
 
 	// Wait for response
-	err := <-req.done
+	err = <-req.done
 	if err != nil {
 		return nil, err
 	}
@@ -412,8 +510,6 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 		}, nil
 	}
 }
-
-// Manifest returns the plugin manifest received during handshake
 func (ph *PluginHost) Manifest() []byte {
 	return ph.manifest
 }

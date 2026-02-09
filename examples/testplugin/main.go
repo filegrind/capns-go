@@ -37,17 +37,17 @@ func main() {
 
 	// Register echo handler
 	runtime.Register(`cap:in="media:string;textable;form=scalar";op=echo;out="media:string;textable;form=scalar"`,
-		func(payload []byte, emitter capns.StreamEmitter, peer capns.PeerInvoker) ([]byte, error) {
+		func(payload []byte, emitter capns.StreamEmitter, peer capns.PeerInvoker) error {
 			// Parse input JSON
 			var input map[string]interface{}
 			if err := json.Unmarshal(payload, &input); err != nil {
-				return nil, fmt.Errorf("failed to parse input: %w", err)
+				return fmt.Errorf("failed to parse input: %w", err)
 			}
 
 			// Extract the text field
 			text, ok := input["text"].(string)
 			if !ok {
-				return nil, fmt.Errorf("missing or invalid 'text' field")
+				return fmt.Errorf("missing or invalid 'text' field")
 			}
 
 			// Echo it back
@@ -55,14 +55,21 @@ func main() {
 				"result": text,
 			}
 
-			return json.Marshal(response)
+			responseData, err := json.Marshal(response)
+			if err != nil {
+				return fmt.Errorf("failed to marshal response: %w", err)
+			}
+
+			emitter.Emit(responseData)
+			return nil
 		})
 
 	// Register void test handler
 	runtime.Register(`cap:in="media:void";op=void_test;out="media:void"`,
-		func(payload []byte, emitter capns.StreamEmitter, peer capns.PeerInvoker) ([]byte, error) {
+		func(payload []byte, emitter capns.StreamEmitter, peer capns.PeerInvoker) error {
 			// Void capability - no input, no output
-			return []byte{}, nil
+			emitter.Emit([]byte{})
+			return nil
 		})
 
 	// Run runtime (auto-detects CLI vs CBOR mode)

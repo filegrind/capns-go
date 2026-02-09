@@ -574,7 +574,7 @@ func TestStreamingChunks(t *testing.T) {
 		// Send 3 chunks
 		chunks := [][]byte{[]byte("chunk1"), []byte("chunk2"), []byte("chunk3")}
 		for i, chunk := range chunks {
-			chunkFrame := cbor.NewChunk(requestID, uint64(i), chunk)
+			chunkFrame := cbor.NewChunk(requestID, "response", uint64(i), chunk)
 			if i == 0 {
 				totalLen := uint64(18)
 				chunkFrame.Len = &totalLen // total length
@@ -1002,13 +1002,15 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 	require.NoError(t, err)
 
 	runtime.Register(`cap:in="media:void";op=echo;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return payload, nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit(payload)
+			return nil
 		})
 
 	runtime.Register(`cap:in="media:void";op=transform;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("transformed"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("transformed"))
+			return nil
 		})
 
 	// Exact match
@@ -1047,7 +1049,7 @@ func TestHeartbeatDuringStreaming(t *testing.T) {
 		requestID := frame.Id
 
 		// Send chunk 1
-		chunk1 := cbor.NewChunk(requestID, 0, []byte("part1"))
+		chunk1 := cbor.NewChunk(requestID, "response", 0, []byte("part1"))
 		err = writer.WriteFrame(chunk1)
 		require.NoError(t, err)
 
@@ -1064,7 +1066,7 @@ func TestHeartbeatDuringStreaming(t *testing.T) {
 		assert.Equal(t, heartbeatID.ToString(), hbResponse.Id.ToString())
 
 		// Send final chunk
-		chunk2 := cbor.NewChunk(requestID, 1, []byte("part2"))
+		chunk2 := cbor.NewChunk(requestID, "response", 1, []byte("part2"))
 		eof := true
 		chunk2.Eof = &eof
 		err = writer.WriteFrame(chunk2)
@@ -1115,61 +1117,6 @@ func TestHeartbeatDuringStreaming(t *testing.T) {
 	wg.Wait()
 }
 
-// TEST295: Test RES frame (not END) is received correctly as single complete response
-func TestResFrameSingleResponse(t *testing.T) {
-	hostWrite, pluginRead, pluginWrite, hostRead := createPipePair(t)
-	defer hostWrite.Close()
-	defer pluginRead.Close()
-	defer pluginWrite.Close()
-	defer hostRead.Close()
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	// Plugin side
-	go func() {
-		defer wg.Done()
-		reader := cbor.NewFrameReader(pluginRead)
-		writer := cbor.NewFrameWriter(pluginWrite)
-
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
-		require.NoError(t, err)
-		reader.SetLimits(limits)
-		writer.SetLimits(limits)
-
-		// Read request
-		frame, err := reader.ReadFrame()
-		require.NoError(t, err)
-
-		// Send RES frame
-		response := cbor.NewRes(frame.Id, []byte("single response"), "application/octet-stream")
-		err = writer.WriteFrame(response)
-		require.NoError(t, err)
-	}()
-
-	// Host side
-	reader := cbor.NewFrameReader(hostRead)
-	writer := cbor.NewFrameWriter(hostWrite)
-
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
-	require.NoError(t, err)
-	reader.SetLimits(limits)
-	writer.SetLimits(limits)
-
-	// Send request
-	requestID := cbor.NewMessageIdRandom()
-	request := cbor.NewReq(requestID, "cap:op=single", []byte(""), "application/json")
-	err = writer.WriteFrame(request)
-	require.NoError(t, err)
-
-	// Read response
-	response, err := reader.ReadFrame()
-	require.NoError(t, err)
-	assert.Equal(t, cbor.FrameTypeRes, response.FrameType)
-	assert.Equal(t, []byte("single response"), response.Payload)
-
-	wg.Wait()
-}
 
 // TEST296: Test host does not echo back plugin's heartbeat response (no infinite ping-pong)
 func TestHostInitiatedHeartbeatNoPingPong(t *testing.T) {
@@ -1208,8 +1155,8 @@ func TestHostInitiatedHeartbeatNoPingPong(t *testing.T) {
 		err = writer.WriteFrame(hbResponse)
 		require.NoError(t, err)
 
-		// Send request response
-		response := cbor.NewRes(requestID, []byte("done"), "text/plain")
+		// Send request response using END frame
+		response := cbor.NewEnd(requestID, []byte("done"))
 		err = writer.WriteFrame(response)
 		require.NoError(t, err)
 
@@ -1245,7 +1192,7 @@ func TestHostInitiatedHeartbeatNoPingPong(t *testing.T) {
 	// Read request response
 	response, err := reader.ReadFrame()
 	require.NoError(t, err)
-	assert.Equal(t, cbor.FrameTypeRes, response.FrameType)
+	assert.Equal(t, cbor.FrameTypeEnd, response.FrameType)
 	assert.Equal(t, []byte("done"), response.Payload)
 
 	<-done
@@ -1522,7 +1469,7 @@ func TestStreamingSequenceNumbers(t *testing.T) {
 		// Send 5 chunks with explicit sequence numbers
 		for seq := uint64(0); seq < 5; seq++ {
 			payload := []byte(string(rune('0' + seq)))
-			chunk := cbor.NewChunk(requestID, seq, payload)
+			chunk := cbor.NewChunk(requestID, "output", seq, payload)
 			if seq == 4 {
 				eof := true
 				chunk.Eof = &eof
@@ -1715,7 +1662,7 @@ func TestAutoChunkingReassembly(t *testing.T) {
 
 		// Use WriteResponseWithChunking to do the splitting
 		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: maxChunk})
-		err = writer.WriteResponseWithChunking(frame.Id, data)
+		err = writer.WriteResponseWithChunking(frame.Id, "response", "application/octet-stream", data)
 		require.NoError(t, err)
 	}()
 
@@ -1733,26 +1680,31 @@ func TestAutoChunkingReassembly(t *testing.T) {
 	require.NoError(t, err)
 
 	// Collect all frames until END
-	var chunks []*cbor.Frame
+	var frames []*cbor.Frame
 	for {
 		frame, err := reader.ReadFrame()
 		require.NoError(t, err)
-		chunks = append(chunks, frame)
+		frames = append(frames, frame)
 		if frame.FrameType == cbor.FrameTypeEnd {
 			break
 		}
 	}
 
-	// Should have CHUNK + CHUNK + END (100 + 100 + 50)
-	assert.Equal(t, 3, len(chunks), "250 bytes / 100 max_chunk = 2 CHUNK + 1 END")
-	assert.Equal(t, cbor.FrameTypeChunk, chunks[0].FrameType)
-	assert.Equal(t, cbor.FrameTypeChunk, chunks[1].FrameType)
-	assert.Equal(t, cbor.FrameTypeEnd, chunks[2].FrameType)
+	// Protocol v2: STREAM_START + CHUNK(100) + CHUNK(100) + CHUNK(50) + STREAM_END + END
+	assert.Equal(t, 6, len(frames), "250 bytes: STREAM_START + 3 CHUNK + STREAM_END + END")
+	assert.Equal(t, cbor.FrameTypeStreamStart, frames[0].FrameType)
+	assert.Equal(t, cbor.FrameTypeChunk, frames[1].FrameType)
+	assert.Equal(t, cbor.FrameTypeChunk, frames[2].FrameType)
+	assert.Equal(t, cbor.FrameTypeChunk, frames[3].FrameType)
+	assert.Equal(t, cbor.FrameTypeStreamEnd, frames[4].FrameType)
+	assert.Equal(t, cbor.FrameTypeEnd, frames[5].FrameType)
 
-	// Reassemble and verify
+	// Reassemble CHUNK payloads only (not STREAM_START/END/END)
 	var reassembled []byte
-	for _, c := range chunks {
-		reassembled = append(reassembled, c.Payload...)
+	for _, f := range frames {
+		if f.FrameType == cbor.FrameTypeChunk {
+			reassembled = append(reassembled, f.Payload...)
+		}
 	}
 	expected := make([]byte, 250)
 	for i := range expected {
@@ -1793,7 +1745,7 @@ func TestExactMaxChunkSingleEnd(t *testing.T) {
 			data[i] = 0xAB
 		}
 		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: 100})
-		err = writer.WriteResponseWithChunking(frame.Id, data)
+		err = writer.WriteResponseWithChunking(frame.Id, "response", "application/octet-stream", data)
 		require.NoError(t, err)
 	}()
 
@@ -1810,10 +1762,20 @@ func TestExactMaxChunkSingleEnd(t *testing.T) {
 	err = writer.WriteFrame(request)
 	require.NoError(t, err)
 
-	frame, err := reader.ReadFrame()
-	require.NoError(t, err)
-	assert.Equal(t, cbor.FrameTypeEnd, frame.FrameType, "exact max_chunk must produce single END")
-	assert.Equal(t, 100, len(frame.Payload))
+	// Protocol v2: STREAM_START + CHUNK(100) + STREAM_END + END
+	// Read all 4 frames
+	var frames []*cbor.Frame
+	for i := 0; i < 4; i++ {
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		frames = append(frames, frame)
+	}
+
+	assert.Equal(t, cbor.FrameTypeStreamStart, frames[0].FrameType)
+	assert.Equal(t, cbor.FrameTypeChunk, frames[1].FrameType)
+	assert.Equal(t, 100, len(frames[1].Payload), "CHUNK should have full 100 bytes")
+	assert.Equal(t, cbor.FrameTypeStreamEnd, frames[2].FrameType)
+	assert.Equal(t, cbor.FrameTypeEnd, frames[3].FrameType)
 
 	wg.Wait()
 }
@@ -1848,7 +1810,7 @@ func TestMaxChunkPlusOneSplitsIntoTwo(t *testing.T) {
 			data[i] = byte(i)
 		}
 		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: 100})
-		err = writer.WriteResponseWithChunking(frame.Id, data)
+		err = writer.WriteResponseWithChunking(frame.Id, "response", "application/octet-stream", data)
 		require.NoError(t, err)
 	}()
 
@@ -1865,19 +1827,29 @@ func TestMaxChunkPlusOneSplitsIntoTwo(t *testing.T) {
 	err = writer.WriteFrame(request)
 	require.NoError(t, err)
 
-	// Should get exactly CHUNK + END
-	chunk, err := reader.ReadFrame()
-	require.NoError(t, err)
-	assert.Equal(t, cbor.FrameTypeChunk, chunk.FrameType)
-	assert.Equal(t, 100, len(chunk.Payload))
+	// Protocol v2: STREAM_START + CHUNK(100) + CHUNK(1) + STREAM_END + END
+	var frames []*cbor.Frame
+	for i := 0; i < 5; i++ {
+		frame, err := reader.ReadFrame()
+		require.NoError(t, err)
+		frames = append(frames, frame)
+	}
 
-	end, err := reader.ReadFrame()
-	require.NoError(t, err)
-	assert.Equal(t, cbor.FrameTypeEnd, end.FrameType)
-	assert.Equal(t, 1, len(end.Payload))
+	assert.Equal(t, cbor.FrameTypeStreamStart, frames[0].FrameType)
+	assert.Equal(t, cbor.FrameTypeChunk, frames[1].FrameType)
+	assert.Equal(t, 100, len(frames[1].Payload))
+	assert.Equal(t, cbor.FrameTypeChunk, frames[2].FrameType)
+	assert.Equal(t, 1, len(frames[2].Payload))
+	assert.Equal(t, cbor.FrameTypeStreamEnd, frames[3].FrameType)
+	assert.Equal(t, cbor.FrameTypeEnd, frames[4].FrameType)
 
-	// Verify reassembled data
-	reassembled := append(chunk.Payload, end.Payload...)
+	// Verify reassembled data from CHUNKs
+	var reassembled []byte
+	for _, f := range frames {
+		if f.FrameType == cbor.FrameTypeChunk {
+			reassembled = append(reassembled, f.Payload...)
+		}
+	}
 	expected := make([]byte, 101)
 	for i := range expected {
 		expected[i] = byte(i)
@@ -1943,7 +1915,7 @@ func TestChunkingDataIntegrity3x(t *testing.T) {
 
 		// 300 bytes with max_chunk=100 → CHUNK(100) + CHUNK(100) + END(100)
 		writer.SetLimits(cbor.Limits{MaxFrame: cbor.DefaultMaxFrame, MaxChunk: 100})
-		err = writer.WriteResponseWithChunking(frame.Id, expected)
+		err = writer.WriteResponseWithChunking(frame.Id, "response", "application/octet-stream", expected)
 		require.NoError(t, err)
 	}()
 
@@ -1971,11 +1943,15 @@ func TestChunkingDataIntegrity3x(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 3, len(frames), "300/100 = 2 CHUNK + 1 END")
+	// Protocol v2: STREAM_START + CHUNK(100) + CHUNK(100) + CHUNK(100) + STREAM_END + END
+	assert.Equal(t, 6, len(frames), "300 bytes: STREAM_START + 3 CHUNK + STREAM_END + END")
 
+	// Reassemble CHUNK payloads only
 	var reassembled []byte
 	for _, f := range frames {
-		reassembled = append(reassembled, f.Payload...)
+		if f.FrameType == cbor.FrameTypeChunk {
+			reassembled = append(reassembled, f.Payload...)
+		}
 	}
 	assert.Equal(t, 300, len(reassembled))
 	assert.Equal(t, expected, reassembled, "pattern must be preserved across chunk boundaries")

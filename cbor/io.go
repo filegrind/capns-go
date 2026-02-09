@@ -110,37 +110,44 @@ func (fw *FrameWriter) WriteFrame(frame *Frame) error {
 	return nil
 }
 
-// WriteResponseWithChunking writes a response with automatic chunking for large payloads
-func (fw *FrameWriter) WriteResponseWithChunking(requestId MessageId, payload []byte) error {
-	if len(payload) <= fw.limits.MaxChunk {
-		// Small payload: single END frame
-		frame := NewEnd(requestId, payload)
-		return fw.WriteFrame(frame)
+// WriteResponseWithChunking writes a response with automatic chunking for large payloads.
+// Uses stream multiplexing protocol: STREAM_START + CHUNK + STREAM_END + END
+func (fw *FrameWriter) WriteResponseWithChunking(requestId MessageId, streamId string, mediaUrn string, payload []byte) error {
+	// Send STREAM_START
+	startFrame := NewStreamStart(requestId, streamId, mediaUrn)
+	if err := fw.WriteFrame(startFrame); err != nil {
+		return err
 	}
 
-	// Large payload: CHUNK frames + final END
-	offset := 0
-	seq := uint64(0)
+	// Send CHUNKs if payload is large
+	if len(payload) > 0 {
+		offset := 0
+		seq := uint64(0)
 
-	for offset < len(payload) {
-		remaining := len(payload) - offset
-		chunkSize := min(remaining, fw.limits.MaxChunk)
-		chunkData := payload[offset : offset+chunkSize]
-		offset += chunkSize
+		for offset < len(payload) {
+			remaining := len(payload) - offset
+			chunkSize := min(remaining, fw.limits.MaxChunk)
+			chunkData := payload[offset : offset+chunkSize]
 
-		if offset < len(payload) {
-			// Not the last chunk - send CHUNK frame
-			frame := NewChunk(requestId, seq, chunkData)
+			frame := NewChunk(requestId, streamId, seq, chunkData)
 			if err := fw.WriteFrame(frame); err != nil {
 				return err
 			}
+
+			offset += chunkSize
 			seq++
-		} else {
-			// Last chunk - send END frame with remaining data
-			frame := NewEnd(requestId, chunkData)
-			return fw.WriteFrame(frame)
 		}
 	}
+
+	// Send STREAM_END
+	endStreamFrame := NewStreamEnd(requestId, streamId)
+	if err := fw.WriteFrame(endStreamFrame); err != nil {
+		return err
+	}
+
+	// Send END
+	endFrame := NewEnd(requestId, nil)
+	return fw.WriteFrame(endFrame)
 
 	return nil
 }

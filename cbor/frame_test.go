@@ -10,13 +10,15 @@ import (
 func TestFrameTypeRoundtrip(t *testing.T) {
 	types := []FrameType{
 		FrameTypeReq,
-		FrameTypeRes,
+		// Res REMOVED - old protocol no longer supported
 		FrameTypeChunk,
 		FrameTypeEnd,
 		FrameTypeErr,
 		FrameTypeLog,
 		FrameTypeHeartbeat,
 		FrameTypeHello,
+		FrameTypeStreamStart,
+		FrameTypeStreamEnd,
 	}
 
 	for _, ft := range types {
@@ -33,16 +35,22 @@ func TestFrameTypeValidRange(t *testing.T) {
 	validTypes := map[uint8]bool{
 		0: true, // HELLO
 		1: true, // REQ
-		2: true, // RES
+		// 2: RES REMOVED - old protocol no longer supported
 		3: true, // CHUNK
 		4: true, // END
 		5: true, // LOG
 		6: true, // ERR
 		7: true, // HEARTBEAT
+		8: true, // STREAM_START
+		9: true, // STREAM_END
 	}
 
 	for i := uint8(0); i < 20; i++ {
-		if i >= 0 && i <= 7 {
+		if i >= 0 && i <= 9 {
+			if i == 2 {
+				// Skip RES (removed)
+				continue
+			}
 			if !validTypes[i] {
 				t.Errorf("Expected %d to be valid FrameType", i)
 			}
@@ -58,9 +66,7 @@ func TestFrameTypeWireProtocolValues(t *testing.T) {
 	if uint8(FrameTypeReq) != 1 {
 		t.Errorf("REQ must be 1, got %d", FrameTypeReq)
 	}
-	if uint8(FrameTypeRes) != 2 {
-		t.Errorf("RES must be 2, got %d", FrameTypeRes)
-	}
+	// Res = 2 REMOVED - old protocol no longer supported
 	if uint8(FrameTypeChunk) != 3 {
 		t.Errorf("CHUNK must be 3, got %d", FrameTypeChunk)
 	}
@@ -75,6 +81,12 @@ func TestFrameTypeWireProtocolValues(t *testing.T) {
 	}
 	if uint8(FrameTypeHeartbeat) != 7 {
 		t.Errorf("HEARTBEAT must be 7, got %d", FrameTypeHeartbeat)
+	}
+	if uint8(FrameTypeStreamStart) != 8 {
+		t.Errorf("STREAM_START must be 8, got %d", FrameTypeStreamStart)
+	}
+	if uint8(FrameTypeStreamEnd) != 9 {
+		t.Errorf("STREAM_END must be 9, got %d", FrameTypeStreamEnd)
 	}
 }
 
@@ -221,35 +233,22 @@ func TestFrameReq(t *testing.T) {
 	}
 }
 
-// TEST183: Test Frame::res stores payload and content_type for single complete response
-func TestFrameRes(t *testing.T) {
-	id := NewMessageIdRandom()
-	payload := []byte("response data")
-	contentType := "application/json"
+// TEST183: REMOVED - RES frame no longer supported in protocol v2
 
-	frame := NewRes(id, payload, contentType)
-
-	if frame.FrameType != FrameTypeRes {
-		t.Errorf("Expected RES frame type, got %v", frame.FrameType)
-	}
-	if string(frame.Payload) != string(payload) {
-		t.Error("Payload mismatch")
-	}
-	if frame.ContentType == nil || *frame.ContentType != contentType {
-		t.Errorf("Expected content_type %s, got %v", contentType, frame.ContentType)
-	}
-}
-
-// TEST184: Test Frame::chunk stores seq and payload for streaming
+// TEST184: Test Frame::chunk stores seq and payload for streaming (updated for stream_id)
 func TestFrameChunk(t *testing.T) {
 	id := NewMessageIdRandom()
+	streamId := "stream-123"
 	seq := uint64(5)
 	payload := []byte("chunk data")
 
-	frame := NewChunk(id, seq, payload)
+	frame := NewChunk(id, streamId, seq, payload)
 
 	if frame.FrameType != FrameTypeChunk {
 		t.Errorf("Expected CHUNK frame type, got %v", frame.FrameType)
+	}
+	if frame.StreamId == nil || *frame.StreamId != streamId {
+		t.Errorf("Expected streamId %s, got %v", streamId, frame.StreamId)
 	}
 	if frame.Seq != seq {
 		t.Errorf("Expected seq %d, got %d", seq, frame.Seq)
@@ -480,10 +479,10 @@ func TestLimitsDefault(t *testing.T) {
 	}
 }
 
-// TEST199: Test PROTOCOL_VERSION is 1
+// TEST199: Test PROTOCOL_VERSION is 2
 func TestProtocolVersionConstant(t *testing.T) {
-	if ProtocolVersion != 1 {
-		t.Errorf("PROTOCOL_VERSION must be 1, got %d", ProtocolVersion)
+	if ProtocolVersion != 2 {
+		t.Errorf("PROTOCOL_VERSION must be 2, got %d", ProtocolVersion)
 	}
 }
 
@@ -593,5 +592,86 @@ func TestReqFrameEmptyPayload(t *testing.T) {
 	}
 	if len(frame.Payload) != 0 {
 		t.Error("Empty payload should have length 0")
+	}
+}
+
+// TEST365: Frame::stream_start stores reqId, streamId, mediaUrn
+func TestStreamStartFrame(t *testing.T) {
+	reqId := NewMessageIdRandom()
+	streamId := "stream-abc-123"
+	mediaUrn := "media:bytes"
+
+	frame := NewStreamStart(reqId, streamId, mediaUrn)
+
+	if frame.FrameType != FrameTypeStreamStart {
+		t.Errorf("Expected STREAM_START frame type, got %v", frame.FrameType)
+	}
+	if frame.StreamId == nil || *frame.StreamId != streamId {
+		t.Errorf("Expected streamId %s, got %v", streamId, frame.StreamId)
+	}
+	if frame.MediaUrn == nil || *frame.MediaUrn != mediaUrn {
+		t.Errorf("Expected mediaUrn %s, got %v", mediaUrn, frame.MediaUrn)
+	}
+	if !frame.Id.Equals(reqId) {
+		t.Error("Request ID mismatch")
+	}
+}
+
+// TEST366: Frame::stream_end stores reqId, streamId
+func TestStreamEndFrame(t *testing.T) {
+	reqId := NewMessageIdRandom()
+	streamId := "stream-xyz-456"
+
+	frame := NewStreamEnd(reqId, streamId)
+
+	if frame.FrameType != FrameTypeStreamEnd {
+		t.Errorf("Expected STREAM_END frame type, got %v", frame.FrameType)
+	}
+	if frame.StreamId == nil || *frame.StreamId != streamId {
+		t.Errorf("Expected streamId %s, got %v", streamId, frame.StreamId)
+	}
+	if frame.MediaUrn != nil {
+		t.Errorf("STREAM_END should not have mediaUrn, got %v", frame.MediaUrn)
+	}
+	if !frame.Id.Equals(reqId) {
+		t.Error("Request ID mismatch")
+	}
+}
+
+// TEST367: Frame::stream_start with empty streamId still constructs
+func TestStreamStartWithEmptyStreamId(t *testing.T) {
+	reqId := NewMessageIdRandom()
+	streamId := ""
+	mediaUrn := "media:json"
+
+	frame := NewStreamStart(reqId, streamId, mediaUrn)
+
+	if frame.FrameType != FrameTypeStreamStart {
+		t.Errorf("Expected STREAM_START frame type, got %v", frame.FrameType)
+	}
+	if frame.StreamId == nil {
+		t.Error("StreamId should not be nil, even if empty")
+	}
+	if frame.MediaUrn == nil || *frame.MediaUrn != mediaUrn {
+		t.Errorf("Expected mediaUrn %s, got %v", mediaUrn, frame.MediaUrn)
+	}
+}
+
+// TEST368: Frame::stream_start with empty mediaUrn still constructs
+func TestStreamStartWithEmptyMediaUrn(t *testing.T) {
+	reqId := NewMessageIdRandom()
+	streamId := "stream-test"
+	mediaUrn := ""
+
+	frame := NewStreamStart(reqId, streamId, mediaUrn)
+
+	if frame.FrameType != FrameTypeStreamStart {
+		t.Errorf("Expected STREAM_START frame type, got %v", frame.FrameType)
+	}
+	if frame.StreamId == nil || *frame.StreamId != streamId {
+		t.Errorf("Expected streamId %s, got %v", streamId, frame.StreamId)
+	}
+	if frame.MediaUrn == nil {
+		t.Error("MediaUrn should not be nil, even if empty")
 	}
 }

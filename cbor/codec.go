@@ -10,7 +10,7 @@ import (
 // CBOR map keys (MUST match Rust implementation exactly)
 // From capns/src/cbor_frame.rs lines 10-22:
 const (
-	keyVersion     = 0  // version (u8, always 1)
+	keyVersion     = 0  // version (u8, always 2)
 	keyFrameType   = 1  // frame_type (u8)
 	keyId          = 2  // id (bytes[16] or uint)
 	keySeq         = 3  // seq (u64)
@@ -21,6 +21,8 @@ const (
 	keyOffset      = 8  // offset (u64, optional - byte offset in chunked stream)
 	keyEof         = 9  // eof (bool, optional - true on final chunk)
 	keyCap         = 10 // cap (tstr, optional - cap URN for requests)
+	keyStreamId    = 11 // stream_id (tstr, optional - stream ID for multiplexed streaming)
+	keyMediaUrn    = 12 // media_urn (tstr, optional - media URN for stream type)
 )
 
 // EncodeFrame encodes a Frame to CBOR bytes using integer keys (matches Rust)
@@ -83,6 +85,16 @@ func EncodeFrame(frame *Frame) ([]byte, error) {
 		m[keyCap] = *frame.Cap
 	}
 
+	// 11: stream_id (optional - for STREAM_START, CHUNK, STREAM_END frames)
+	if frame.StreamId != nil && *frame.StreamId != "" {
+		m[keyStreamId] = *frame.StreamId
+	}
+
+	// 12: media_urn (optional - for STREAM_START frames)
+	if frame.MediaUrn != nil && *frame.MediaUrn != "" {
+		m[keyMediaUrn] = *frame.MediaUrn
+	}
+
 	return cbor.Marshal(m)
 }
 
@@ -116,9 +128,13 @@ func DecodeFrame(data []byte) (*Frame, error) {
 	}
 	if ft, ok := ftVal.(uint64); ok {
 		frameType := FrameType(ft)
-		// Validate frame type is in valid range
-		if frameType < FrameTypeHello || frameType > FrameTypeHeartbeat {
+		// Validate frame type is in valid range (0-9, excluding removed value 2)
+		if frameType < FrameTypeHello || frameType > FrameTypeStreamEnd {
 			return nil, fmt.Errorf("invalid frame_type %d", ft)
+		}
+		// Reject old RES frame type (2) - no longer supported
+		if frameType == 2 {
+			return nil, fmt.Errorf("frame_type 2 (RES) is no longer supported in protocol v2")
 		}
 		frame.FrameType = frameType
 	} else {
@@ -204,6 +220,20 @@ func DecodeFrame(data []byte) (*Frame, error) {
 	if capVal, ok := m[keyCap]; ok {
 		if cap, ok := capVal.(string); ok {
 			frame.Cap = &cap
+		}
+	}
+
+	// 11: stream_id (optional - for STREAM_START, CHUNK, STREAM_END frames)
+	if streamIdVal, ok := m[keyStreamId]; ok {
+		if streamId, ok := streamIdVal.(string); ok {
+			frame.StreamId = &streamId
+		}
+	}
+
+	// 12: media_urn (optional - for STREAM_START frames)
+	if mediaUrnVal, ok := m[keyMediaUrn]; ok {
+		if mediaUrn, ok := mediaUrnVal.(string); ok {
+			frame.MediaUrn = &mediaUrn
 		}
 	}
 

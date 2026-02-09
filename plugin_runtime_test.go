@@ -15,6 +15,23 @@ import (
 
 const testManifest = `{"name":"TestPlugin","version":"1.0.0","description":"Test plugin","caps":[{"urn":"cap:in=\"media:void\";op=test;out=\"media:void\"","title":"Test","command":"test"}]}`
 
+// Mock emitter that captures emitted data for testing
+type mockStreamEmitter struct {
+	emittedData []byte
+}
+
+func (m *mockStreamEmitter) Emit(payload []byte) {
+	m.emittedData = append(m.emittedData, payload...)
+}
+
+func (m *mockStreamEmitter) Log(level, message string) {
+	// No-op for tests
+}
+
+func (m *mockStreamEmitter) EmitStatus(operation, details string) {
+	// No-op for tests
+}
+
 // TEST248: Test register handler by exact cap URN and find it by the same URN
 func TestRegisterAndFindHandler(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
@@ -23,8 +40,9 @@ func TestRegisterAndFindHandler(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("result"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("result"))
+			return nil
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
@@ -41,8 +59,9 @@ func TestRawHandler(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=raw;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return payload, nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit(payload)
+			return nil
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=raw;out="media:void"`)
@@ -50,14 +69,14 @@ func TestRawHandler(t *testing.T) {
 		t.Fatal("Expected to find handler")
 	}
 
-	emitter := &cliStreamEmitter{}
+	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	result, err := handler([]byte("echo this"), emitter, peer)
+	err = handler([]byte("echo this"), emitter, peer)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
-	if string(result) != "echo this" {
-		t.Errorf("Expected 'echo this', got %s", string(result))
+	if string(emitter.emittedData) != "echo this" {
+		t.Errorf("Expected 'echo this', got %s", string(emitter.emittedData))
 	}
 }
 
@@ -69,27 +88,29 @@ func TestTypedHandlerDeserialization(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
 			var req map[string]interface{}
 			if err := json.Unmarshal(payload, &req); err != nil {
-				return nil, err
+				return err
 			}
 			value := req["key"]
 			if value == nil {
-				return []byte("missing"), nil
+				emitter.Emit([]byte("missing"))
+				return nil
 			}
-			return []byte(value.(string)), nil
+			emitter.Emit([]byte(value.(string)))
+			return nil
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
-	emitter := &cliStreamEmitter{}
+	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	result, err := handler([]byte(`{"key":"hello"}`), emitter, peer)
+	err = handler([]byte(`{"key":"hello"}`), emitter, peer)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
-	if string(result) != "hello" {
-		t.Errorf("Expected 'hello', got %s", string(result))
+	if string(emitter.emittedData) != "hello" {
+		t.Errorf("Expected 'hello', got %s", string(emitter.emittedData))
 	}
 }
 
@@ -101,18 +122,19 @@ func TestTypedHandlerRejectsInvalidJSON(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
 			var req map[string]interface{}
 			if err := json.Unmarshal(payload, &req); err != nil {
-				return nil, err
+				return err
 			}
-			return []byte{}, nil
+			emitter.Emit([]byte{})
+			return nil
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
-	emitter := &cliStreamEmitter{}
+	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	_, err = handler([]byte("not json {{{{"), emitter, peer)
+	err = handler([]byte("not json {{{{"), emitter, peer)
 	if err == nil {
 		t.Fatal("Expected error for invalid JSON, got nil")
 	}
@@ -139,8 +161,9 @@ func TestHandlerIsSendSync(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=threaded;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("done"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("done"))
+			return nil
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=threaded;out="media:void"`)
@@ -151,14 +174,14 @@ func TestHandlerIsSendSync(t *testing.T) {
 	// Test that handler can be called from goroutine
 	done := make(chan bool)
 	go func() {
-		emitter := &cliStreamEmitter{}
+		emitter := &mockStreamEmitter{}
 		peer := &noPeerInvoker{}
-		result, err := handler([]byte("{}"), emitter, peer)
+		err := handler([]byte("{}"), emitter, peer)
 		if err != nil {
 			t.Errorf("Handler failed: %v", err)
 		}
-		if string(result) != "done" {
-			t.Errorf("Expected 'done', got %s", string(result))
+		if string(emitter.emittedData) != "done" {
+			t.Errorf("Expected 'done', got %s", string(emitter.emittedData))
 		}
 		done <- true
 	}()
@@ -376,37 +399,42 @@ func TestMultipleHandlers(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=alpha;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("a"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("a"))
+			return nil
 		})
 	runtime.Register(`cap:in="media:void";op=beta;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("b"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("b"))
+			return nil
 		})
 	runtime.Register(`cap:in="media:void";op=gamma;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("g"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("g"))
+			return nil
 		})
 
-	emitter := &cliStreamEmitter{}
 	peer := &noPeerInvoker{}
 
+	emitterA := &mockStreamEmitter{}
 	hAlpha := runtime.FindHandler(`cap:in="media:void";op=alpha;out="media:void"`)
-	resultA, _ := hAlpha([]byte{}, emitter, peer)
-	if string(resultA) != "a" {
-		t.Errorf("Expected 'a', got %s", string(resultA))
+	_ = hAlpha([]byte{}, emitterA, peer)
+	if string(emitterA.emittedData) != "a" {
+		t.Errorf("Expected 'a', got %s", string(emitterA.emittedData))
 	}
 
+	emitterB := &mockStreamEmitter{}
 	hBeta := runtime.FindHandler(`cap:in="media:void";op=beta;out="media:void"`)
-	resultB, _ := hBeta([]byte{}, emitter, peer)
-	if string(resultB) != "b" {
-		t.Errorf("Expected 'b', got %s", string(resultB))
+	_ = hBeta([]byte{}, emitterB, peer)
+	if string(emitterB.emittedData) != "b" {
+		t.Errorf("Expected 'b', got %s", string(emitterB.emittedData))
 	}
 
+	emitterG := &mockStreamEmitter{}
 	hGamma := runtime.FindHandler(`cap:in="media:void";op=gamma;out="media:void"`)
-	resultG, _ := hGamma([]byte{}, emitter, peer)
-	if string(resultG) != "g" {
-		t.Errorf("Expected 'g', got %s", string(resultG))
+	_ = hGamma([]byte{}, emitterG, peer)
+	if string(emitterG.emittedData) != "g" {
+		t.Errorf("Expected 'g', got %s", string(emitterG.emittedData))
 	}
 }
 
@@ -418,20 +446,22 @@ func TestHandlerReplacement(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("first"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("first"))
+			return nil
 		})
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
-			return []byte("second"), nil
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+			emitter.Emit([]byte("second"))
+			return nil
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
-	emitter := &cliStreamEmitter{}
+	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	result, _ := handler([]byte{}, emitter, peer)
-	if string(result) != "second" {
-		t.Errorf("Expected 'second' (later registration), got %s", string(result))
+	_ = handler([]byte{}, emitter, peer)
+	if string(emitter.emittedData) != "second" {
+		t.Errorf("Expected 'second' (later registration), got %s", string(emitter.emittedData))
 	}
 }
 
@@ -559,9 +589,10 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	var receivedPayload []byte
 	runtime.Register(
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
 			receivedPayload = payload
-			return []byte("processed"), nil
+			emitter.Emit([]byte("processed"))
+			return nil
 		},
 	)
 
@@ -579,9 +610,9 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	}
 
 	handler := runtime.FindHandler(manifest.Caps[0].UrnString())
-	emitter := &cliStreamEmitter{}
+	emitter := &mockStreamEmitter{}
 	peerInvoker := &noPeerInvoker{}
-	result, err := handler(payload, emitter, peerInvoker)
+	err = handler(payload, emitter, peerInvoker)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
@@ -590,8 +621,8 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	if string(receivedPayload) != "PDF binary content 336" {
 		t.Errorf("Expected handler to receive file bytes, got: %s", string(receivedPayload))
 	}
-	if string(result) != "processed" {
-		t.Errorf("Expected 'processed', got: %s", string(result))
+	if string(emitter.emittedData) != "processed" {
+		t.Errorf("Expected 'processed', got: %s", string(emitter.emittedData))
 	}
 }
 
@@ -1192,9 +1223,10 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	var receivedPayload []byte
 	runtime.Register(
 		`cap:in="media:pdf;bytes";op=process;out="media:result;textable"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error) {
+		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
 			receivedPayload = payload
-			return []byte("processed"), nil
+			emitter.Emit([]byte("processed"))
+			return nil
 		},
 	)
 
@@ -1212,9 +1244,9 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	}
 
 	handler := runtime.FindHandler(manifest.Caps[0].UrnString())
-	emitter := &cliStreamEmitter{}
+	emitter := &mockStreamEmitter{}
 	peerInvoker := &noPeerInvoker{}
-	result, err := handler(payload, emitter, peerInvoker)
+	err = handler(payload, emitter, peerInvoker)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
@@ -1223,8 +1255,8 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	if string(receivedPayload) != string(testContent) {
 		t.Errorf("Handler should receive file bytes, not path")
 	}
-	if string(result) != "processed" {
-		t.Errorf("Expected 'processed', got: %s", string(result))
+	if string(emitter.emittedData) != "processed" {
+		t.Errorf("Expected 'processed', got: %s", string(emitter.emittedData))
 	}
 }
 

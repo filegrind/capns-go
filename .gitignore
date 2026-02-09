@@ -53,3 +53,4 @@ temp/
 # bindata.go
 .ws/
 .scrap/
+examples/testplugin/testplugin

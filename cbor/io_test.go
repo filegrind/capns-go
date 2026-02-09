@@ -115,30 +115,7 @@ func TestLogFrameRoundtrip(t *testing.T) {
 	}
 }
 
-// TEST209: Test RES frame encode/decode roundtrip preserves payload and content_type
-func TestResFrameRoundtrip(t *testing.T) {
-	id := NewMessageIdRandom()
-	payload := []byte("response data")
-	contentType := "application/json"
-
-	original := NewRes(id, payload, contentType)
-	encoded, err := EncodeFrame(original)
-	if err != nil {
-		t.Fatalf("Encode failed: %v", err)
-	}
-
-	decoded, err := DecodeFrame(encoded)
-	if err != nil {
-		t.Fatalf("Decode failed: %v", err)
-	}
-
-	if string(decoded.Payload) != string(payload) {
-		t.Error("Payload mismatch")
-	}
-	if decoded.ContentType == nil || *decoded.ContentType != contentType {
-		t.Errorf("ContentType mismatch")
-	}
-}
+// TEST209: REMOVED - RES frame no longer supported in protocol v2
 
 // TEST210: Test END frame encode/decode roundtrip preserves payload
 func TestEndFrameRoundtrip(t *testing.T) {
@@ -190,13 +167,14 @@ func TestHelloWithManifestRoundtrip(t *testing.T) {
 	}
 }
 
-// TEST212: Test chunk encode/decode roundtrip (offset/len not yet implemented)
+// TEST212: Test chunk encode/decode roundtrip with streamId
 func TestChunkWithOffsetRoundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
+	streamId := "test-stream"
 	seq := uint64(3)
 	payload := []byte("chunk data")
 
-	original := NewChunk(id, seq, payload)
+	original := NewChunk(id, streamId, seq, payload)
 	encoded, err := EncodeFrame(original)
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)
@@ -337,87 +315,140 @@ func TestReadFrameRejectsOversized(t *testing.T) {
 	}
 }
 
-// TEST218: Test write_chunked splits data into chunks respecting max_chunk
+// TEST218: Test write_chunked splits data into chunks respecting max_chunk (updated for stream multiplexing)
 func TestWriteChunked(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 	writer.SetLimits(Limits{MaxFrame: DefaultMaxFrame, MaxChunk: 100})
 
 	id := NewMessageIdRandom()
+	streamId := "test-stream"
+	mediaUrn := "media:bytes"
 	data := make([]byte, 250) // Will be split into 3 chunks: 100 + 100 + 50
 
-	err := writer.WriteResponseWithChunking(id, data)
+	err := writer.WriteResponseWithChunking(id, streamId, mediaUrn, data)
 	if err != nil {
 		t.Fatalf("WriteResponseWithChunking failed: %v", err)
 	}
 
-	// Read back and verify we got multiple frames
+	// Read back and verify we got: STREAM_START + CHUNK(s) + STREAM_END + END
 	reader := NewFrameReader(&buf)
-	var chunks [][]byte
 
+	// First frame should be STREAM_START
+	frame, err := reader.ReadFrame()
+	if err != nil {
+		t.Fatalf("ReadFrame failed: %v", err)
+	}
+	if frame.FrameType != FrameTypeStreamStart {
+		t.Errorf("Expected STREAM_START, got %v", frame.FrameType)
+	}
+
+	// Collect CHUNK frames
+	var chunkCount int
 	for {
 		frame, err := reader.ReadFrame()
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
 			t.Fatalf("ReadFrame failed: %v", err)
 		}
-		chunks = append(chunks, frame.Payload)
-		if frame.FrameType == FrameTypeEnd || frame.IsEof() {
+		if frame.FrameType == FrameTypeChunk {
+			chunkCount++
+		} else if frame.FrameType == FrameTypeStreamEnd {
 			break
+		} else {
+			t.Fatalf("Unexpected frame type: %v", frame.FrameType)
 		}
 	}
 
-	if len(chunks) < 2 {
-		t.Errorf("Expected multiple chunks, got %d", len(chunks))
+	if chunkCount < 2 {
+		t.Errorf("Expected multiple chunks, got %d", chunkCount)
+	}
+
+	// Final frame should be END
+	frame, err = reader.ReadFrame()
+	if err != nil {
+		t.Fatalf("ReadFrame failed: %v", err)
+	}
+	if frame.FrameType != FrameTypeEnd {
+		t.Errorf("Expected END, got %v", frame.FrameType)
 	}
 }
 
-// TEST219: Test write_chunked with empty data produces a single END frame
+// TEST219: Test write_chunked with empty data produces STREAM_START + STREAM_END + END
 func TestWriteChunkedEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 
 	id := NewMessageIdRandom()
-	err := writer.WriteResponseWithChunking(id, []byte{})
+	streamId := "empty-stream"
+	mediaUrn := "media:void"
+	err := writer.WriteResponseWithChunking(id, streamId, mediaUrn, []byte{})
 	if err != nil {
 		t.Fatalf("WriteResponseWithChunking failed: %v", err)
 	}
 
 	reader := NewFrameReader(&buf)
+
+	// First: STREAM_START
 	frame, err := reader.ReadFrame()
 	if err != nil {
 		t.Fatalf("ReadFrame failed: %v", err)
 	}
+	if frame.FrameType != FrameTypeStreamStart {
+		t.Errorf("Expected STREAM_START, got %v", frame.FrameType)
+	}
 
+	// Second: STREAM_END (no chunks for empty data)
+	frame, err = reader.ReadFrame()
+	if err != nil {
+		t.Fatalf("ReadFrame failed: %v", err)
+	}
+	if frame.FrameType != FrameTypeStreamEnd {
+		t.Errorf("Expected STREAM_END, got %v", frame.FrameType)
+	}
+
+	// Third: END
+	frame, err = reader.ReadFrame()
+	if err != nil {
+		t.Fatalf("ReadFrame failed: %v", err)
+	}
 	if frame.FrameType != FrameTypeEnd {
 		t.Errorf("Expected END frame for empty data, got %v", frame.FrameType)
 	}
 }
 
-// TEST220: Test write_chunked with data exactly equal to max_chunk produces one chunk
+// TEST220: Test write_chunked with data exactly equal to max_chunk produces STREAM_START + CHUNK + STREAM_END + END
 func TestWriteChunkedExactChunkSize(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 	writer.SetLimits(Limits{MaxFrame: DefaultMaxFrame, MaxChunk: 100})
 
 	id := NewMessageIdRandom()
+	streamId := "exact-stream"
+	mediaUrn := "media:bytes"
 	data := make([]byte, 100) // Exactly max_chunk
 
-	err := writer.WriteResponseWithChunking(id, data)
+	err := writer.WriteResponseWithChunking(id, streamId, mediaUrn, data)
 	if err != nil {
 		t.Fatalf("WriteResponseWithChunking failed: %v", err)
 	}
 
 	reader := NewFrameReader(&buf)
+
+	// First: STREAM_START
 	frame, err := reader.ReadFrame()
 	if err != nil {
 		t.Fatalf("ReadFrame failed: %v", err)
 	}
+	if frame.FrameType != FrameTypeStreamStart {
+		t.Errorf("Expected STREAM_START, got %v", frame.FrameType)
+	}
 
-	// Should be a single END frame (not CHUNK + END)
-	if frame.FrameType != FrameTypeEnd {
+	// Second: CHUNK
+	frame, err = reader.ReadFrame()
+	if err != nil {
+		t.Fatalf("ReadFrame failed: %v", err)
+	}
+	if frame.FrameType != FrameTypeChunk {
 		t.Errorf("Expected END frame, got %v", frame.FrameType)
 	}
 }
@@ -757,5 +788,60 @@ func TestDecodeGarbageBytes(t *testing.T) {
 	_, err := DecodeFrame(garbage)
 	if err == nil {
 		t.Error("garbage bytes must produce decode error")
+	}
+}
+
+// TEST389: StreamStart encode/decode roundtrip preserves stream_id and media_urn
+func TestStreamStartRoundtrip(t *testing.T) {
+	reqId := NewMessageIdRandom()
+	streamId := "stream-roundtrip-123"
+	mediaUrn := "media:json;form=scalar"
+
+	original := NewStreamStart(reqId, streamId, mediaUrn)
+	encoded, err := EncodeFrame(original)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	decoded, err := DecodeFrame(encoded)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	if decoded.FrameType != FrameTypeStreamStart {
+		t.Errorf("Expected STREAM_START, got %v", decoded.FrameType)
+	}
+	if decoded.StreamId == nil || *decoded.StreamId != streamId {
+		t.Errorf("StreamId mismatch: expected %s, got %v", streamId, decoded.StreamId)
+	}
+	if decoded.MediaUrn == nil || *decoded.MediaUrn != mediaUrn {
+		t.Errorf("MediaUrn mismatch: expected %s, got %v", mediaUrn, decoded.MediaUrn)
+	}
+}
+
+// TEST390: StreamEnd encode/decode roundtrip preserves stream_id, no media_urn
+func TestStreamEndRoundtrip(t *testing.T) {
+	reqId := NewMessageIdRandom()
+	streamId := "stream-end-456"
+
+	original := NewStreamEnd(reqId, streamId)
+	encoded, err := EncodeFrame(original)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	decoded, err := DecodeFrame(encoded)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	if decoded.FrameType != FrameTypeStreamEnd {
+		t.Errorf("Expected STREAM_END, got %v", decoded.FrameType)
+	}
+	if decoded.StreamId == nil || *decoded.StreamId != streamId {
+		t.Errorf("StreamId mismatch: expected %s, got %v", streamId, decoded.StreamId)
+	}
+	if decoded.MediaUrn != nil {
+		t.Errorf("STREAM_END should not have mediaUrn, got %v", *decoded.MediaUrn)
 	}
 }

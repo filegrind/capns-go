@@ -38,9 +38,10 @@ type InvokeResult struct {
 	Error error
 }
 
-// HandlerFunc is the function signature for cap handlers
-// Receives request payload bytes, emitter, and peer invoker; returns response payload bytes
-type HandlerFunc func(payload []byte, emitter StreamEmitter, peer PeerInvoker) ([]byte, error)
+// HandlerFunc is the function signature for cap handlers using stream multiplexing protocol.
+// Handlers receive payload, emit responses via StreamEmitter, and return only an error.
+// The emitter handles STREAM_START, CHUNK, STREAM_END, and END frames automatically.
+type HandlerFunc func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error
 
 // PluginRuntime handles all I/O for plugin binaries
 type PluginRuntime struct {
@@ -224,14 +225,17 @@ func (pr *PluginRuntime) runCBORMode() error {
 			if frame.ContentType != nil {
 				contentType = *frame.ContentType
 			}
-			maxChunk := negotiatedLimits.MaxChunk
-
 			// Spawn handler in separate goroutine - main loop continues immediately
 			activeHandlers.Add(1)
 			go func() {
 				defer activeHandlers.Done()
 
-				emitter := newThreadSafeEmitter(writer, requestID)
+				// Generate unique stream ID for response
+				streamID := fmt.Sprintf("resp-%s", requestID.ToString()[:8])
+				mediaUrn := "media:bytes" // Default output media URN
+
+				// Create emitter with stream multiplexing
+				emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn)
 				peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests)
 
 				// Extract effective payload from arguments if content_type is CBOR
@@ -244,9 +248,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 					return
 				}
 
-				result, err := handler(payload, emitter, peerInvoker)
-
-				// Send response with automatic chunking for large payloads
+				// Invoke handler (returns only error, emits via emitter)
+				err = handler(payload, emitter, peerInvoker)
 				if err != nil {
 					errFrame := cbor.NewErr(requestID, "HANDLER_ERROR", err.Error())
 					if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
@@ -255,44 +258,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 					return
 				}
 
-				// Automatic chunking: split large payloads into CHUNK frames
-				if len(result) <= maxChunk {
-					// Small payload: send single END frame
-					endFrame := cbor.NewEnd(requestID, result)
-					if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
-						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
-					}
-				} else {
-					// Large payload: send CHUNK frames + final END
-					offset := 0
-					seq := uint64(0)
-
-					for offset < len(result) {
-						remaining := len(result) - offset
-						chunkSize := remaining
-						if chunkSize > maxChunk {
-							chunkSize = maxChunk
-						}
-						chunkData := result[offset : offset+chunkSize]
-						offset += chunkSize
-
-						if offset < len(result) {
-							// Not the last chunk - send CHUNK frame
-							chunkFrame := cbor.NewChunk(requestID, seq, chunkData)
-							if writeErr := writer.WriteFrame(chunkFrame); writeErr != nil {
-								fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write CHUNK frame: %v\n", writeErr)
-								return
-							}
-							seq++
-						} else {
-							// Last chunk - send END frame with remaining data
-							endFrame := cbor.NewEnd(requestID, chunkData)
-							if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
-								fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
-							}
-						}
-					}
-				}
+				// Finalize sends STREAM_END + END frames
+				emitter.Finalize()
 			}()
 
 		case cbor.FrameTypeHeartbeat:
@@ -361,13 +328,17 @@ func (pr *PluginRuntime) runCBORMode() error {
 				if pendingReq.contentType != nil {
 					contentType = *pendingReq.contentType
 				}
-				maxChunk := negotiatedLimits.MaxChunk
 
 				activeHandlers.Add(1)
 				go func() {
 					defer activeHandlers.Done()
 
-					emitter := newThreadSafeEmitter(writer, requestID)
+					// Generate unique stream ID for response
+					streamID := fmt.Sprintf("resp-%s", requestID.ToString()[:8])
+					mediaUrn := "media:bytes" // Default output media URN
+
+					// Create emitter with stream multiplexing
+					emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn)
 					peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests)
 
 					// Extract effective payload from arguments if content_type is CBOR
@@ -380,9 +351,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 						return
 					}
 
-					result, err := handler(payload, emitter, peerInvoker)
-
-					// Send response with automatic chunking for large payloads
+					// Invoke handler (returns only error, emits via emitter)
+					err = handler(payload, emitter, peerInvoker)
 					if err != nil {
 						errFrame := cbor.NewErr(requestID, "HANDLER_ERROR", err.Error())
 						if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
@@ -391,44 +361,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 						return
 					}
 
-					// Automatic chunking: split large payloads into CHUNK frames
-					if len(result) <= maxChunk {
-						// Small payload: send single END frame
-						endFrame := cbor.NewEnd(requestID, result)
-						if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
-							fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
-						}
-					} else {
-						// Large payload: send CHUNK frames + final END
-						offset := 0
-						seq := uint64(0)
-
-						for offset < len(result) {
-							remaining := len(result) - offset
-							chunkSize := remaining
-							if chunkSize > maxChunk {
-								chunkSize = maxChunk
-							}
-							chunkData := result[offset : offset+chunkSize]
-							offset += chunkSize
-
-							if offset < len(result) {
-								// Not the last chunk - send CHUNK frame
-								chunkFrame := cbor.NewChunk(requestID, seq, chunkData)
-								if writeErr := writer.WriteFrame(chunkFrame); writeErr != nil {
-									fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write CHUNK frame: %v\n", writeErr)
-									return
-								}
-								seq++
-							} else {
-								// Last chunk - send END frame with remaining data
-								endFrame := cbor.NewEnd(requestID, chunkData)
-								if writeErr := writer.WriteFrame(endFrame); writeErr != nil {
-									fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END frame: %v\n", writeErr)
-								}
-							}
-						}
-					}
+					// Finalize sends STREAM_END + END frames
+					emitter.Finalize()
 				}()
 
 				continue
@@ -445,17 +379,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 				close(pendingReq.sender)
 			}
 
-		case cbor.FrameTypeRes:
-			// Response frame from host - route to pending peer request by frame.Id
-			idKey := frame.Id.ToString()
-			if pending, ok := pendingPeerRequests.Load(idKey); ok {
-				pendingReq := pending.(*pendingPeerRequest)
-				pendingReq.sender <- InvokeResult{Data: frame.Payload, Error: nil}
-			}
-			if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
-				pendingReq := pending.(*pendingPeerRequest)
-				close(pendingReq.sender)
-			}
+		// RES frame REMOVED - old protocol no longer supported
+		// Peer invoke responses now use stream multiplexing (handled by END case above)
 
 		case cbor.FrameTypeErr:
 			// Error frame from host - could be response to peer request
@@ -548,8 +473,8 @@ func (pr *PluginRuntime) runCLIMode(args []string) error {
 	emitter := &cliStreamEmitter{}
 	peer := &noPeerInvoker{}
 
-	// Invoke handler
-	result, err := handler(payload, emitter, peer)
+	// Invoke handler (stream multiplexing: handler emits via emitter, returns only error)
+	err = handler(payload, emitter, peer)
 	if err != nil {
 		errorJSON, _ := json.Marshal(map[string]string{
 			"error": err.Error(),
@@ -557,11 +482,6 @@ func (pr *PluginRuntime) runCLIMode(args []string) error {
 		})
 		fmt.Fprintln(os.Stderr, string(errorJSON))
 		return err
-	}
-
-	// Output final response if not empty
-	if len(result) > 0 {
-		fmt.Println(string(result))
 	}
 
 	return nil
@@ -732,30 +652,77 @@ func (s *syncFrameWriter) SetLimits(limits cbor.Limits) {
 	s.writer.SetLimits(limits)
 }
 
-// threadSafeEmitter implements StreamEmitter with thread-safe writes
+// threadSafeEmitter implements StreamEmitter with thread-safe writes using stream multiplexing
 type threadSafeEmitter struct {
-	writer    *syncFrameWriter
-	requestID cbor.MessageId
-	seq       uint64
-	seqMu     sync.Mutex
+	writer        *syncFrameWriter
+	requestID     cbor.MessageId
+	streamID      string // Response stream ID
+	mediaUrn      string // Response media URN
+	streamStarted bool   // Track if STREAM_START was sent
+	seq           uint64
+	seqMu         sync.Mutex
 }
 
-func newThreadSafeEmitter(writer *syncFrameWriter, requestID cbor.MessageId) *threadSafeEmitter {
+func newThreadSafeEmitter(writer *syncFrameWriter, requestID cbor.MessageId, streamID string, mediaUrn string) *threadSafeEmitter {
 	return &threadSafeEmitter{
-		writer:    writer,
-		requestID: requestID,
+		writer:        writer,
+		requestID:     requestID,
+		streamID:      streamID,
+		mediaUrn:      mediaUrn,
+		streamStarted: false,
 	}
 }
 
 func (e *threadSafeEmitter) Emit(payload []byte) {
 	e.seqMu.Lock()
+	defer e.seqMu.Unlock()
+
+	// STREAM MULTIPLEXING: Send STREAM_START before first chunk
+	if !e.streamStarted {
+		e.streamStarted = true
+		startFrame := cbor.NewStreamStart(e.requestID, e.streamID, e.mediaUrn)
+		if err := e.writer.WriteFrame(startFrame); err != nil {
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write STREAM_START: %v\n", err)
+			return
+		}
+	}
+
+	// Send CHUNK with stream_id
 	currentSeq := e.seq
 	e.seq++
-	e.seqMu.Unlock()
 
-	frame := cbor.NewChunk(e.requestID, currentSeq, payload)
+	frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, payload)
 	if err := e.writer.WriteFrame(frame); err != nil {
 		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write chunk: %v\n", err)
+	}
+}
+
+// Finalize sends STREAM_END + END frames to complete the response
+func (e *threadSafeEmitter) Finalize() {
+	e.seqMu.Lock()
+	defer e.seqMu.Unlock()
+
+	// If no chunks were sent, still send STREAM_START to keep protocol consistent
+	if !e.streamStarted {
+		e.streamStarted = true
+		startFrame := cbor.NewStreamStart(e.requestID, e.streamID, e.mediaUrn)
+		if err := e.writer.WriteFrame(startFrame); err != nil {
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write STREAM_START: %v\n", err)
+			return
+		}
+	}
+
+	// STREAM_END: Close this stream
+	streamEndFrame := cbor.NewStreamEnd(e.requestID, e.streamID)
+	if err := e.writer.WriteFrame(streamEndFrame); err != nil {
+		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write STREAM_END: %v\n", err)
+		return
+	}
+
+	// END: Close the entire request
+	endFrame := cbor.NewEnd(e.requestID, nil)
+	if err := e.writer.WriteFrame(endFrame); err != nil {
+		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END: %v\n", err)
 	}
 }
 
