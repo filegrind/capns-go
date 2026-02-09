@@ -162,10 +162,23 @@ func (pr *PluginRuntime) runCBORMode() error {
 	pendingPeerRequests := &sync.Map{} // map[string]*pendingPeerRequest
 
 	// Track incoming requests that are being chunked
+	// Protocol v2: Stream tracking for incoming request streams
+	type pendingStream struct {
+		mediaUrn string
+		chunks   [][]byte
+		complete bool
+	}
+
+	type streamEntry struct {
+		streamID string
+		stream   *pendingStream
+	}
+
 	type pendingIncomingRequest struct {
-		capUrn      string
-		contentType *string
-		chunks      [][]byte
+		capUrn  string
+		handler func([]byte, StreamEmitter, PeerInvoker) error
+		streams []streamEntry // Ordered list of streams
+		ended   bool          // True after END frame - any stream activity after is FATAL
 	}
 	pendingIncoming := make(map[string]*pendingIncomingRequest)
 	pendingIncomingMu := &sync.Mutex{}
@@ -196,20 +209,16 @@ func (pr *PluginRuntime) runCBORMode() error {
 			capUrn := *frame.Cap
 			rawPayload := frame.Payload
 
-			// Check if this is a chunked request (empty payload means chunks will follow)
-			if len(rawPayload) == 0 {
-				// Start accumulating chunks for this request
-				pendingIncomingMu.Lock()
-				pendingIncoming[frame.Id.ToString()] = &pendingIncomingRequest{
-					capUrn:      capUrn,
-					contentType: frame.ContentType,
-					chunks:      [][]byte{},
+			// Protocol v2: REQ must have empty payload - arguments come as streams
+			if len(rawPayload) > 0 {
+				errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", "REQ frame must have empty payload - use STREAM_START for arguments")
+				if err := writer.WriteFrame(errFrame); err != nil {
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write PROTOCOL_ERROR: %v\n", err)
 				}
-				pendingIncomingMu.Unlock()
-				continue // Wait for CHUNK/END frames
+				continue
 			}
 
-			// Complete payload in REQ frame - invoke handler immediately
+			// Find handler
 			handler := pr.FindHandler(capUrn)
 			if handler == nil {
 				errFrame := cbor.NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", capUrn))
@@ -219,48 +228,17 @@ func (pr *PluginRuntime) runCBORMode() error {
 				continue
 			}
 
-			// Clone what we need for the handler goroutine
-			requestID := frame.Id
-			var contentType string
-			if frame.ContentType != nil {
-				contentType = *frame.ContentType
+			// Start tracking this request - streams will be added via STREAM_START
+			pendingIncomingMu.Lock()
+			pendingIncoming[frame.Id.ToString()] = &pendingIncomingRequest{
+				capUrn:  capUrn,
+				handler: handler,
+				streams: []streamEntry{}, // Streams added via STREAM_START
+				ended:   false,
 			}
-			// Spawn handler in separate goroutine - main loop continues immediately
-			activeHandlers.Add(1)
-			go func() {
-				defer activeHandlers.Done()
-
-				// Generate unique stream ID for response
-				streamID := fmt.Sprintf("resp-%s", requestID.ToString()[:8])
-				mediaUrn := "media:bytes" // Default output media URN
-
-				// Create emitter with stream multiplexing
-				emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn)
-				peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests)
-
-				// Extract effective payload from arguments if content_type is CBOR
-				payload, err := extractEffectivePayload(rawPayload, contentType, capUrn)
-				if err != nil {
-					errFrame := cbor.NewErr(requestID, "PAYLOAD_ERROR", err.Error())
-					if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
-						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
-					}
-					return
-				}
-
-				// Invoke handler (returns only error, emits via emitter)
-				err = handler(payload, emitter, peerInvoker)
-				if err != nil {
-					errFrame := cbor.NewErr(requestID, "HANDLER_ERROR", err.Error())
-					if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
-						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
-					}
-					return
-				}
-
-				// Finalize sends STREAM_END + END frames
-				emitter.Finalize()
-			}()
+			pendingIncomingMu.Unlock()
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] REQ: req_id=%s cap=%s - waiting for streams\n", frame.Id.ToString(), capUrn)
+			continue // Wait for STREAM_START/CHUNK/STREAM_END/END frames
 
 		case cbor.FrameTypeHeartbeat:
 			// Respond to heartbeat immediately - never blocked by handlers
@@ -277,14 +255,66 @@ func (pr *PluginRuntime) runCBORMode() error {
 			}
 
 		case cbor.FrameTypeChunk:
+			// Protocol v2: CHUNK must have stream_id
+			if frame.StreamId == nil {
+				errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", "CHUNK frame missing stream_id")
+				if err := writer.WriteFrame(errFrame); err != nil {
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+				}
+				continue
+			}
+
+			streamID := *frame.StreamId
+
 			// Check if this is a chunk for an incoming request
 			pendingIncomingMu.Lock()
 			if pendingReq, exists := pendingIncoming[frame.Id.ToString()]; exists {
+				// FAIL HARD: Request already ended
+				if pendingReq.ended {
+					delete(pendingIncoming, frame.Id.ToString())
+					pendingIncomingMu.Unlock()
+					errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", "CHUNK after request END")
+					if err := writer.WriteFrame(errFrame); err != nil {
+						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+					}
+					continue
+				}
+
+				// FAIL HARD: Unknown or inactive stream
+				var foundStream *pendingStream
+				for i := range pendingReq.streams {
+					if pendingReq.streams[i].streamID == streamID {
+						foundStream = pendingReq.streams[i].stream
+						break
+					}
+				}
+
+				if foundStream == nil {
+					delete(pendingIncoming, frame.Id.ToString())
+					pendingIncomingMu.Unlock()
+					errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", fmt.Sprintf("CHUNK for unknown stream_id: %s", streamID))
+					if err := writer.WriteFrame(errFrame); err != nil {
+						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+					}
+					continue
+				}
+
+				if foundStream.complete {
+					delete(pendingIncoming, frame.Id.ToString())
+					pendingIncomingMu.Unlock()
+					errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", fmt.Sprintf("CHUNK for ended stream: %s", streamID))
+					if err := writer.WriteFrame(errFrame); err != nil {
+						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+					}
+					continue
+				}
+
+				// ✅ Valid chunk for active stream
 				if frame.Payload != nil {
-					pendingReq.chunks = append(pendingReq.chunks, frame.Payload)
+					foundStream.chunks = append(foundStream.chunks, frame.Payload)
 				}
 				pendingIncomingMu.Unlock()
-				continue // Wait for more chunks or END
+				continue // Wait for more chunks or STREAM_END
 			}
 			pendingIncomingMu.Unlock()
 
@@ -296,38 +326,51 @@ func (pr *PluginRuntime) runCBORMode() error {
 			}
 
 		case cbor.FrameTypeEnd:
-			// Check if this is the end of an incoming chunked request
+			// Protocol v2: END frame marks the end of all streams for this request
 			pendingIncomingMu.Lock()
 			pendingReq, exists := pendingIncoming[frame.Id.ToString()]
 			if exists {
+				pendingReq.ended = true
 				delete(pendingIncoming, frame.Id.ToString())
 			}
 			pendingIncomingMu.Unlock()
 
 			if exists {
-				// Concatenate all chunks into final payload
-				if frame.Payload != nil {
-					pendingReq.chunks = append(pendingReq.chunks, frame.Payload)
-				}
-				rawPayload := bytes.Join(pendingReq.chunks, nil)
-
-				// Find handler
-				handler := pr.FindHandler(pendingReq.capUrn)
-				if handler == nil {
-					errFrame := cbor.NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", pendingReq.capUrn))
-					if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
-						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
+				// Concatenate all complete streams into final payload
+				// Protocol v2: Each stream's chunks are concatenated, then streams are concatenated in order
+				var allChunks [][]byte
+				for _, entry := range pendingReq.streams {
+					if entry.stream.complete {
+						allChunks = append(allChunks, entry.stream.chunks...)
 					}
-					continue
 				}
 
-				// Spawn goroutine to invoke handler (same pattern as REQ handling)
-				requestID := frame.Id
-				capUrn := pendingReq.capUrn
-				var contentType string
-				if pendingReq.contentType != nil {
-					contentType = *pendingReq.contentType
+				// Add END frame payload if present
+				if frame.Payload != nil {
+					allChunks = append(allChunks, frame.Payload)
 				}
+
+				rawPayload := bytes.Join(allChunks, nil)
+
+				// Extract the first argument from CBOR if that's how it was sent
+				// (For backward compatibility with the test plugin's argument wrapping)
+				var finalPayload []byte
+				if len(pendingReq.streams) > 0 && pendingReq.streams[0].stream.mediaUrn == "media:bytes" {
+					// Try to decode as CBOR array
+					var args [][]byte
+					if err := cborlib.Unmarshal(rawPayload, &args); err == nil && len(args) > 0 {
+						finalPayload = args[0]
+					} else {
+						finalPayload = rawPayload
+					}
+				} else {
+					finalPayload = rawPayload
+				}
+
+				// Spawn goroutine to invoke handler
+				requestID := frame.Id
+				handler := pendingReq.handler
+				capUrn := pendingReq.capUrn
 
 				activeHandlers.Add(1)
 				go func() {
@@ -341,18 +384,10 @@ func (pr *PluginRuntime) runCBORMode() error {
 					emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn)
 					peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests)
 
-					// Extract effective payload from arguments if content_type is CBOR
-					payload, err := extractEffectivePayload(rawPayload, contentType, capUrn)
-					if err != nil {
-						errFrame := cbor.NewErr(requestID, "PAYLOAD_ERROR", err.Error())
-						if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
-							fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
-						}
-						return
-					}
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] END: Invoking handler for cap=%s with payload len=%d\n", capUrn, len(finalPayload))
 
 					// Invoke handler (returns only error, emits via emitter)
-					err = handler(payload, emitter, peerInvoker)
+					err := handler(finalPayload, emitter, peerInvoker)
 					if err != nil {
 						errFrame := cbor.NewErr(requestID, "HANDLER_ERROR", err.Error())
 						if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
@@ -404,6 +439,120 @@ func (pr *PluginRuntime) runCBORMode() error {
 		case cbor.FrameTypeLog:
 			// Log frames from host - shouldn't normally receive these, ignore
 			continue
+
+		case cbor.FrameTypeStreamStart:
+			// Protocol v2: A new stream is starting for a request
+			if frame.StreamId == nil {
+				errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", "STREAM_START missing stream_id")
+				if err := writer.WriteFrame(errFrame); err != nil {
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+				}
+				continue
+			}
+
+			if frame.MediaUrn == nil {
+				errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", "STREAM_START missing media_urn")
+				if err := writer.WriteFrame(errFrame); err != nil {
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+				}
+				continue
+			}
+
+			streamID := *frame.StreamId
+			mediaUrn := *frame.MediaUrn
+
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_START: req_id=%s stream_id=%s media_urn=%s\n",
+				frame.Id.ToString(), streamID, mediaUrn)
+
+			// STRICT: Add stream with validation
+			pendingIncomingMu.Lock()
+			if pendingReq, exists := pendingIncoming[frame.Id.ToString()]; exists {
+				// FAIL HARD: Request already ended
+				if pendingReq.ended {
+					delete(pendingIncoming, frame.Id.ToString())
+					pendingIncomingMu.Unlock()
+					errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", "STREAM_START after request END")
+					if err := writer.WriteFrame(errFrame); err != nil {
+						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+					}
+					continue
+				}
+
+				// FAIL HARD: Duplicate stream_id
+				for _, entry := range pendingReq.streams {
+					if entry.streamID == streamID {
+						delete(pendingIncoming, frame.Id.ToString())
+						pendingIncomingMu.Unlock()
+						errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", fmt.Sprintf("Duplicate stream_id: %s", streamID))
+						if err := writer.WriteFrame(errFrame); err != nil {
+							fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+						}
+						continue
+					}
+				}
+
+				// ✅ Add new stream
+				pendingReq.streams = append(pendingReq.streams, streamEntry{
+					streamID: streamID,
+					stream: &pendingStream{
+						mediaUrn: mediaUrn,
+						chunks:   [][]byte{},
+						complete: false,
+					},
+				})
+				pendingIncomingMu.Unlock()
+				fmt.Fprintf(os.Stderr, "[PluginRuntime] Incoming stream started: %s\n", streamID)
+				continue
+			}
+			pendingIncomingMu.Unlock()
+
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_START for unknown request_id: %s\n", frame.Id.ToString())
+
+		case cbor.FrameTypeStreamEnd:
+			// Protocol v2: A stream has ended for a request
+			if frame.StreamId == nil {
+				errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", "STREAM_END missing stream_id")
+				if err := writer.WriteFrame(errFrame); err != nil {
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+				}
+				continue
+			}
+
+			streamID := *frame.StreamId
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_END: stream_id=%s\n", streamID)
+
+			// STRICT: Mark stream as complete with validation
+			pendingIncomingMu.Lock()
+			if pendingReq, exists := pendingIncoming[frame.Id.ToString()]; exists {
+				// Find and mark stream as complete
+				found := false
+				for i := range pendingReq.streams {
+					if pendingReq.streams[i].streamID == streamID {
+						pendingReq.streams[i].stream.complete = true
+						found = true
+						fmt.Fprintf(os.Stderr, "[PluginRuntime] Incoming stream marked complete: %s\n", streamID)
+						break
+					}
+				}
+
+				if !found {
+					// FAIL HARD: STREAM_END for unknown stream
+					delete(pendingIncoming, frame.Id.ToString())
+					pendingIncomingMu.Unlock()
+					errFrame := cbor.NewErr(frame.Id, "PROTOCOL_ERROR", fmt.Sprintf("STREAM_END for unknown stream_id: %s", streamID))
+					if err := writer.WriteFrame(errFrame); err != nil {
+						fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+					}
+					continue
+				}
+				pendingIncomingMu.Unlock()
+				continue
+			}
+			pendingIncomingMu.Unlock()
+
+			// Not an incoming request stream - could be a peer response stream
+			// (handled elsewhere)
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_END for unknown request_id: %s\n", frame.Id.ToString())
 		}
 	}
 
