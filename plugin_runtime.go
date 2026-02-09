@@ -826,6 +826,13 @@ func (e *threadSafeEmitter) Emit(payload []byte) {
 	e.seqMu.Lock()
 	defer e.seqMu.Unlock()
 
+	// CBOR-encode the payload as a CBOR byte string (matches Rust emit_cbor behavior)
+	cborPayload, err := cborlib.Marshal(payload)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to CBOR-encode payload: %v\n", err)
+		return
+	}
+
 	// STREAM MULTIPLEXING: Send STREAM_START before first chunk
 	if !e.streamStarted {
 		e.streamStarted = true
@@ -836,11 +843,11 @@ func (e *threadSafeEmitter) Emit(payload []byte) {
 		}
 	}
 
-	// Send CHUNK with stream_id
+	// Send CHUNK with stream_id — payload is CBOR-encoded
 	currentSeq := e.seq
 	e.seq++
 
-	frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, payload)
+	frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, cborPayload)
 	if err := e.writer.WriteFrame(frame); err != nil {
 		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write chunk: %v\n", err)
 	}
