@@ -12,7 +12,7 @@ import (
 
 	cborlib "github.com/fxamacker/cbor/v2"
 
-	"github.com/filegrind/cap-sdk-go/cbor"
+	"github.com/filegrind/capns-go/cbor"
 	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 

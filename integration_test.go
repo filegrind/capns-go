@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	cbor2 "github.com/fxamacker/cbor/v2"
-	"github.com/filegrind/cap-sdk-go/cbor"
+	"github.com/filegrind/capns-go/cbor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

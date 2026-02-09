@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	cborlib "github.com/fxamacker/cbor/v2"
-	"github.com/filegrind/cap-sdk-go/cbor"
+	"github.com/filegrind/capns-go/cbor"
 )
 
 const testManifest = `{"name":"TestPlugin","version":"1.0.0","description":"Test plugin","caps":[{"urn":"cap:in=\"media:void\";op=test;out=\"media:void\"","title":"Test","command":"test"}]}`

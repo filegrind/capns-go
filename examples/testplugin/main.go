@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	capns "github.com/filegrind/cap-sdk-go"
+	capns "github.com/filegrind/capns-go"
 )
 
 func main() {

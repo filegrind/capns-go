@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/filegrind/cap-sdk-go/cbor"
+	"github.com/filegrind/capns-go/cbor"
 )
 
 // CapHandler is a function that handles a peer invoke request.

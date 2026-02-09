@@ -1,4 +1,4 @@
-module github.com/filegrind/cap-sdk-go
+module github.com/filegrind/capns-go
 
 // version: 0.84.26011
 
