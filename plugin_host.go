@@ -3,10 +3,33 @@ package capns
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/filegrind/cap-sdk-go/cbor"
 )
+
+// CapHandler is a function that handles a peer invoke request.
+// It receives the concatenated payload bytes and returns response bytes.
+type CapHandler func(payload []byte) ([]byte, error)
+
+// peerIncomingStream tracks a single stream within an incoming peer request
+type peerIncomingStream struct {
+	mediaUrn string
+	chunks   [][]byte
+	complete bool
+}
+
+// peerIncomingRequest tracks an incoming peer request from a plugin (peer invoke)
+type peerIncomingRequest struct {
+	capUrn      string
+	contentType string
+	streams     []struct {
+		streamID string
+		stream   *peerIncomingStream
+	}
+	ended bool
+}
 
 // PluginHost manages communication with a plugin process
 type PluginHost struct {
@@ -15,6 +38,8 @@ type PluginHost struct {
 	limits          cbor.Limits
 	manifest        []byte
 	pendingRequests map[string]*pendingRequest // key is MessageId.ToString()
+	capHandlers     map[string]CapHandler      // op → handler for peer invoke
+	peerIncoming    map[string]*peerIncomingRequest
 	mu              sync.Mutex
 	writerMu        sync.Mutex
 	closed          bool
@@ -184,6 +209,8 @@ func NewPluginHost(stdin io.Writer, stdout io.Reader) (*PluginHost, error) {
 		limits:          limits,
 		manifest:        manifest,
 		pendingRequests: make(map[string]*pendingRequest),
+		capHandlers:     make(map[string]CapHandler),
+		peerIncoming:    make(map[string]*peerIncomingRequest),
 		closed:          false,
 	}
 
@@ -224,10 +251,20 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 	idKey := frame.Id.ToString()
 
 	switch frame.FrameType {
-	// RES frame REMOVED - old protocol no longer supported
+	case cbor.FrameTypeReq:
+		// Incoming REQ from plugin (peer invoke) — only if not a pending host request
+		if _, isHostReq := ph.pendingRequests[idKey]; !isHostReq {
+			ph.handlePeerInvoke(frame)
+			return
+		}
 
 	case cbor.FrameTypeStreamStart:
-		// STREAM_START: Announce new stream
+		// Check if this belongs to a peer incoming request first
+		if _, isPeer := ph.peerIncoming[idKey]; isPeer {
+			ph.handlePeerFrame(frame)
+			return
+		}
+		// STREAM_START: Announce new stream (host-initiated request response)
 		if req, ok := ph.pendingRequests[idKey]; ok {
 			// STRICT validation: must have stream_id and media_urn
 			if frame.StreamId == nil {
@@ -271,7 +308,12 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 		}
 
 	case cbor.FrameTypeChunk:
-		// CHUNK: Data chunk for a stream
+		// Check if this belongs to a peer incoming request first
+		if _, isPeer := ph.peerIncoming[idKey]; isPeer {
+			ph.handlePeerFrame(frame)
+			return
+		}
+		// CHUNK: Data chunk for a stream (host-initiated request response)
 		if req, ok := ph.pendingRequests[idKey]; ok {
 			req.isChunked = true
 
@@ -322,7 +364,12 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 		}
 
 	case cbor.FrameTypeStreamEnd:
-		// STREAM_END: End a specific stream
+		// Check if this belongs to a peer incoming request first
+		if _, isPeer := ph.peerIncoming[idKey]; isPeer {
+			ph.handlePeerFrame(frame)
+			return
+		}
+		// STREAM_END: End a specific stream (host-initiated request response)
 		if req, ok := ph.pendingRequests[idKey]; ok {
 			// STRICT validation: must have stream_id
 			if frame.StreamId == nil {
@@ -352,7 +399,12 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 		}
 
 	case cbor.FrameTypeEnd:
-		// END: Close entire request
+		// Check if this belongs to a peer incoming request first
+		if _, isPeer := ph.peerIncoming[idKey]; isPeer {
+			ph.handlePeerFrame(frame)
+			return
+		}
+		// END: Close entire request (host-initiated request response)
 		if req, ok := ph.pendingRequests[idKey]; ok {
 			// Mark request as ended - any stream activity after is FATAL
 			req.ended = true
@@ -398,17 +450,19 @@ func (ph *PluginHost) handleFrame(frame *cbor.Frame) {
 
 // Call invokes a capability on the plugin and waits for the response
 // Call invokes a capability on the plugin and waits for the response using stream multiplexing
-func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*PluginResponse, error) {
+// CallWithArguments sends a cap request with typed arguments and waits for the complete response.
+//
+// Each argument becomes an independent stream (STREAM_START + CHUNK(s) + STREAM_END).
+// This matches the Rust AsyncPluginHost.request_with_arguments() wire format exactly.
+func (ph *PluginHost) CallWithArguments(capUrn string, arguments []CapArgumentValue) (*PluginResponse, error) {
 	ph.mu.Lock()
 	if ph.closed {
 		ph.mu.Unlock()
 		return nil, fmt.Errorf("host is closed")
 	}
 
-	// Generate new message ID
 	requestID := cbor.NewMessageIdRandom()
 
-	// Create pending request with stream tracking
 	req := &pendingRequest{
 		chunks:  make([]*ResponseChunk, 0),
 		done:    make(chan error, 1),
@@ -420,89 +474,77 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 	maxChunk := ph.limits.MaxChunk
 	ph.mu.Unlock()
 
-	// Send request using stream multiplexing protocol:
-	// 1. REQ (empty payload)
-	// 2. STREAM_START + CHUNK(s) + STREAM_END for the payload
-	// 3. END
+	cleanup := func() {
+		ph.mu.Lock()
+		delete(ph.pendingRequests, idKey)
+		ph.mu.Unlock()
+	}
 
-	// Send REQ frame with cap_urn, empty payload
+	// REQ with empty payload — arguments come as streams
 	reqFrame := cbor.NewReq(requestID, capUrn, []byte{}, "application/cbor")
 	ph.writerMu.Lock()
 	err := ph.writer.WriteFrame(reqFrame)
 	ph.writerMu.Unlock()
 	if err != nil {
-		ph.mu.Lock()
-		delete(ph.pendingRequests, idKey)
-		ph.mu.Unlock()
+		cleanup()
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
-	// Send payload as a single stream
-	streamId := "arg-0" // Single argument stream
-	mediaUrn := contentType
-	if mediaUrn == "" {
-		mediaUrn = "media:bytes"
-	}
+	// Each argument becomes an independent stream
+	for i, arg := range arguments {
+		streamId := fmt.Sprintf("arg-%d", i)
 
-	// STREAM_START
-	startFrame := cbor.NewStreamStart(requestID, streamId, mediaUrn)
-	ph.writerMu.Lock()
-	err = ph.writer.WriteFrame(startFrame)
-	ph.writerMu.Unlock()
-	if err != nil {
-		ph.mu.Lock()
-		delete(ph.pendingRequests, idKey)
-		ph.mu.Unlock()
-		return nil, fmt.Errorf("failed to send stream start: %w", err)
-	}
-
-	// CHUNK(s)
-	offset := 0
-	seq := uint64(0)
-	for offset < len(payload) {
-		remaining := len(payload) - offset
-		chunkSize := remaining
-		if chunkSize > maxChunk {
-			chunkSize = maxChunk
-		}
-		chunkData := payload[offset : offset+chunkSize]
-
-		chunkFrame := cbor.NewChunk(requestID, streamId, seq, chunkData)
+		// STREAM_START with the argument's media_urn
+		startFrame := cbor.NewStreamStart(requestID, streamId, arg.MediaUrn)
 		ph.writerMu.Lock()
-		err := ph.writer.WriteFrame(chunkFrame)
+		err = ph.writer.WriteFrame(startFrame)
 		ph.writerMu.Unlock()
 		if err != nil {
-			ph.mu.Lock()
-			delete(ph.pendingRequests, idKey)
-			ph.mu.Unlock()
-			return nil, fmt.Errorf("failed to send chunk: %w", err)
+			cleanup()
+			return nil, fmt.Errorf("failed to send stream start: %w", err)
 		}
 
-		offset += chunkSize
-		seq++
+		// CHUNK(s)
+		offset := 0
+		seq := uint64(0)
+		for offset < len(arg.Value) {
+			chunkSize := len(arg.Value) - offset
+			if chunkSize > maxChunk {
+				chunkSize = maxChunk
+			}
+			chunkData := arg.Value[offset : offset+chunkSize]
+
+			chunkFrame := cbor.NewChunk(requestID, streamId, seq, chunkData)
+			ph.writerMu.Lock()
+			err := ph.writer.WriteFrame(chunkFrame)
+			ph.writerMu.Unlock()
+			if err != nil {
+				cleanup()
+				return nil, fmt.Errorf("failed to send chunk: %w", err)
+			}
+
+			offset += chunkSize
+			seq++
+		}
+
+		// STREAM_END
+		streamEndFrame := cbor.NewStreamEnd(requestID, streamId)
+		ph.writerMu.Lock()
+		err = ph.writer.WriteFrame(streamEndFrame)
+		ph.writerMu.Unlock()
+		if err != nil {
+			cleanup()
+			return nil, fmt.Errorf("failed to send stream end: %w", err)
+		}
 	}
 
-	// STREAM_END
-	streamEndFrame := cbor.NewStreamEnd(requestID, streamId)
-	ph.writerMu.Lock()
-	err = ph.writer.WriteFrame(streamEndFrame)
-	ph.writerMu.Unlock()
-	if err != nil {
-		ph.mu.Lock()
-		delete(ph.pendingRequests, idKey)
-		ph.mu.Unlock()
-		return nil, fmt.Errorf("failed to send stream end: %w", err)
-	}
-
-	// END
+	// END closes the entire request
 	endFrame := cbor.NewEnd(requestID, nil)
 	ph.writerMu.Lock()
 	err = ph.writer.WriteFrame(endFrame)
 	ph.writerMu.Unlock()
 	if err != nil {
-		ph.mu.Lock()
-		delete(ph.pendingRequests, idKey)
-		ph.mu.Unlock()
+		cleanup()
 		return nil, fmt.Errorf("failed to send end: %w", err)
 	}
 
@@ -512,21 +554,18 @@ func (ph *PluginHost) Call(capUrn string, payload []byte, contentType string) (*
 		return nil, err
 	}
 
-	// Build PluginResponse based on whether it was chunked
+	// Build PluginResponse
 	if req.isChunked || len(req.chunks) > 1 {
-		// Streaming response
 		return &PluginResponse{
 			Type:      PluginResponseTypeStreaming,
 			Streaming: req.chunks,
 		}, nil
 	} else if len(req.chunks) == 1 {
-		// Single response
 		return &PluginResponse{
 			Type:   PluginResponseTypeSingle,
 			Single: req.chunks[0].Payload,
 		}, nil
 	} else {
-		// Empty response
 		return &PluginResponse{
 			Type:   PluginResponseTypeSingle,
 			Single: []byte{},
@@ -548,4 +587,198 @@ func (ph *PluginHost) Close() error {
 	defer ph.mu.Unlock()
 	ph.closed = true
 	return nil
+}
+
+// RegisterCapability registers a host-side capability handler for peer invoke.
+// The capUrn should contain an op= tag that will be matched against incoming requests.
+func (ph *PluginHost) RegisterCapability(capUrn string, handler CapHandler) {
+	// Extract the op tag from the cap URN for matching
+	op := extractOpTag(capUrn)
+	if op == "" {
+		return
+	}
+	ph.mu.Lock()
+	defer ph.mu.Unlock()
+	ph.capHandlers[op] = handler
+}
+
+// extractOpTag extracts the "op" tag value from a cap URN string.
+// E.g. "cap:in=*;op=echo;out=*" → "echo"
+func extractOpTag(capUrn string) string {
+	// Parse as CapUrn if possible, otherwise use simple extraction
+	parsed, err := NewCapUrnFromString(capUrn)
+	if err == nil {
+		if op, ok := parsed.GetTag("op"); ok {
+			return op
+		}
+		return ""
+	}
+	// Fallback: simple string extraction for wildcard URNs like "cap:in=*;op=echo;out=*"
+	for _, part := range strings.Split(capUrn, ";") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "op=") {
+			return part[3:]
+		}
+	}
+	return ""
+}
+
+// handlePeerInvoke handles an incoming REQ from a plugin (peer invoke)
+func (ph *PluginHost) handlePeerInvoke(frame *cbor.Frame) {
+	idKey := frame.Id.ToString()
+
+	// Start tracking the peer request
+	capUrn := ""
+	if frame.Cap != nil {
+		capUrn = *frame.Cap
+	}
+	contentType := ""
+	if frame.ContentType != nil {
+		contentType = *frame.ContentType
+	}
+
+	ph.peerIncoming[idKey] = &peerIncomingRequest{
+		capUrn:      capUrn,
+		contentType: contentType,
+		ended:       false,
+	}
+}
+
+// handlePeerFrame processes a frame belonging to an incoming peer request
+func (ph *PluginHost) handlePeerFrame(frame *cbor.Frame) {
+	idKey := frame.Id.ToString()
+	peer, ok := ph.peerIncoming[idKey]
+	if !ok {
+		return
+	}
+
+	switch frame.FrameType {
+	case cbor.FrameTypeStreamStart:
+		streamId := ""
+		if frame.StreamId != nil {
+			streamId = *frame.StreamId
+		}
+		mediaUrn := ""
+		if frame.MediaUrn != nil {
+			mediaUrn = *frame.MediaUrn
+		}
+		peer.streams = append(peer.streams, struct {
+			streamID string
+			stream   *peerIncomingStream
+		}{
+			streamID: streamId,
+			stream: &peerIncomingStream{
+				mediaUrn: mediaUrn,
+				chunks:   nil,
+				complete: false,
+			},
+		})
+
+	case cbor.FrameTypeChunk:
+		streamId := ""
+		if frame.StreamId != nil {
+			streamId = *frame.StreamId
+		}
+		for _, entry := range peer.streams {
+			if entry.streamID == streamId {
+				if frame.Payload != nil {
+					entry.stream.chunks = append(entry.stream.chunks, frame.Payload)
+				}
+				break
+			}
+		}
+
+	case cbor.FrameTypeStreamEnd:
+		streamId := ""
+		if frame.StreamId != nil {
+			streamId = *frame.StreamId
+		}
+		for _, entry := range peer.streams {
+			if entry.streamID == streamId {
+				entry.stream.complete = true
+				break
+			}
+		}
+
+	case cbor.FrameTypeEnd:
+		// Concatenate all stream chunks
+		var payload []byte
+		for _, entry := range peer.streams {
+			for _, chunk := range entry.stream.chunks {
+				payload = append(payload, chunk...)
+			}
+		}
+
+		delete(ph.peerIncoming, idKey)
+
+		// Dispatch handler in goroutine (must release lock first)
+		reqId := frame.Id
+		capUrn := peer.capUrn
+		contentType := peer.contentType
+		go ph.dispatchPeerHandler(reqId, capUrn, contentType, payload)
+	}
+}
+
+// dispatchPeerHandler finds and executes the matching handler, sends response back
+func (ph *PluginHost) dispatchPeerHandler(reqId cbor.MessageId, capUrn string, contentType string, payload []byte) {
+	// Extract op from the request's cap URN
+	op := extractOpTag(capUrn)
+
+	ph.mu.Lock()
+	handler, ok := ph.capHandlers[op]
+	maxChunk := ph.limits.MaxChunk
+	ph.mu.Unlock()
+
+	if !ok {
+		// No handler — send error
+		errFrame := cbor.NewErr(reqId, "NO_HANDLER", fmt.Sprintf("No handler for op=%s", op))
+		ph.writerMu.Lock()
+		ph.writer.WriteFrame(errFrame)
+		ph.writerMu.Unlock()
+		return
+	}
+
+	result, err := handler(payload)
+	if err != nil {
+		errFrame := cbor.NewErr(reqId, "HANDLER_ERROR", err.Error())
+		ph.writerMu.Lock()
+		ph.writer.WriteFrame(errFrame)
+		ph.writerMu.Unlock()
+		return
+	}
+
+	// Send response: STREAM_START + CHUNK(s) + STREAM_END + END
+	peerStreamId := fmt.Sprintf("peer-resp-%s", reqId.ToString()[:8])
+	peerMediaUrn := contentType
+	if peerMediaUrn == "" {
+		peerMediaUrn = "media:bytes"
+	}
+
+	ph.writerMu.Lock()
+	defer ph.writerMu.Unlock()
+
+	// STREAM_START
+	ph.writer.WriteFrame(cbor.NewStreamStart(reqId, peerStreamId, peerMediaUrn))
+
+	// CHUNK(s) with proper chunking
+	if len(result) > 0 {
+		offset := 0
+		seq := uint64(0)
+		for offset < len(result) {
+			chunkSize := len(result) - offset
+			if chunkSize > maxChunk {
+				chunkSize = maxChunk
+			}
+			chunkData := result[offset : offset+chunkSize]
+			ph.writer.WriteFrame(cbor.NewChunk(reqId, peerStreamId, seq, chunkData))
+			offset += chunkSize
+			seq++
+		}
+	}
+
+	// STREAM_END
+	ph.writer.WriteFrame(cbor.NewStreamEnd(reqId, peerStreamId))
+
+	// END
+	ph.writer.WriteFrame(cbor.NewEnd(reqId, nil))
 }
