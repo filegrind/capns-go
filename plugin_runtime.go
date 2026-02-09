@@ -381,8 +381,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 					mediaUrn := "media:bytes" // Default output media URN
 
 					// Create emitter with stream multiplexing
-					emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn)
-					peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests)
+					emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn, negotiatedLimits.MaxChunk)
+					peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests, negotiatedLimits.MaxChunk)
 
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] END: Invoking handler for cap=%s with payload len=%d\n", capUrn, len(finalPayload))
 
@@ -810,15 +810,17 @@ type threadSafeEmitter struct {
 	streamStarted bool   // Track if STREAM_START was sent
 	seq           uint64
 	seqMu         sync.Mutex
+	maxChunk      int
 }
 
-func newThreadSafeEmitter(writer *syncFrameWriter, requestID cbor.MessageId, streamID string, mediaUrn string) *threadSafeEmitter {
+func newThreadSafeEmitter(writer *syncFrameWriter, requestID cbor.MessageId, streamID string, mediaUrn string, maxChunk int) *threadSafeEmitter {
 	return &threadSafeEmitter{
 		writer:        writer,
 		requestID:     requestID,
 		streamID:      streamID,
 		mediaUrn:      mediaUrn,
 		streamStarted: false,
+		maxChunk:      maxChunk,
 	}
 }
 
@@ -843,13 +845,24 @@ func (e *threadSafeEmitter) Emit(payload []byte) {
 		}
 	}
 
-	// Send CHUNK with stream_id — payload is CBOR-encoded
-	currentSeq := e.seq
-	e.seq++
+	// AUTO-CHUNKING: Split large CBOR payloads into negotiated max_chunk sized pieces
+	offset := 0
+	for offset < len(cborPayload) {
+		chunkSize := len(cborPayload) - offset
+		if chunkSize > e.maxChunk {
+			chunkSize = e.maxChunk
+		}
+		chunkData := cborPayload[offset : offset+chunkSize]
 
-	frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, cborPayload)
-	if err := e.writer.WriteFrame(frame); err != nil {
-		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write chunk: %v\n", err)
+		currentSeq := e.seq
+		e.seq++
+
+		frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, chunkData)
+		if err := e.writer.WriteFrame(frame); err != nil {
+			fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write chunk: %v\n", err)
+			return
+		}
+		offset += chunkSize
 	}
 }
 
@@ -927,12 +940,14 @@ type pendingPeerRequest struct {
 type peerInvokerImpl struct {
 	writer          *syncFrameWriter
 	pendingRequests *sync.Map
+	maxChunk        int
 }
 
-func newPeerInvokerImpl(writer *syncFrameWriter, pendingRequests *sync.Map) *peerInvokerImpl {
+func newPeerInvokerImpl(writer *syncFrameWriter, pendingRequests *sync.Map, maxChunk int) *peerInvokerImpl {
 	return &peerInvokerImpl{
 		writer:          writer,
 		pendingRequests: pendingRequests,
+		maxChunk:        maxChunk,
 	}
 }
 
@@ -943,31 +958,62 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<
 	// Create a buffered channel for responses (buffer up to 64 chunks)
 	sender := make(chan InvokeResult, 64)
 
-	// Register the pending request before sending (use string key since MessageId is not comparable)
+	// Register the pending request before sending
 	p.pendingRequests.Store(requestID.ToString(), &pendingPeerRequest{sender: sender})
 
-	// Serialize arguments as CBOR arguments:
-	// Array of maps, each with "media_urn" (text) and "value" (bytes)
-	cborArgs := make([]interface{}, len(arguments))
-	for i, arg := range arguments {
-		cborArgs[i] = map[string]interface{}{
-			"media_urn": arg.MediaUrn,
-			"value":     arg.Value,
+	maxChunk := p.maxChunk
+
+	// Protocol v2: REQ(empty) + STREAM_START + CHUNK(s) + STREAM_END + END per argument
+
+	// 1. REQ with empty payload
+	reqFrame := cbor.NewReq(requestID, capUrn, nil, "application/cbor")
+	if err := p.writer.WriteFrame(reqFrame); err != nil {
+		p.pendingRequests.Delete(requestID.ToString())
+		return nil, fmt.Errorf("failed to send REQ frame: %w", err)
+	}
+
+	// 2. Each argument as an independent stream
+	for _, arg := range arguments {
+		streamID := fmt.Sprintf("peer-%s", cbor.NewMessageIdRandom().ToString()[:8])
+
+		// STREAM_START
+		startFrame := cbor.NewStreamStart(requestID, streamID, arg.MediaUrn)
+		if err := p.writer.WriteFrame(startFrame); err != nil {
+			p.pendingRequests.Delete(requestID.ToString())
+			return nil, fmt.Errorf("failed to send STREAM_START: %w", err)
+		}
+
+		// CHUNK(s)
+		offset := 0
+		seq := uint64(0)
+		for offset < len(arg.Value) {
+			chunkSize := len(arg.Value) - offset
+			if chunkSize > maxChunk {
+				chunkSize = maxChunk
+			}
+			chunkData := arg.Value[offset : offset+chunkSize]
+			chunkFrame := cbor.NewChunk(requestID, streamID, seq, chunkData)
+			if err := p.writer.WriteFrame(chunkFrame); err != nil {
+				p.pendingRequests.Delete(requestID.ToString())
+				return nil, fmt.Errorf("failed to send CHUNK: %w", err)
+			}
+			offset += chunkSize
+			seq++
+		}
+
+		// STREAM_END
+		endFrame := cbor.NewStreamEnd(requestID, streamID)
+		if err := p.writer.WriteFrame(endFrame); err != nil {
+			p.pendingRequests.Delete(requestID.ToString())
+			return nil, fmt.Errorf("failed to send STREAM_END: %w", err)
 		}
 	}
 
-	payload, err := cborlib.Marshal(cborArgs)
-	if err != nil {
+	// 3. END
+	endFrame := cbor.NewEnd(requestID, nil)
+	if err := p.writer.WriteFrame(endFrame); err != nil {
 		p.pendingRequests.Delete(requestID.ToString())
-		return nil, fmt.Errorf("failed to serialize arguments as CBOR: %w", err)
-	}
-
-	// Create and send the REQ frame with CBOR payload
-	frame := cbor.NewReq(requestID, capUrn, payload, "application/cbor")
-
-	if err := p.writer.WriteFrame(frame); err != nil {
-		p.pendingRequests.Delete(requestID.ToString())
-		return nil, fmt.Errorf("failed to send REQ frame: %w", err)
+		return nil, fmt.Errorf("failed to send END: %w", err)
 	}
 
 	return sender, nil
