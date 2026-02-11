@@ -845,3 +845,67 @@ func TestStreamEndRoundtrip(t *testing.T) {
 		t.Errorf("STREAM_END should not have mediaUrn, got %v", *decoded.MediaUrn)
 	}
 }
+
+// TEST399a: RelayNotify encode/decode roundtrip preserves manifest and limits
+func TestRelayNotifyRoundtrip(t *testing.T) {
+	manifest := []byte(`{"caps":["cap:op=relay-test"]}`)
+	maxFrame := 2_000_000
+	maxChunk := 128_000
+
+	original := NewRelayNotify(manifest, maxFrame, maxChunk)
+	encoded, err := EncodeFrame(original)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	decoded, err := DecodeFrame(encoded)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	if decoded.FrameType != FrameTypeRelayNotify {
+		t.Errorf("Expected RELAY_NOTIFY, got %v", decoded.FrameType)
+	}
+
+	extractedManifest := decoded.RelayNotifyManifest()
+	if extractedManifest == nil {
+		t.Fatal("RelayNotifyManifest() returned nil after roundtrip")
+	}
+	if string(extractedManifest) != string(manifest) {
+		t.Errorf("Manifest mismatch after roundtrip: got %s", string(extractedManifest))
+	}
+
+	extractedLimits := decoded.RelayNotifyLimits()
+	if extractedLimits == nil {
+		t.Fatal("RelayNotifyLimits() returned nil after roundtrip")
+	}
+	if extractedLimits.MaxFrame != maxFrame {
+		t.Errorf("MaxFrame mismatch: expected %d, got %d", maxFrame, extractedLimits.MaxFrame)
+	}
+	if extractedLimits.MaxChunk != maxChunk {
+		t.Errorf("MaxChunk mismatch: expected %d, got %d", maxChunk, extractedLimits.MaxChunk)
+	}
+}
+
+// TEST400a: RelayState encode/decode roundtrip preserves resource payload
+func TestRelayStateRoundtrip(t *testing.T) {
+	resources := []byte(`{"gpu_memory":8192,"cpu_cores":16}`)
+
+	original := NewRelayState(resources)
+	encoded, err := EncodeFrame(original)
+	if err != nil {
+		t.Fatalf("Encode failed: %v", err)
+	}
+
+	decoded, err := DecodeFrame(encoded)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	if decoded.FrameType != FrameTypeRelayState {
+		t.Errorf("Expected RELAY_STATE, got %v", decoded.FrameType)
+	}
+	if string(decoded.Payload) != string(resources) {
+		t.Errorf("Payload mismatch after roundtrip: got %s", string(decoded.Payload))
+	}
+}

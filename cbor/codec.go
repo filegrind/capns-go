@@ -128,8 +128,8 @@ func DecodeFrame(data []byte) (*Frame, error) {
 	}
 	if ft, ok := ftVal.(uint64); ok {
 		frameType := FrameType(ft)
-		// Validate frame type is in valid range (0-9, excluding removed value 2)
-		if frameType < FrameTypeHello || frameType > FrameTypeStreamEnd {
+		// Validate frame type is in valid range (0-11, excluding removed value 2)
+		if frameType < FrameTypeHello || frameType > FrameTypeRelayState {
 			return nil, fmt.Errorf("invalid frame_type %d", ft)
 		}
 		// Reject old RES frame type (2) - no longer supported

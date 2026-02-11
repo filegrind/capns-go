@@ -1,6 +1,7 @@
 package cbor
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -30,31 +31,35 @@ func TestFrameTypeRoundtrip(t *testing.T) {
 	}
 }
 
-// TEST172: Test FrameType values are within expected range
+// TEST172: Test FrameType::from_u8 returns invalid for values outside the valid discriminant range
 func TestFrameTypeValidRange(t *testing.T) {
 	validTypes := map[uint8]bool{
-		0: true, // HELLO
-		1: true, // REQ
-		// 2: RES REMOVED - old protocol no longer supported
-		3: true, // CHUNK
-		4: true, // END
-		5: true, // LOG
-		6: true, // ERR
-		7: true, // HEARTBEAT
-		8: true, // STREAM_START
-		9: true, // STREAM_END
+		0:  true,  // HELLO
+		1:  true,  // REQ
+		2:  false, // RES REMOVED - old protocol no longer supported
+		3:  true,  // CHUNK
+		4:  true,  // END
+		5:  true,  // LOG
+		6:  true,  // ERR
+		7:  true,  // HEARTBEAT
+		8:  true,  // STREAM_START
+		9:  true,  // STREAM_END
+		10: true,  // RELAY_NOTIFY
+		11: true,  // RELAY_STATE
 	}
 
-	for i := uint8(0); i < 20; i++ {
-		if i >= 0 && i <= 9 {
-			if i == 2 {
-				// Skip RES (removed)
-				continue
-			}
-			if !validTypes[i] {
-				t.Errorf("Expected %d to be valid FrameType", i)
+	for i := uint8(0); i <= 11; i++ {
+		if expected, exists := validTypes[i]; exists && expected {
+			ft := FrameType(i)
+			if ft.String() == fmt.Sprintf("UNKNOWN(%d)", i) {
+				t.Errorf("Expected %d to be a valid FrameType", i)
 			}
 		}
+	}
+	// 12 is one past RelayState — must be invalid
+	ft12 := FrameType(12)
+	if ft12.String() != "UNKNOWN(12)" {
+		t.Errorf("Expected 12 to be invalid, got %s", ft12.String())
 	}
 }
 
@@ -673,5 +678,96 @@ func TestStreamStartWithEmptyMediaUrn(t *testing.T) {
 	}
 	if frame.MediaUrn == nil {
 		t.Error("MediaUrn should not be nil, even if empty")
+	}
+}
+
+// TEST399: RelayNotify discriminant roundtrips through uint8 conversion (value 10)
+func TestRelayNotifyDiscriminantRoundtrip(t *testing.T) {
+	ft := FrameTypeRelayNotify
+	asUint := uint8(ft)
+	if asUint != 10 {
+		t.Errorf("RELAY_NOTIFY must be 10, got %d", asUint)
+	}
+	backToType := FrameType(asUint)
+	if backToType != FrameTypeRelayNotify {
+		t.Errorf("FrameType(10) must be RELAY_NOTIFY, got %v", backToType)
+	}
+}
+
+// TEST400: RelayState discriminant roundtrips through uint8 conversion (value 11)
+func TestRelayStateDiscriminantRoundtrip(t *testing.T) {
+	ft := FrameTypeRelayState
+	asUint := uint8(ft)
+	if asUint != 11 {
+		t.Errorf("RELAY_STATE must be 11, got %d", asUint)
+	}
+	backToType := FrameType(asUint)
+	if backToType != FrameTypeRelayState {
+		t.Errorf("FrameType(11) must be RELAY_STATE, got %v", backToType)
+	}
+}
+
+// TEST401: relay_notify factory stores manifest and limits, accessors extract them correctly
+func TestRelayNotifyFactoryAndAccessors(t *testing.T) {
+	manifest := []byte(`{"caps":["cap:op=test"]}`)
+	maxFrame := 2_000_000
+	maxChunk := 128_000
+
+	frame := NewRelayNotify(manifest, maxFrame, maxChunk)
+
+	if frame.FrameType != FrameTypeRelayNotify {
+		t.Errorf("Expected RELAY_NOTIFY, got %v", frame.FrameType)
+	}
+
+	// Test manifest accessor
+	extractedManifest := frame.RelayNotifyManifest()
+	if extractedManifest == nil {
+		t.Fatal("RelayNotifyManifest() returned nil")
+	}
+	if string(extractedManifest) != string(manifest) {
+		t.Errorf("Manifest mismatch: got %s", string(extractedManifest))
+	}
+
+	// Test limits accessor
+	extractedLimits := frame.RelayNotifyLimits()
+	if extractedLimits == nil {
+		t.Fatal("RelayNotifyLimits() returned nil")
+	}
+	if extractedLimits.MaxFrame != maxFrame {
+		t.Errorf("MaxFrame mismatch: expected %d, got %d", maxFrame, extractedLimits.MaxFrame)
+	}
+	if extractedLimits.MaxChunk != maxChunk {
+		t.Errorf("MaxChunk mismatch: expected %d, got %d", maxChunk, extractedLimits.MaxChunk)
+	}
+
+	// Test accessors on wrong frame type return nil
+	req := NewReq(NewMessageIdRandom(), "cap:op=test", []byte{}, "text/plain")
+	if req.RelayNotifyManifest() != nil {
+		t.Error("RelayNotifyManifest on REQ must return nil")
+	}
+	if req.RelayNotifyLimits() != nil {
+		t.Error("RelayNotifyLimits on REQ must return nil")
+	}
+}
+
+// TEST402: relay_state factory stores resource payload in Payload field
+func TestRelayStateFactoryAndPayload(t *testing.T) {
+	resources := []byte(`{"gpu_memory":8192}`)
+
+	frame := NewRelayState(resources)
+
+	if frame.FrameType != FrameTypeRelayState {
+		t.Errorf("Expected RELAY_STATE, got %v", frame.FrameType)
+	}
+	if string(frame.Payload) != string(resources) {
+		t.Errorf("Payload mismatch: got %s", string(frame.Payload))
+	}
+}
+
+// TEST403: FrameType from value 12 is invalid (one past RelayState)
+func TestFrameTypeOnePastRelayState(t *testing.T) {
+	ft := FrameType(12)
+	if ft.String() != fmt.Sprintf("UNKNOWN(%d)", 12) {
+		t.Errorf("FrameType(12) must be unknown, got %s", ft.String())
 	}
 }

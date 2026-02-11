@@ -369,6 +369,53 @@ func (f *Frame) LogMessage() string {
 	return ""
 }
 
+// RelayNotifyManifest extracts manifest bytes from RelayNotify metadata.
+// Returns nil if not a RelayNotify frame or no manifest present.
+func (f *Frame) RelayNotifyManifest() []byte {
+	if f.FrameType != FrameTypeRelayNotify || f.Meta == nil {
+		return nil
+	}
+	if manifest, ok := f.Meta["manifest"].([]byte); ok {
+		return manifest
+	}
+	return nil
+}
+
+// RelayNotifyLimits extracts Limits from RelayNotify metadata.
+// Returns nil if not a RelayNotify frame or limits are missing.
+func (f *Frame) RelayNotifyLimits() *Limits {
+	if f.FrameType != FrameTypeRelayNotify || f.Meta == nil {
+		return nil
+	}
+	maxFrame := extractIntFromMeta(f.Meta, "max_frame")
+	maxChunk := extractIntFromMeta(f.Meta, "max_chunk")
+	if maxFrame <= 0 || maxChunk <= 0 {
+		return nil
+	}
+	return &Limits{MaxFrame: maxFrame, MaxChunk: maxChunk}
+}
+
+// extractIntFromMeta extracts an integer from a meta map, handling CBOR type variance.
+// CBOR libraries may decode integers as int, int64, uint64, or float64.
+func extractIntFromMeta(meta map[string]interface{}, key string) int {
+	v, ok := meta[key]
+	if !ok {
+		return 0
+	}
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case uint64:
+		return int(n)
+	case float64:
+		return int(n)
+	default:
+		return 0
+	}
+}
+
 // IsEof checks if this is the final frame in a stream (matches Rust Frame::is_eof)
 func (f *Frame) IsEof() bool {
 	return f.Eof != nil && *f.Eof

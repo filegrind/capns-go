@@ -54,3 +54,4 @@ temp/
 .ws/
 .scrap/
 examples/testplugin/testplugin
+diffs/
