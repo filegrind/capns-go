@@ -33,8 +33,10 @@ const (
 	FrameTypeLog         FrameType = 5 // MUST be 5 - matches Rust
 	FrameTypeErr         FrameType = 6 // MUST be 6 - matches Rust
 	FrameTypeHeartbeat   FrameType = 7
-	FrameTypeStreamStart FrameType = 8 // Announce new stream for a request (multiplexed streaming)
-	FrameTypeStreamEnd   FrameType = 9 // End a specific stream (multiplexed streaming)
+	FrameTypeStreamStart FrameType = 8  // Announce new stream for a request (multiplexed streaming)
+	FrameTypeStreamEnd   FrameType = 9  // End a specific stream (multiplexed streaming)
+	FrameTypeRelayNotify FrameType = 10 // Relay capability advertisement (slave → master)
+	FrameTypeRelayState  FrameType = 11 // Relay host system resources + cap demands (master → slave)
 )
 
 // String returns the frame type name
@@ -59,6 +61,10 @@ func (ft FrameType) String() string {
 		return "STREAM_START"
 	case FrameTypeStreamEnd:
 		return "STREAM_END"
+	case FrameTypeRelayNotify:
+		return "RELAY_NOTIFY"
+	case FrameTypeRelayState:
+		return "RELAY_STATE"
 	default:
 		return fmt.Sprintf("UNKNOWN(%d)", ft)
 	}
@@ -294,6 +300,26 @@ func NewHelloWithManifest(maxFrame, maxChunk int, manifest []byte) *Frame {
 		"version":   ProtocolVersion,
 		"manifest":  manifest,
 	}
+	return frame
+}
+
+// NewRelayNotify creates a RELAY_NOTIFY frame for capability advertisement (slave → master).
+// Carries aggregate manifest + negotiated limits. (matches Rust Frame::relay_notify)
+func NewRelayNotify(manifest []byte, maxFrame, maxChunk int) *Frame {
+	frame := newFrame(FrameTypeRelayNotify, MessageId{uintValue: new(uint64)})
+	frame.Meta = map[string]interface{}{
+		"manifest":  manifest,
+		"max_frame": maxFrame,
+		"max_chunk": maxChunk,
+	}
+	return frame
+}
+
+// NewRelayState creates a RELAY_STATE frame for host system resources + cap demands (master → slave).
+// Carries an opaque resource payload. (matches Rust Frame::relay_state)
+func NewRelayState(resources []byte) *Frame {
+	frame := newFrame(FrameTypeRelayState, MessageId{uintValue: new(uint64)})
+	frame.Payload = resources
 	return frame
 }
 
