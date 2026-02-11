@@ -261,7 +261,7 @@ func TestSpecificity(t *testing.T) {
 	assert.Equal(t, 5, cap4.Specificity())
 }
 
-// TEST024: Test compatibility checking (missing tags = wildcards, different directions = incompatible)
+// TEST024: Test compatibility via directional Accepts (bidirectional)
 func TestCompatibility(t *testing.T) {
 	cap1, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
 	require.NoError(t, err)
@@ -272,20 +272,27 @@ func TestCompatibility(t *testing.T) {
 	cap3, err := NewCapUrnFromString(testUrn("type=image;op=extract"))
 	require.NoError(t, err)
 
-	assert.True(t, cap1.IsCompatibleWith(cap2))
-	assert.True(t, cap2.IsCompatibleWith(cap1))
-	assert.False(t, cap1.IsCompatibleWith(cap3))
+	// cap1 and cap2 have non-overlapping required tags: neither direction accepts
+	assert.False(t, cap1.Accepts(cap2))
+	assert.False(t, cap2.Accepts(cap1))
 
-	// Missing tags are treated as wildcards for compatibility
+	// cap1 and cap3: different op values, neither accepts
+	assert.False(t, cap1.Accepts(cap3))
+	assert.False(t, cap3.Accepts(cap1))
+
+	// General pattern (fewer tags) accepts specific instance
 	cap4, err := NewCapUrnFromString(testUrn("op=generate"))
 	require.NoError(t, err)
-	assert.True(t, cap1.IsCompatibleWith(cap4))
-	assert.True(t, cap4.IsCompatibleWith(cap1))
+	// cap1 (more specific) satisfies cap4 (general pattern): cap1.Accepts(cap4) = true
+	assert.True(t, cap1.Accepts(cap4))
+	// cap4 (general) does NOT satisfy cap1 (specific pattern requires ext=pdf): false
+	assert.False(t, cap4.Accepts(cap1))
 
-	// Different direction specs are incompatible
+	// Different direction specs: neither accepts
 	cap5, err := NewCapUrnFromString(`cap:in="media:binary";out="media:object";op=generate`)
 	require.NoError(t, err)
-	assert.False(t, cap1.IsCompatibleWith(cap5))
+	assert.False(t, cap1.Accepts(cap5))
+	assert.False(t, cap5.Accepts(cap1))
 }
 
 func TestConvenienceMethods(t *testing.T) {

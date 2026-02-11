@@ -586,94 +586,9 @@ func (c *CapUrn) IsMoreSpecificThan(other *CapUrn) bool {
 		return true
 	}
 
-	// First check if they're compatible
-	if !c.IsCompatibleWith(other) {
-		return false
-	}
-
 	return c.Specificity() > other.Specificity()
 }
 
-// IsCompatibleWith checks if this cap is compatible with another
-//
-// Two caps are compatible if they can potentially match
-// the same types of requests (considering wildcards and missing tags as wildcards)
-// Direction specs are compatible if either is a subtype of the other via TaggedUrn matching
-func (c *CapUrn) IsCompatibleWith(other *CapUrn) bool {
-	if other == nil {
-		return true
-	}
-
-	// Check inSpec compatibility: either direction of ConformsTo succeeds
-	if c.inSpec != "*" && other.inSpec != "*" {
-		selfIn, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: self in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
-		}
-		otherIn, err := taggedurn.NewTaggedUrnFromString(other.inSpec)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: other in_spec '%s' is not a valid media URN: %v", other.inSpec, err))
-		}
-		fwd, err := selfIn.ConformsTo(otherIn)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
-		}
-		rev, err := otherIn.ConformsTo(selfIn)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
-		}
-		if !fwd && !rev {
-			return false
-		}
-	}
-
-	// Check outSpec compatibility
-	if c.outSpec != "*" && other.outSpec != "*" {
-		selfOut, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: self out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
-		}
-		otherOut, err := taggedurn.NewTaggedUrnFromString(other.outSpec)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: other out_spec '%s' is not a valid media URN: %v", other.outSpec, err))
-		}
-		fwd, err := selfOut.ConformsTo(otherOut)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
-		}
-		rev, err := otherOut.ConformsTo(selfOut)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec compatibility: %v", err))
-		}
-		if !fwd && !rev {
-			return false
-		}
-	}
-
-	// Get all unique tag keys from both caps
-	allKeys := make(map[string]bool)
-	for key := range c.tags {
-		allKeys[key] = true
-	}
-	for key := range other.tags {
-		allKeys[key] = true
-	}
-
-	for key := range allKeys {
-		v1, exists1 := c.tags[key]
-		v2, exists2 := other.tags[key]
-
-		if exists1 && exists2 {
-			// Both have the tag - they must match or one must be wildcard
-			if v1 != "*" && v2 != "*" && v1 != v2 {
-				return false
-			}
-		}
-		// If only one has the tag, it's compatible (missing tag is wildcard)
-	}
-
-	return true
-}
 
 // WithWildcardTag returns a new cap with a specific tag set to wildcard
 // For 'in' or 'out', sets the corresponding direction spec to wildcard
@@ -845,10 +760,11 @@ func (m *CapMatcher) FindAllMatches(caps []*CapUrn, request *CapUrn) []*CapUrn {
 }
 
 // AreCompatible checks if two cap sets are compatible
+// Two caps are compatible if either accepts the other (bidirectional accepts)
 func (m *CapMatcher) AreCompatible(caps1, caps2 []*CapUrn) bool {
 	for _, c1 := range caps1 {
 		for _, c2 := range caps2 {
-			if c1.IsCompatibleWith(c2) {
+			if c1.Accepts(c2) || c2.Accepts(c1) {
 				return true
 			}
 		}

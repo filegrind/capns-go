@@ -553,6 +553,11 @@ func (pr *PluginRuntime) runCBORMode() error {
 			// Not an incoming request stream - could be a peer response stream
 			// (handled elsewhere)
 			fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_END for unknown request_id: %s\n", frame.Id.ToString())
+
+		case cbor.FrameTypeRelayNotify, cbor.FrameTypeRelayState:
+			// Relay-level frames must never reach a plugin runtime.
+			// If they do, it's a bug in the relay layer — fail hard.
+			return fmt.Errorf("relay frame %v must not reach plugin runtime", frame.FrameType)
 		}
 	}
 
