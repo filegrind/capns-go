@@ -377,19 +377,17 @@ func (h *PluginHost) handleRelayFrame(frame *cbor.Frame, relayWriter *cbor.Frame
 			h.sendToPlugin(entry.pluginIdx, frame)
 		}
 
-	case cbor.FrameTypeEnd:
+	case cbor.FrameTypeEnd, cbor.FrameTypeErr:
 		if entry, ok := h.requestRouting[idKey]; ok {
 			h.sendToPlugin(entry.pluginIdx, frame)
-			if !h.peerRequests[idKey] {
+			// Only remove routing on terminal frames if this is a PEER response
+			// (engine responding to a plugin's peer invoke). For engine-initiated
+			// requests, the relay END is just the end of the request body — the
+			// plugin still needs to respond, so routing must survive.
+			if h.peerRequests[idKey] {
 				delete(h.requestRouting, idKey)
+				delete(h.peerRequests, idKey)
 			}
-		}
-
-	case cbor.FrameTypeErr:
-		if entry, ok := h.requestRouting[idKey]; ok {
-			h.sendToPlugin(entry.pluginIdx, frame)
-			delete(h.requestRouting, idKey)
-			delete(h.peerRequests, idKey)
 		}
 
 	case cbor.FrameTypeHeartbeat:
