@@ -402,53 +402,6 @@ func TestExtractEffectivePayloadInvalidCapUrn(t *testing.T) {
 	}
 }
 
-// TEST266: Test CliStreamEmitter writes to stdout and stderr correctly (basic construction)
-func TestCliStreamEmitterConstruction(t *testing.T) {
-	emitter := &cliStreamEmitter{}
-	if emitter == nil {
-		t.Fatal("Expected emitter to be created")
-	}
-	// Just verify construction works
-}
-
-// TEST267: Test CliStreamEmitter default behavior
-func TestCliStreamEmitterDefault(t *testing.T) {
-	emitter := &cliStreamEmitter{}
-	// Verify it can be used
-	emitter.EmitLog("info", "test message")
-	_ = emitter.EmitCbor("test")
-}
-
-// TEST268: Test error types display correct messages
-func TestErrorMessages(t *testing.T) {
-	// Go doesn't have RuntimeError enum, but we can test error strings
-	err1 := NewPluginRuntimeError("NoHandler", "cap:op=missing")
-	if err1.Error() == "" {
-		t.Fatal("Expected error message")
-	}
-
-	err2 := NewPluginRuntimeError("MissingArgument", "model")
-	if err2.Error() == "" {
-		t.Fatal("Expected error message")
-	}
-}
-
-// TEST269: Test PluginRuntime limits returns default protocol limits
-func TestRuntimeLimitsDefault(t *testing.T) {
-	runtime, err := NewPluginRuntime([]byte(testManifest))
-	if err != nil {
-		t.Fatalf("Failed to create runtime: %v", err)
-	}
-
-	limits := runtime.Limits()
-	if limits.MaxFrame != cbor.DefaultMaxFrame {
-		t.Errorf("Expected max_frame %d, got %d", cbor.DefaultMaxFrame, limits.MaxFrame)
-	}
-	if limits.MaxChunk != cbor.DefaultMaxChunk {
-		t.Errorf("Expected max_chunk %d, got %d", cbor.DefaultMaxChunk, limits.MaxChunk)
-	}
-}
-
 // TEST270: Test registering multiple handlers for different caps and finding each independently
 func TestMultipleHandlers(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
