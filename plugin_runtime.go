@@ -1057,6 +1057,73 @@ func (pr *PluginRuntime) Limits() cbor.Limits {
 	return pr.limits
 }
 
+// buildPayloadFromStreamingReader builds CBOR payload from streaming reader (testable version).
+//
+// This simulates the CBOR chunked request flow for CLI piped stdin:
+// - Pure binary chunks from reader
+// - Accumulated in chunks (respecting max_chunk size)
+// - Built into CBOR arguments array (same format as CBOR mode)
+//
+// This makes all 4 modes use the SAME payload format:
+// - CLI file path → read file → payload
+// - CLI piped binary → chunk reader → payload
+// - CBOR chunked → payload
+// - CBOR file path → auto-convert → payload
+func (pr *PluginRuntime) buildPayloadFromStreamingReader(cap *Cap, reader io.Reader, maxChunk int) ([]byte, error) {
+	// Accumulate chunks
+	var chunks [][]byte
+	totalBytes := 0
+
+	for {
+		buffer := make([]byte, maxChunk)
+		n, err := reader.Read(buffer)
+		if n > 0 {
+			buffer = buffer[:n]
+			chunks = append(chunks, buffer)
+			totalBytes += n
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Concatenate chunks
+	completePayload := make([]byte, 0, totalBytes)
+	for _, chunk := range chunks {
+		completePayload = append(completePayload, chunk...)
+	}
+
+	// Build CBOR arguments array (same format as CBOR mode)
+	capUrn, err := NewCapUrnFromString(cap.UrnString())
+	if err != nil {
+		return nil, fmt.Errorf("invalid cap URN: %w", err)
+	}
+	expectedMediaUrn := capUrn.InSpec()
+
+	arg := CapArgumentValue{
+		MediaUrn: expectedMediaUrn,
+		Value:    completePayload,
+	}
+
+	// Encode as CBOR array
+	cborArgs := []interface{}{
+		map[string]interface{}{
+			"media_urn": arg.MediaUrn,
+			"value":     arg.Value,
+		},
+	}
+
+	payload, err := cborlib.Marshal(cborArgs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode CBOR payload: %w", err)
+	}
+
+	return payload, nil
+}
+
 // buildPayloadFromCLI builds CBOR payload from CLI arguments based on cap's arg definitions.
 // Returns CBOR-encoded array of CapArgumentValue objects.
 func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte, error) {

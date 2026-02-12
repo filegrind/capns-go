@@ -1,6 +1,7 @@
 package capns
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	cborlib "github.com/fxamacker/cbor/v2"
 	"github.com/filegrind/capns-go/cbor"
@@ -1799,5 +1801,348 @@ func Test360ExtractEffectivePayloadWithFileData(t *testing.T) {
 	// The effective payload should be the raw PDF bytes
 	if string(effective) != string(pdfContent) {
 		t.Errorf("extract_effective_payload should extract file bytes, got: %s", string(effective))
+	}
+}
+
+// TEST361: CLI mode with file path - pass file path as command-line argument
+func Test361CLIModeFilePath(t *testing.T) {
+	tempFile := filepath.Join(os.TempDir(), "test361.pdf")
+	pdfContent := []byte("PDF content for CLI file path test")
+	if err := os.WriteFile(tempFile, pdfContent, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile)
+
+	cap := createTestCap(
+		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{
+			{
+				MediaUrn: "media:file-path;textable;form=scalar",
+				Required: true,
+				Sources: []ArgSource{
+					stdinSource("media:pdf;bytes"),
+					positionSource(0),
+				},
+			},
+		},
+	)
+
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	runtime, err := NewPluginRuntimeWithManifest(manifest)
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
+	// CLI mode: pass file path as positional argument
+	cliArgs := []string{tempFile}
+	payload, err := runtime.buildPayloadFromCLI(&manifest.Caps[0], cliArgs)
+	if err != nil {
+		t.Fatalf("Failed to build payload from CLI: %v", err)
+	}
+
+	// Verify payload is CBOR array with file-path argument
+	var cborVal interface{}
+	if err := cborlib.Unmarshal(payload, &cborVal); err != nil {
+		t.Fatalf("Failed to unmarshal CBOR: %v", err)
+	}
+
+	if _, ok := cborVal.([]interface{}); !ok {
+		t.Errorf("CLI mode should produce CBOR array, got: %T", cborVal)
+	}
+}
+
+// TEST362: CLI mode with binary piped in - pipe binary data via stdin
+//
+// This test simulates real-world conditions:
+// - Pure binary data piped to stdin (NOT CBOR)
+// - CLI mode detected (command arg present)
+// - Cap accepts stdin source
+// - Binary is chunked on-the-fly and accumulated
+// - Handler receives complete CBOR payload
+func Test362CLIModePipedBinary(t *testing.T) {
+	// Simulate large binary being piped (1MB PDF)
+	pdfContent := make([]byte, 1_000_000)
+	for i := range pdfContent {
+		pdfContent[i] = 0xAB
+	}
+
+	// Create cap that accepts stdin
+	cap := createTestCap(
+		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{
+			{
+				MediaUrn: "media:pdf;bytes",
+				Required: true,
+				Sources: []ArgSource{
+					stdinSource("media:pdf;bytes"),
+				},
+			},
+		},
+	)
+
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	runtime, err := NewPluginRuntimeWithManifest(manifest)
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
+	// Mock stdin with bytes.Reader (simulates piped binary)
+	mockStdin := strings.NewReader(string(pdfContent))
+
+	// Build payload from streaming reader (what CLI piped mode does)
+	payload, err := runtime.buildPayloadFromStreamingReader(cap, mockStdin, cbor.DefaultLimits().MaxChunk)
+	if err != nil {
+		t.Fatalf("Failed to build payload from streaming reader: %v", err)
+	}
+
+	// Verify payload is CBOR array with correct structure
+	var cborVal interface{}
+	if err := cborlib.Unmarshal(payload, &cborVal); err != nil {
+		t.Fatalf("Failed to unmarshal CBOR: %v", err)
+	}
+
+	arr, ok := cborVal.([]interface{})
+	if !ok {
+		t.Fatalf("Expected CBOR Array, got: %T", cborVal)
+	}
+
+	if len(arr) != 1 {
+		t.Fatalf("CBOR array should have one argument, got: %d", len(arr))
+	}
+
+	argMap, ok := arr[0].(map[interface{}]interface{})
+	if !ok {
+		t.Fatalf("Expected Map in CBOR array, got: %T", arr[0])
+	}
+
+	var mediaUrn string
+	var value []byte
+
+	for k, v := range argMap {
+		key, ok := k.(string)
+		if !ok {
+			continue
+		}
+		switch key {
+		case "media_urn":
+			if s, ok := v.(string); ok {
+				mediaUrn = s
+			}
+		case "value":
+			if b, ok := v.([]byte); ok {
+				value = b
+			}
+		}
+	}
+
+	if mediaUrn != "media:pdf;bytes" {
+		t.Errorf("Media URN should match cap in_spec, got: %s", mediaUrn)
+	}
+	if string(value) != string(pdfContent) {
+		t.Errorf("Binary content should be preserved exactly, got %d bytes, expected %d bytes", len(value), len(pdfContent))
+	}
+}
+
+// TEST363: CBOR mode with chunked content - send file content streaming as chunks
+func Test363CBORModeChunkedContent(t *testing.T) {
+	pdfContent := make([]byte, 10000) // 10KB of data
+	for i := range pdfContent {
+		pdfContent[i] = 0xAA
+	}
+
+	var receivedData []byte
+	receivedChan := make(chan []byte, 1)
+
+	handler := func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+		// TRUE STREAMING: Relay frames and verify
+		var total []byte
+		for frame := range frames {
+			if frame.FrameType == cbor.FrameTypeChunk {
+				if frame.Payload != nil {
+					total = append(total, frame.Payload...)
+					if err := emitter.EmitCbor(frame.Payload); err != nil {
+						return err
+					}
+				}
+			}
+		}
+
+		// Verify what we received
+		var cborVal interface{}
+		if err := cborlib.Unmarshal(total, &cborVal); err != nil {
+			return err
+		}
+
+		if arr, ok := cborVal.([]interface{}); ok {
+			if argMap, ok := arr[0].(map[interface{}]interface{}); ok {
+				for k, v := range argMap {
+					if key, ok := k.(string); ok && key == "value" {
+						if data, ok := v.([]byte); ok {
+							receivedChan <- data
+						}
+					}
+				}
+			}
+		}
+		return nil
+	}
+
+	cap := createTestCap(
+		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{
+			{
+				MediaUrn: "media:pdf;bytes",
+				Required: true,
+				Sources: []ArgSource{
+					stdinSource("media:pdf;bytes"),
+				},
+			},
+		},
+	)
+
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	runtime, err := NewPluginRuntimeWithManifest(manifest)
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+	runtime.Register(cap.UrnString(), handler)
+
+	// Build CBOR payload
+	args := []CapArgumentValue{
+		{
+			MediaUrn: "media:pdf;bytes",
+			Value:    pdfContent,
+		},
+	}
+	var payloadBytes []byte
+	cborArgs := make([]interface{}, len(args))
+	for i, arg := range args {
+		cborArgs[i] = map[string]interface{}{
+			"media_urn": arg.MediaUrn,
+			"value":     arg.Value,
+		}
+	}
+	payloadBytes, err = cborlib.Marshal(cborArgs)
+	if err != nil {
+		t.Fatalf("Failed to marshal CBOR: %v", err)
+	}
+
+	// Simulate streaming: chunk payload and send via channel
+	handlerFunc := runtime.FindHandler(cap.UrnString())
+	if handlerFunc == nil {
+		t.Fatal("Handler not found")
+	}
+
+	noPeer := &noPeerInvoker{}
+	emitter := &mockStreamEmitter{}
+
+	frameChan := make(chan cbor.Frame, 100)
+	const maxChunk = 262144
+	requestID := cbor.NewMessageIdDefault()
+	streamID := "test-stream"
+
+	// Send STREAM_START
+	frameChan <- *cbor.NewStreamStart(requestID, streamID, "media:bytes")
+
+	// Send CHUNK frames
+	offset := 0
+	seq := uint64(0)
+	for offset < len(payloadBytes) {
+		chunkSize := len(payloadBytes) - offset
+		if chunkSize > maxChunk {
+			chunkSize = maxChunk
+		}
+		frameChan <- *cbor.NewChunk(requestID, streamID, seq, payloadBytes[offset:offset+chunkSize])
+		offset += chunkSize
+		seq++
+	}
+
+	// Send STREAM_END and END
+	frameChan <- *cbor.NewStreamEnd(requestID, streamID)
+	frameChan <- *cbor.NewEnd(requestID, nil)
+	close(frameChan)
+
+	// Run handler in goroutine
+	go func() {
+		if err := handlerFunc(frameChan, emitter, noPeer); err != nil {
+			t.Errorf("Handler failed: %v", err)
+		}
+	}()
+
+	// Wait for result
+	select {
+	case receivedData = <-receivedChan:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Timeout waiting for handler response")
+	}
+
+	if string(receivedData) != string(pdfContent) {
+		t.Errorf("Handler should receive chunked content, got %d bytes, expected %d bytes", len(receivedData), len(pdfContent))
+	}
+}
+
+// TEST364: CBOR mode with file path - send file path in CBOR arguments (auto-conversion)
+func Test364CBORModeFilePath(t *testing.T) {
+	tempFile := filepath.Join(os.TempDir(), "test364.pdf")
+	pdfContent := []byte("PDF content for CBOR file path test")
+	if err := os.WriteFile(tempFile, pdfContent, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tempFile)
+
+	cap := createTestCap(
+		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{
+			{
+				MediaUrn: "media:file-path;textable;form=scalar",
+				Required: true,
+				Sources: []ArgSource{
+					stdinSource("media:pdf;bytes"),
+				},
+			},
+		},
+	)
+
+	// Build CBOR arguments with file-path URN
+	args := []CapArgumentValue{
+		{
+			MediaUrn: "media:file-path;textable;form=scalar",
+			Value:    []byte(tempFile),
+		},
+	}
+	var payload []byte
+	cborArgs := make([]interface{}, len(args))
+	for i, arg := range args {
+		cborArgs[i] = map[string]interface{}{
+			"media_urn": arg.MediaUrn,
+			"value":     arg.Value,
+		}
+	}
+	payload, err := cborlib.Marshal(cborArgs)
+	if err != nil {
+		t.Fatalf("Failed to marshal CBOR: %v", err)
+	}
+
+	// Extract effective payload (triggers file-path auto-conversion)
+	effective, err := extractEffectivePayload(
+		payload,
+		"application/cbor",
+		cap.UrnString(),
+	)
+	if err != nil {
+		t.Fatalf("Failed to extract effective payload: %v", err)
+	}
+
+	// The effective payload should be the raw PDF bytes (Go's extractEffectivePayload returns bytes directly)
+	if string(effective) != string(pdfContent) {
+		t.Errorf("File should be auto-converted to bytes, got: %s", string(effective))
 	}
 }
