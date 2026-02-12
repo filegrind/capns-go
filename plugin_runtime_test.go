@@ -17,19 +17,57 @@ const testManifest = `{"name":"TestPlugin","version":"1.0.0","description":"Test
 
 // Mock emitter that captures emitted data for testing
 type mockStreamEmitter struct {
-	emittedData []byte
+	emittedData [][]byte
 }
 
-func (m *mockStreamEmitter) Emit(payload []byte) {
-	m.emittedData = append(m.emittedData, payload...)
+func (m *mockStreamEmitter) EmitCbor(value interface{}) error {
+	// CBOR-encode the value
+	cborPayload, err := cborlib.Marshal(value)
+	if err != nil {
+		return err
+	}
+	m.emittedData = append(m.emittedData, cborPayload)
+	return nil
 }
 
-func (m *mockStreamEmitter) Log(level, message string) {
+func (m *mockStreamEmitter) EmitLog(level, message string) {
 	// No-op for tests
 }
 
-func (m *mockStreamEmitter) EmitStatus(operation, details string) {
-	// No-op for tests
+// Helper to get all emitted data as single concatenated bytes
+func (m *mockStreamEmitter) GetAllData() []byte {
+	var result []byte
+	for _, chunk := range m.emittedData {
+		result = append(result, chunk...)
+	}
+	return result
+}
+
+// bytesToFrameChannel converts a byte payload to a frame channel for testing.
+// Sends: STREAM_START → CHUNK → STREAM_END → END
+func bytesToFrameChannel(payload []byte) <-chan cbor.Frame {
+	ch := make(chan cbor.Frame, 4)
+	go func() {
+		defer close(ch)
+		requestID := cbor.NewMessageIdDefault()
+		streamID := "test-arg"
+		mediaUrn := "media:bytes"
+
+		// STREAM_START
+		ch <- *cbor.NewStreamStart(requestID, streamID, mediaUrn)
+
+		// CHUNK (if payload is not empty)
+		if len(payload) > 0 {
+			ch <- *cbor.NewChunk(requestID, streamID, 0, payload)
+		}
+
+		// STREAM_END
+		ch <- *cbor.NewStreamEnd(requestID, streamID)
+
+		// END
+		ch <- *cbor.NewEnd(requestID, nil)
+	}()
+	return ch
 }
 
 // TEST248: Test register handler by exact cap URN and find it by the same URN
@@ -40,9 +78,8 @@ func TestRegisterAndFindHandler(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("result"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("result")
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
@@ -59,9 +96,13 @@ func TestRawHandler(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=raw;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit(payload)
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			// Collect first arg and echo it
+			payload, err := CollectFirstArg(frames)
+			if err != nil {
+				return err
+			}
+			return emitter.EmitCbor(payload)
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=raw;out="media:void"`)
@@ -71,12 +112,17 @@ func TestRawHandler(t *testing.T) {
 
 	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	err = handler([]byte("echo this"), emitter, peer)
+	err = handler(bytesToFrameChannel([]byte("echo this")), emitter, peer)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
-	if string(emitter.emittedData) != "echo this" {
-		t.Errorf("Expected 'echo this', got %s", string(emitter.emittedData))
+	// Decode CBOR
+	var result []byte
+	if err := cborlib.Unmarshal(emitter.GetAllData(), &result); err != nil {
+		t.Fatalf("Failed to decode result: %v", err)
+	}
+	if string(result) != "echo this" {
+		t.Errorf("Expected 'echo this', got %s", string(result))
 	}
 }
 
@@ -88,29 +134,35 @@ func TestTypedHandlerDeserialization(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			payload, err := CollectFirstArg(frames)
+			if err != nil {
+				return err
+			}
 			var req map[string]interface{}
 			if err := json.Unmarshal(payload, &req); err != nil {
 				return err
 			}
 			value := req["key"]
 			if value == nil {
-				emitter.Emit([]byte("missing"))
-				return nil
+				return emitter.EmitCbor("missing")
 			}
-			emitter.Emit([]byte(value.(string)))
-			return nil
+			return emitter.EmitCbor(value.(string))
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
 	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	err = handler([]byte(`{"key":"hello"}`), emitter, peer)
+	err = handler(bytesToFrameChannel([]byte(`{"key":"hello"}`)), emitter, peer)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
-	if string(emitter.emittedData) != "hello" {
-		t.Errorf("Expected 'hello', got %s", string(emitter.emittedData))
+	var result string
+	if err := cborlib.Unmarshal(emitter.GetAllData(), &result); err != nil {
+		t.Fatalf("Failed to decode: %v", err)
+	}
+	if result != "hello" {
+		t.Errorf("Expected 'hello', got %s", result)
 	}
 }
 
@@ -122,19 +174,22 @@ func TestTypedHandlerRejectsInvalidJSON(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			payload, err := CollectFirstArg(frames)
+			if err != nil {
+				return err
+			}
 			var req map[string]interface{}
 			if err := json.Unmarshal(payload, &req); err != nil {
 				return err
 			}
-			emitter.Emit([]byte{})
-			return nil
+			return emitter.EmitCbor([]byte{})
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
 	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	err = handler([]byte("not json {{{{"), emitter, peer)
+	err = handler(bytesToFrameChannel([]byte("not json {{{{")), emitter, peer)
 	if err == nil {
 		t.Fatal("Expected error for invalid JSON, got nil")
 	}
@@ -161,9 +216,8 @@ func TestHandlerIsSendSync(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=threaded;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("done"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("done")
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=threaded;out="media:void"`)
@@ -172,20 +226,24 @@ func TestHandlerIsSendSync(t *testing.T) {
 	}
 
 	// Test that handler can be called from goroutine
-	done := make(chan bool)
+	doneCh := make(chan bool)
 	go func() {
 		emitter := &mockStreamEmitter{}
 		peer := &noPeerInvoker{}
-		err := handler([]byte("{}"), emitter, peer)
+		err := handler(bytesToFrameChannel([]byte("{}")), emitter, peer)
 		if err != nil {
 			t.Errorf("Handler failed: %v", err)
 		}
-		if string(emitter.emittedData) != "done" {
-			t.Errorf("Expected 'done', got %s", string(emitter.emittedData))
+		var result string
+		if err := cborlib.Unmarshal(emitter.GetAllData(), &result); err != nil {
+			t.Errorf("Failed to decode: %v", err)
 		}
-		done <- true
+		if result != "done" {
+			t.Errorf("Expected 'done', got %s", result)
+		}
+		doneCh <- true
 	}()
-	<-done
+	<-doneCh
 }
 
 // TEST254: Test NoPeerInvoker always returns PeerRequest error regardless of arguments
@@ -357,8 +415,8 @@ func TestCliStreamEmitterConstruction(t *testing.T) {
 func TestCliStreamEmitterDefault(t *testing.T) {
 	emitter := &cliStreamEmitter{}
 	// Verify it can be used
-	emitter.Log("info", "test message")
-	emitter.EmitStatus("testing", "details")
+	emitter.EmitLog("info", "test message")
+	_ = emitter.EmitCbor("test")
 }
 
 // TEST268: Test error types display correct messages
@@ -399,42 +457,45 @@ func TestMultipleHandlers(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=alpha;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("a"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("a")
 		})
 	runtime.Register(`cap:in="media:void";op=beta;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("b"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("b")
 		})
 	runtime.Register(`cap:in="media:void";op=gamma;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("g"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("g")
 		})
 
 	peer := &noPeerInvoker{}
 
 	emitterA := &mockStreamEmitter{}
 	hAlpha := runtime.FindHandler(`cap:in="media:void";op=alpha;out="media:void"`)
-	_ = hAlpha([]byte{}, emitterA, peer)
-	if string(emitterA.emittedData) != "a" {
-		t.Errorf("Expected 'a', got %s", string(emitterA.emittedData))
+	_ = hAlpha(bytesToFrameChannel([]byte{}), emitterA, peer)
+	var resultA string
+	cborlib.Unmarshal(emitterA.GetAllData(), &resultA)
+	if resultA != "a" {
+		t.Errorf("Expected 'a', got %s", resultA)
 	}
 
 	emitterB := &mockStreamEmitter{}
 	hBeta := runtime.FindHandler(`cap:in="media:void";op=beta;out="media:void"`)
-	_ = hBeta([]byte{}, emitterB, peer)
-	if string(emitterB.emittedData) != "b" {
-		t.Errorf("Expected 'b', got %s", string(emitterB.emittedData))
+	_ = hBeta(bytesToFrameChannel([]byte{}), emitterB, peer)
+	var resultB string
+	cborlib.Unmarshal(emitterB.GetAllData(), &resultB)
+	if resultB != "b" {
+		t.Errorf("Expected 'b', got %s", resultB)
 	}
 
 	emitterG := &mockStreamEmitter{}
 	hGamma := runtime.FindHandler(`cap:in="media:void";op=gamma;out="media:void"`)
-	_ = hGamma([]byte{}, emitterG, peer)
-	if string(emitterG.emittedData) != "g" {
-		t.Errorf("Expected 'g', got %s", string(emitterG.emittedData))
+	_ = hGamma(bytesToFrameChannel([]byte{}), emitterG, peer)
+	var resultG string
+	cborlib.Unmarshal(emitterG.GetAllData(), &resultG)
+	if resultG != "g" {
+		t.Errorf("Expected 'g', got %s", resultG)
 	}
 }
 
@@ -446,22 +507,22 @@ func TestHandlerReplacement(t *testing.T) {
 	}
 
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("first"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("first")
 		})
 	runtime.Register(`cap:in="media:void";op=test;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("second"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("second")
 		})
 
 	handler := runtime.FindHandler(`cap:in="media:void";op=test;out="media:void"`)
 	emitter := &mockStreamEmitter{}
 	peer := &noPeerInvoker{}
-	_ = handler([]byte{}, emitter, peer)
-	if string(emitter.emittedData) != "second" {
-		t.Errorf("Expected 'second' (later registration), got %s", string(emitter.emittedData))
+	_ = handler(bytesToFrameChannel([]byte{}), emitter, peer)
+	var result string
+	cborlib.Unmarshal(emitter.GetAllData(), &result)
+	if result != "second" {
+		t.Errorf("Expected 'second' (later registration), got %s", result)
 	}
 }
 
@@ -589,10 +650,13 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	var receivedPayload []byte
 	runtime.Register(
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			payload, err := CollectFirstArg(frames)
+			if err != nil {
+				return err
+			}
 			receivedPayload = payload
-			emitter.Emit([]byte("processed"))
-			return nil
+			return emitter.EmitCbor("processed")
 		},
 	)
 
@@ -612,7 +676,7 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	handler := runtime.FindHandler(manifest.Caps[0].UrnString())
 	emitter := &mockStreamEmitter{}
 	peerInvoker := &noPeerInvoker{}
-	err = handler(payload, emitter, peerInvoker)
+	err = handler(bytesToFrameChannel(payload), emitter, peerInvoker)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
@@ -621,8 +685,10 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	if string(receivedPayload) != "PDF binary content 336" {
 		t.Errorf("Expected handler to receive file bytes, got: %s", string(receivedPayload))
 	}
-	if string(emitter.emittedData) != "processed" {
-		t.Errorf("Expected 'processed', got: %s", string(emitter.emittedData))
+	var result string
+	cborlib.Unmarshal(emitter.GetAllData(), &result)
+	if result != "processed" {
+		t.Errorf("Expected 'processed', got: %s", result)
 	}
 }
 
@@ -1223,10 +1289,13 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	var receivedPayload []byte
 	runtime.Register(
 		`cap:in="media:pdf;bytes";op=process;out="media:result;textable"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			payload, err := CollectFirstArg(frames)
+			if err != nil {
+				return err
+			}
 			receivedPayload = payload
-			emitter.Emit([]byte("processed"))
-			return nil
+			return emitter.EmitCbor("processed")
 		},
 	)
 
@@ -1246,7 +1315,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	handler := runtime.FindHandler(manifest.Caps[0].UrnString())
 	emitter := &mockStreamEmitter{}
 	peerInvoker := &noPeerInvoker{}
-	err = handler(payload, emitter, peerInvoker)
+	err = handler(bytesToFrameChannel(payload), emitter, peerInvoker)
 	if err != nil {
 		t.Fatalf("Handler failed: %v", err)
 	}
@@ -1255,8 +1324,10 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	if string(receivedPayload) != string(testContent) {
 		t.Errorf("Handler should receive file bytes, not path")
 	}
-	if string(emitter.emittedData) != "processed" {
-		t.Errorf("Expected 'processed', got: %s", string(emitter.emittedData))
+	var result string
+	cborlib.Unmarshal(emitter.GetAllData(), &result)
+	if result != "processed" {
+		t.Errorf("Expected 'processed', got: %s", result)
 	}
 }
 

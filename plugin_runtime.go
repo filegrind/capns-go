@@ -1,7 +1,6 @@
 package capns
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,32 +15,34 @@ import (
 	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
-// StreamEmitter allows handlers to emit chunked responses and logs
+// StreamEmitter allows handlers to emit CBOR values and logs.
+// Handlers emit CBOR values via EmitCbor() or logs via EmitLog().
+// The value is CBOR-encoded once and sent as raw CBOR bytes in CHUNK frames.
+// No double-encoding: one CBOR layer from handler to consumer.
 type StreamEmitter interface {
-	// Emit sends a CHUNK frame with the given data
-	Emit(payload []byte)
-	// Log sends a LOG frame at the given level
-	Log(level, message string)
-	// EmitStatus sends a status update (as a LOG frame)
-	EmitStatus(operation, details string)
+	// EmitCbor emits a CBOR value as output.
+	// The value is CBOR-encoded once and sent as raw CBOR bytes in CHUNK frames.
+	EmitCbor(value interface{}) error
+	// EmitLog emits a log message at the given level.
+	// Sends a LOG frame (side-channel, does not affect response stream).
+	EmitLog(level, message string)
 }
 
-// PeerInvoker allows handlers to invoke caps on the peer (host)
+// PeerInvoker allows handlers to invoke caps on the peer (host).
+// Spawns a goroutine that receives response frames and forwards them to a channel.
+// Returns a channel that yields bare CBOR Frame objects (STREAM_START, CHUNK,
+// STREAM_END, END, ERR) as they arrive from the host. The consumer processes
+// frames directly - no decoding, no wrapper types.
 type PeerInvoker interface {
-	// Invoke sends a REQ frame to the host and returns a channel that yields response chunks
-	Invoke(capUrn string, arguments []CapArgumentValue) (<-chan InvokeResult, error)
+	Invoke(capUrn string, arguments []CapArgumentValue) (<-chan cbor.Frame, error)
 }
 
-// InvokeResult represents a chunk or error from peer invocation
-type InvokeResult struct {
-	Data  []byte
-	Error error
-}
+// StreamChunk removed - handlers now receive bare CBOR Frame objects directly
 
-// HandlerFunc is the function signature for cap handlers using stream multiplexing protocol.
-// Handlers receive payload, emit responses via StreamEmitter, and return only an error.
-// The emitter handles STREAM_START, CHUNK, STREAM_END, and END frames automatically.
-type HandlerFunc func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error
+// HandlerFunc is the function signature for cap handlers.
+// Receives bare CBOR Frame objects for both input arguments and peer responses.
+// Handler has full streaming control - decides when to consume frames and when to produce output.
+type HandlerFunc func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error
 
 // PluginRuntime handles all I/O for plugin binaries
 type PluginRuntime struct {
@@ -176,7 +177,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 	type pendingIncomingRequest struct {
 		capUrn  string
-		handler func([]byte, StreamEmitter, PeerInvoker) error
+		handler HandlerFunc
 		streams []streamEntry // Ordered list of streams
 		ended   bool          // True after END frame - any stream activity after is FATAL
 	}
@@ -318,11 +319,12 @@ func (pr *PluginRuntime) runCBORMode() error {
 			}
 			pendingIncomingMu.Unlock()
 
-			// Not an incoming request chunk - must be a response chunk
+			// Not an incoming request chunk - must be a peer response chunk
+			// Forward bare Frame object to handler - no wrapping, no decoding
 			idKey := frame.Id.ToString()
 			if pending, ok := pendingPeerRequests.Load(idKey); ok {
 				pendingReq := pending.(*pendingPeerRequest)
-				pendingReq.sender <- InvokeResult{Data: frame.Payload, Error: nil}
+				pendingReq.sender <- *frame
 			}
 
 		case cbor.FrameTypeEnd:
@@ -336,45 +338,19 @@ func (pr *PluginRuntime) runCBORMode() error {
 			pendingIncomingMu.Unlock()
 
 			if exists {
-				// Concatenate all complete streams into final payload
-				// Protocol v2: Each stream's chunks are concatenated, then streams are concatenated in order
-				var allChunks [][]byte
-				for _, entry := range pendingReq.streams {
-					if entry.stream.complete {
-						allChunks = append(allChunks, entry.stream.chunks...)
-					}
-				}
-
-				// Add END frame payload if present
-				if frame.Payload != nil {
-					allChunks = append(allChunks, frame.Payload)
-				}
-
-				rawPayload := bytes.Join(allChunks, nil)
-
-				// Extract the first argument from CBOR if that's how it was sent
-				// (For backward compatibility with the test plugin's argument wrapping)
-				var finalPayload []byte
-				if len(pendingReq.streams) > 0 && pendingReq.streams[0].stream.mediaUrn == "media:bytes" {
-					// Try to decode as CBOR array
-					var args [][]byte
-					if err := cborlib.Unmarshal(rawPayload, &args); err == nil && len(args) > 0 {
-						finalPayload = args[0]
-					} else {
-						finalPayload = rawPayload
-					}
-				} else {
-					finalPayload = rawPayload
-				}
-
-				// Spawn goroutine to invoke handler
+				// Build frame channel with all incoming frames in order
+				// Protocol v2: Send STREAM_START → CHUNK(s) → STREAM_END for each stream, then END
 				requestID := frame.Id
 				handler := pendingReq.handler
 				capUrn := pendingReq.capUrn
 
+				// Create buffered channel for input frames
+				framesChan := make(chan cbor.Frame, 64)
+
 				activeHandlers.Add(1)
 				go func() {
 					defer activeHandlers.Done()
+					defer close(framesChan)
 
 					// Generate unique stream ID for response
 					streamID := fmt.Sprintf("resp-%s", requestID.ToString()[:8])
@@ -384,10 +360,32 @@ func (pr *PluginRuntime) runCBORMode() error {
 					emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn, negotiatedLimits.MaxChunk)
 					peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests, negotiatedLimits.MaxChunk)
 
-					fmt.Fprintf(os.Stderr, "[PluginRuntime] END: Invoking handler for cap=%s with payload len=%d\n", capUrn, len(finalPayload))
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] END: Invoking handler for cap=%s with %d streams\n", capUrn, len(pendingReq.streams))
 
-					// Invoke handler (returns only error, emits via emitter)
-					err := handler(finalPayload, emitter, peerInvoker)
+					// Send all frames to channel: STREAM_START → CHUNK(s) → STREAM_END per stream, then END
+					go func() {
+						for _, entry := range pendingReq.streams {
+							// STREAM_START
+							startFrame := cbor.NewStreamStart(requestID, entry.streamID, entry.stream.mediaUrn)
+							framesChan <- *startFrame
+
+							// CHUNKs
+							for seq, chunk := range entry.stream.chunks {
+								chunkFrame := cbor.NewChunk(requestID, entry.streamID, uint64(seq), chunk)
+								framesChan <- *chunkFrame
+							}
+
+							// STREAM_END
+							endStreamFrame := cbor.NewStreamEnd(requestID, entry.streamID)
+							framesChan <- *endStreamFrame
+						}
+
+						// END frame
+						framesChan <- *frame
+					}()
+
+					// Invoke handler with frame channel
+					err := handler(framesChan, emitter, peerInvoker)
 					if err != nil {
 						errFrame := cbor.NewErr(requestID, "HANDLER_ERROR", err.Error())
 						if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
@@ -403,12 +401,9 @@ func (pr *PluginRuntime) runCBORMode() error {
 				continue
 			}
 
-			// Not an incoming request end - must be a response end
+			// Not an incoming request end - must be a peer response end
+			// Closing the channel signals completion to the handler
 			idKey := frame.Id.ToString()
-			if pending, ok := pendingPeerRequests.Load(idKey); ok {
-				pendingReq := pending.(*pendingPeerRequest)
-				pendingReq.sender <- InvokeResult{Data: frame.Payload, Error: nil}
-			}
 			if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
 				pendingReq := pending.(*pendingPeerRequest)
 				close(pendingReq.sender)
@@ -419,20 +414,11 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 		case cbor.FrameTypeErr:
 			// Error frame from host - could be response to peer request
+			// Forward bare ERR frame to handler - handler extracts error details
 			idKey := frame.Id.ToString()
 			if pending, ok := pendingPeerRequests.LoadAndDelete(idKey); ok {
 				pendingReq := pending.(*pendingPeerRequest)
-				code := frame.ErrorCode()
-				message := frame.ErrorMessage()
-				if code == "" {
-					code = "UNKNOWN"
-				}
-				if message == "" {
-					message = "Unknown error"
-				}
-				pendingReq.sender <- InvokeResult{
-					Error: fmt.Errorf("[%s] %s", code, message),
-				}
+				pendingReq.sender <- *frame
 				close(pendingReq.sender)
 			}
 
@@ -506,7 +492,16 @@ func (pr *PluginRuntime) runCBORMode() error {
 			}
 			pendingIncomingMu.Unlock()
 
-			fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_START for unknown request_id: %s\n", frame.Id.ToString())
+			// Not an incoming request — check if it's a peer response stream
+			idKey := frame.Id.ToString()
+			if pending, ok := pendingPeerRequests.Load(idKey); ok {
+				pendingReq := pending.(*pendingPeerRequest)
+				pendingReq.streams[streamID] = mediaUrn
+				// Forward bare STREAM_START frame to handler
+				pendingReq.sender <- *frame
+			} else {
+				fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_START for unknown request_id: %s\n", frame.Id.ToString())
+			}
 
 		case cbor.FrameTypeStreamEnd:
 			// Protocol v2: A stream has ended for a request
@@ -550,9 +545,15 @@ func (pr *PluginRuntime) runCBORMode() error {
 			}
 			pendingIncomingMu.Unlock()
 
-			// Not an incoming request stream - could be a peer response stream
-			// (handled elsewhere)
-			fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_END for unknown request_id: %s\n", frame.Id.ToString())
+			// Not an incoming request stream — check if it's a peer response stream end
+			idKey := frame.Id.ToString()
+			if pending, ok := pendingPeerRequests.Load(idKey); ok {
+				pendingReq := pending.(*pendingPeerRequest)
+				// Forward bare STREAM_END frame to handler
+				pendingReq.sender <- *frame
+			} else {
+				fmt.Fprintf(os.Stderr, "[PluginRuntime] STREAM_END for unknown request_id: %s\n", frame.Id.ToString())
+			}
 
 		case cbor.FrameTypeRelayNotify, cbor.FrameTypeRelayState:
 			// Relay-level frames must never reach a plugin runtime.
@@ -617,18 +618,42 @@ func (pr *PluginRuntime) runCLIMode(args []string) error {
 		return fmt.Errorf("failed to build payload: %w", err)
 	}
 
-	// Extract effective payload (same as CBOR mode does)
-	payload, err := extractEffectivePayload(rawPayload, "application/cbor", cap.UrnString())
-	if err != nil {
-		return fmt.Errorf("failed to extract payload: %w", err)
-	}
+	// Create CLI-mode frame channel
+	// CLI mode: single argument stream with STREAM_START → CHUNK → STREAM_END → END
+	framesChan := make(chan cbor.Frame, 8)
+	requestID := cbor.NewMessageIdDefault()
+	streamID := "cli-arg"
+	mediaUrn := "media:bytes"
+
+	// Send frames in a goroutine
+	go func() {
+		defer close(framesChan)
+
+		// STREAM_START
+		startFrame := cbor.NewStreamStart(requestID, streamID, mediaUrn)
+		framesChan <- *startFrame
+
+		// CHUNK (single chunk for CLI)
+		if len(rawPayload) > 0 {
+			chunkFrame := cbor.NewChunk(requestID, streamID, 0, rawPayload)
+			framesChan <- *chunkFrame
+		}
+
+		// STREAM_END
+		endStreamFrame := cbor.NewStreamEnd(requestID, streamID)
+		framesChan <- *endStreamFrame
+
+		// END
+		endFrame := cbor.NewEnd(requestID, nil)
+		framesChan <- *endFrame
+	}()
 
 	// Create CLI-mode emitter and no-op peer invoker
 	emitter := &cliStreamEmitter{}
 	peer := &noPeerInvoker{}
 
-	// Invoke handler (stream multiplexing: handler emits via emitter, returns only error)
-	err = handler(payload, emitter, peer)
+	// Invoke handler with frame channel
+	err = handler(framesChan, emitter, peer)
 	if err != nil {
 		errorJSON, _ := json.Marshal(map[string]string{
 			"error": err.Error(),
@@ -829,15 +854,14 @@ func newThreadSafeEmitter(writer *syncFrameWriter, requestID cbor.MessageId, str
 	}
 }
 
-func (e *threadSafeEmitter) Emit(payload []byte) {
+func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 	e.seqMu.Lock()
 	defer e.seqMu.Unlock()
 
-	// CBOR-encode the payload as a CBOR byte string (matches Rust emit_cbor behavior)
-	cborPayload, err := cborlib.Marshal(payload)
+	// CBOR-encode the value once - handler produces CBOR values, not raw bytes
+	cborPayload, err := cborlib.Marshal(value)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to CBOR-encode payload: %v\n", err)
-		return
+		return fmt.Errorf("failed to CBOR-encode value: %w", err)
 	}
 
 	// STREAM MULTIPLEXING: Send STREAM_START before first chunk
@@ -845,8 +869,7 @@ func (e *threadSafeEmitter) Emit(payload []byte) {
 		e.streamStarted = true
 		startFrame := cbor.NewStreamStart(e.requestID, e.streamID, e.mediaUrn)
 		if err := e.writer.WriteFrame(startFrame); err != nil {
-			fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write STREAM_START: %v\n", err)
-			return
+			return fmt.Errorf("failed to write STREAM_START: %w", err)
 		}
 	}
 
@@ -864,11 +887,11 @@ func (e *threadSafeEmitter) Emit(payload []byte) {
 
 		frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, chunkData)
 		if err := e.writer.WriteFrame(frame); err != nil {
-			fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write chunk: %v\n", err)
-			return
+			return fmt.Errorf("failed to write chunk: %w", err)
 		}
 		offset += chunkSize
 	}
+	return nil
 }
 
 // Finalize sends STREAM_END + END frames to complete the response
@@ -900,45 +923,37 @@ func (e *threadSafeEmitter) Finalize() {
 	}
 }
 
-func (e *threadSafeEmitter) Log(level, message string) {
+func (e *threadSafeEmitter) EmitLog(level, message string) {
 	frame := cbor.NewLog(e.requestID, level, message)
 	if err := e.writer.WriteFrame(frame); err != nil {
 		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write log: %v\n", err)
 	}
 }
 
-func (e *threadSafeEmitter) EmitStatus(operation, details string) {
-	message := fmt.Sprintf("%s: %s", operation, details)
-	frame := cbor.NewLog(e.requestID, "status", message)
-	if err := e.writer.WriteFrame(frame); err != nil {
-		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write status: %v\n", err)
-	}
-}
-
 // cliStreamEmitter implements StreamEmitter for CLI mode
 type cliStreamEmitter struct{}
 
-func (e *cliStreamEmitter) Emit(payload []byte) {
-	os.Stdout.Write(payload)
+func (e *cliStreamEmitter) EmitCbor(value interface{}) error {
+	// CBOR-encode the value once
+	cborPayload, err := cborlib.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("failed to CBOR-encode value: %w", err)
+	}
+	os.Stdout.Write(cborPayload)
 	os.Stdout.Write([]byte("\n"))
+	return nil
 }
 
-func (e *cliStreamEmitter) Log(level, message string) {
+func (e *cliStreamEmitter) EmitLog(level, message string) {
 	fmt.Fprintf(os.Stderr, "[%s] %s\n", level, message)
 }
 
-func (e *cliStreamEmitter) EmitStatus(operation, details string) {
-	statusJSON, _ := json.Marshal(map[string]string{
-		"type":      "status",
-		"operation": operation,
-		"details":   details,
-	})
-	fmt.Fprintln(os.Stderr, string(statusJSON))
-}
-
-// pendingPeerRequest tracks a pending peer request
+// pendingPeerRequest tracks a pending peer request.
+// The reader loop forwards response frames to the channel.
 type pendingPeerRequest struct {
-	sender chan InvokeResult
+	sender  chan cbor.Frame    // Channel to send response frames to handler
+	streams map[string]string  // stream_id → media_urn mapping
+	ended   bool               // true after END frame (close channel)
 }
 
 // peerInvokerImpl implements PeerInvoker
@@ -956,15 +971,19 @@ func newPeerInvokerImpl(writer *syncFrameWriter, pendingRequests *sync.Map, maxC
 	}
 }
 
-func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<-chan InvokeResult, error) {
+func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<-chan cbor.Frame, error) {
 	// Generate a new message ID for this request
 	requestID := cbor.NewMessageIdRandom()
 
-	// Create a buffered channel for responses (buffer up to 64 chunks)
-	sender := make(chan InvokeResult, 64)
+	// Create a buffered channel for response frames
+	sender := make(chan cbor.Frame, 64)
 
 	// Register the pending request before sending
-	p.pendingRequests.Store(requestID.ToString(), &pendingPeerRequest{sender: sender})
+	p.pendingRequests.Store(requestID.ToString(), &pendingPeerRequest{
+		sender:  sender,
+		streams: make(map[string]string),
+		ended:   false,
+	})
 
 	maxChunk := p.maxChunk
 
@@ -1027,7 +1046,7 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<
 // noPeerInvoker is a no-op PeerInvoker that always returns an error
 type noPeerInvoker struct{}
 
-func (n *noPeerInvoker) Invoke(capUrn string, arguments []CapArgumentValue) (<-chan InvokeResult, error) {
+func (n *noPeerInvoker) Invoke(capUrn string, arguments []CapArgumentValue) (<-chan cbor.Frame, error) {
 	return nil, errors.New("peer invocation not supported in this context")
 }
 

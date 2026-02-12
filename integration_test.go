@@ -1002,15 +1002,17 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 	require.NoError(t, err)
 
 	runtime.Register(`cap:in="media:void";op=echo;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit(payload)
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			payload, err := CollectFirstArg(frames)
+			if err != nil {
+				return err
+			}
+			return emitter.EmitCbor(payload)
 		})
 
 	runtime.Register(`cap:in="media:void";op=transform;out="media:void"`,
-		func(payload []byte, emitter StreamEmitter, peer PeerInvoker) error {
-			emitter.Emit([]byte("transformed"))
-			return nil
+		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
+			return emitter.EmitCbor("transformed")
 		})
 
 	// Exact match
