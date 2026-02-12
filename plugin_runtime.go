@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	cborlib "github.com/fxamacker/cbor/v2"
 
@@ -619,29 +620,73 @@ func (pr *PluginRuntime) runCLIMode(args []string) error {
 	}
 
 	// Create CLI-mode frame channel
-	// CLI mode: single argument stream with STREAM_START → CHUNK → STREAM_END → END
-	framesChan := make(chan cbor.Frame, 8)
+	// CLI mode: each argument as separate stream (STREAM_START → CHUNK → STREAM_END per arg, then END)
+	framesChan := make(chan cbor.Frame, 32)
 	requestID := cbor.NewMessageIdDefault()
-	streamID := "cli-arg"
-	mediaUrn := "media:bytes"
 
 	// Send frames in a goroutine
 	go func() {
 		defer close(framesChan)
 
-		// STREAM_START
-		startFrame := cbor.NewStreamStart(requestID, streamID, mediaUrn)
-		framesChan <- *startFrame
-
-		// CHUNK (single chunk for CLI)
+		// Decode CBOR arguments array
+		var arguments []interface{}
 		if len(rawPayload) > 0 {
-			chunkFrame := cbor.NewChunk(requestID, streamID, 0, rawPayload)
-			framesChan <- *chunkFrame
+			if err := cborlib.Unmarshal(rawPayload, &arguments); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to decode CBOR arguments: %v\n", err)
+				return
+			}
 		}
 
-		// STREAM_END
-		endStreamFrame := cbor.NewStreamEnd(requestID, streamID)
-		framesChan <- *endStreamFrame
+		// Send each argument as a separate stream
+		for i, arg := range arguments {
+			argMap, ok := arg.(map[interface{}]interface{})
+			if !ok {
+				continue
+			}
+
+			var mediaUrn string
+			var value interface{}
+
+			// Extract media_urn and value from arg map
+			for k, v := range argMap {
+				key, ok := k.(string)
+				if !ok {
+					continue
+				}
+				if key == "media_urn" {
+					if urnStr, ok := v.(string); ok {
+						mediaUrn = urnStr
+					}
+				} else if key == "value" {
+					value = v
+				}
+			}
+
+			if mediaUrn == "" || value == nil {
+				continue
+			}
+
+			streamID := fmt.Sprintf("arg-%d", i)
+
+			// STREAM_START
+			startFrame := cbor.NewStreamStart(requestID, streamID, mediaUrn)
+			framesChan <- *startFrame
+
+			// CHUNK: CBOR-encode the value before sending
+			// Protocol: ALL values must be CBOR-encoded (encode once, no double-wrapping)
+			cborValue, err := cborlib.Marshal(value)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to encode argument value: %v\n", err)
+				continue
+			}
+
+			chunkFrame := cbor.NewChunk(requestID, streamID, 0, cborValue)
+			framesChan <- *chunkFrame
+
+			// STREAM_END
+			endStreamFrame := cbor.NewStreamEnd(requestID, streamID)
+			framesChan <- *endStreamFrame
+		}
 
 		// END
 		endFrame := cbor.NewEnd(requestID, nil)
@@ -1036,13 +1081,26 @@ func (e *threadSafeEmitter) EmitLog(level, message string) {
 type cliStreamEmitter struct{}
 
 func (e *cliStreamEmitter) EmitCbor(value interface{}) error {
-	// CBOR-encode the value once
-	cborPayload, err := cborlib.Marshal(value)
-	if err != nil {
-		return fmt.Errorf("failed to CBOR-encode value: %w", err)
+	// In CLI mode: extract raw bytes/text from value and emit to stdout
+	// Supported types: []byte, string, map (extract "value" field)
+	// NO FALLBACK - fail hard if unsupported type
+
+	switch v := value.(type) {
+	case []byte:
+		// Raw bytes - write directly
+		os.Stdout.Write(v)
+	case string:
+		// Text - write as bytes
+		os.Stdout.WriteString(v)
+	case map[string]interface{}:
+		// Map - extract "value" field
+		if val, ok := v["value"]; ok {
+			return e.EmitCbor(val) // Recursive call
+		}
+		return fmt.Errorf("Map value has no 'value' field in CLI mode")
+	default:
+		return fmt.Errorf("Unsupported type in CLI mode: %T (expected []byte, string, or map)", value)
 	}
-	os.Stdout.Write(cborPayload)
-	os.Stdout.Write([]byte("\n"))
 	return nil
 }
 
@@ -1270,22 +1328,18 @@ func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte
 			// If file-path with stdin source, use stdin source's media URN (the target type)
 			mediaUrn := argDef.MediaUrn
 
-			// Check if this is a file-path arg with stdin source
+			// Check if this is a file-path arg using pattern matching
 			argMediaUrn, parseErr := NewMediaUrnFromString(argDef.MediaUrn)
 			if parseErr == nil {
 				filePathPattern, _ := NewMediaUrnFromString(MediaFilePath)
 				filePathArrayPattern, _ := NewMediaUrnFromString(MediaFilePathArray)
 
+				// Pattern matching: check if patterns accept this instance
 				isFilePath := false
-				if filePathPattern != nil {
-					if filePathPattern.Accepts(argMediaUrn) {
-						isFilePath = true
-					}
-				}
-				if !isFilePath && filePathArrayPattern != nil {
-					if filePathArrayPattern.Accepts(argMediaUrn) {
-						isFilePath = true
-					}
+				if filePathArrayPattern != nil && filePathArrayPattern.Accepts(argMediaUrn) {
+					isFilePath = true
+				} else if filePathPattern != nil && filePathPattern.Accepts(argMediaUrn) {
+					isFilePath = true
 				}
 
 				// If file-path type, check for stdin source and use its media URN
@@ -1333,7 +1387,7 @@ func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte
 // extractArgValue extracts a single argument value from CLI args or stdin.
 // Handles automatic file-path to bytes conversion when appropriate.
 func (pr *PluginRuntime) extractArgValue(argDef *CapArg, cliArgs []string, stdinData []byte) ([]byte, error) {
-	// Check if this arg requires file-path to bytes conversion using proper URN matching
+	// Check if this arg requires file-path to bytes conversion using pattern matching
 	argMediaUrn, err := NewMediaUrnFromString(argDef.MediaUrn)
 	if err != nil {
 		return nil, fmt.Errorf("invalid media URN '%s': %w", argDef.MediaUrn, err)
@@ -1348,10 +1402,9 @@ func (pr *PluginRuntime) extractArgValue(argDef *CapArg, cliArgs []string, stdin
 		return nil, fmt.Errorf("failed to parse MediaFilePathArray constant: %w", err)
 	}
 
-	// Check array first (more specific), then single file-path
+	// Pattern matching: check if patterns accept this instance (array first, more specific)
 	isArray := false
 	isFilePath := false
-
 	if filePathArrayPattern.Accepts(argMediaUrn) {
 		isArray = true
 		isFilePath = true
@@ -1459,7 +1512,8 @@ func contains(s string, c byte) bool {
 	return false
 }
 
-// readStdinIfAvailable reads stdin if data is available (non-blocking check)
+// readStdinIfAvailable reads stdin if data is available (non-blocking check).
+// Returns nil immediately if stdin is a terminal or no data is ready.
 func (pr *PluginRuntime) readStdinIfAvailable() ([]byte, error) {
 	// Check if stdin is a terminal (interactive)
 	stat, err := os.Stdin.Stat()
@@ -1472,17 +1526,33 @@ func (pr *PluginRuntime) readStdinIfAvailable() ([]byte, error) {
 		return nil, nil
 	}
 
-	// Read all data from stdin
-	data, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, err
+	// Non-blocking check: try reading with immediate timeout
+	// Use a goroutine with select and timeout to avoid blocking
+	type result struct {
+		data []byte
+		err  error
 	}
 
-	if len(data) == 0 {
+	done := make(chan result, 1)
+	go func() {
+		data, err := io.ReadAll(os.Stdin)
+		done <- result{data, err}
+	}()
+
+	// Wait up to 100ms for data - if nothing arrives, assume no stdin data
+	select {
+	case res := <-done:
+		if res.err != nil {
+			return nil, res.err
+		}
+		if len(res.data) == 0 {
+			return nil, nil
+		}
+		return res.data, nil
+	case <-time.After(100 * time.Millisecond):
+		// No data ready - return nil immediately
 		return nil, nil
 	}
-
-	return data, nil
 }
 
 // readFilePathToBytes reads file(s) for file-path arguments and returns bytes.
