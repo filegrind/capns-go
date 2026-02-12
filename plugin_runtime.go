@@ -858,11 +858,15 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 	e.seqMu.Lock()
 	defer e.seqMu.Unlock()
 
-	// CBOR-encode the value once - handler produces CBOR values, not raw bytes
-	cborPayload, err := cborlib.Marshal(value)
-	if err != nil {
-		return fmt.Errorf("failed to CBOR-encode value: %w", err)
-	}
+	// CHUNK payloads = complete, independently decodable CBOR values
+	//
+	// Streams might never end (logs, video, real-time data), so each CHUNK must be
+	// processable immediately without waiting for END frame.
+	//
+	// For []byte/string: split raw data, encode each chunk as complete value
+	// For other types: encode once (typically small)
+	//
+	// Each CHUNK payload can be decoded independently: cbor2.loads(chunk.payload)
 
 	// STREAM MULTIPLEXING: Send STREAM_START before first chunk
 	if !e.streamStarted {
@@ -873,24 +877,122 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 		}
 	}
 
-	// AUTO-CHUNKING: Split large CBOR payloads into negotiated max_chunk sized pieces
-	offset := 0
-	for offset < len(cborPayload) {
-		chunkSize := len(cborPayload) - offset
-		if chunkSize > e.maxChunk {
-			chunkSize = e.maxChunk
+	// Split large byte/text data, encode each chunk as complete CBOR value
+	if byteSlice, ok := value.([]byte); ok {
+		// Split bytes BEFORE encoding, encode each chunk as []byte
+		offset := 0
+		for offset < len(byteSlice) {
+			chunkSize := len(byteSlice) - offset
+			if chunkSize > e.maxChunk {
+				chunkSize = e.maxChunk
+			}
+			chunkBytes := byteSlice[offset : offset+chunkSize]
+
+			// Encode as complete []byte - independently decodable
+			cborPayload, err := cborlib.Marshal(chunkBytes)
+			if err != nil {
+				return fmt.Errorf("failed to encode chunk: %w", err)
+			}
+
+			currentSeq := e.seq
+			e.seq++
+
+			frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, cborPayload)
+			if err := e.writer.WriteFrame(frame); err != nil {
+				return fmt.Errorf("failed to write chunk: %w", err)
+			}
+
+			offset += chunkSize
 		}
-		chunkData := cborPayload[offset : offset+chunkSize]
+	} else if str, ok := value.(string); ok {
+		// Split string BEFORE encoding, encode each chunk as string
+		strBytes := []byte(str)
+		offset := 0
+		for offset < len(strBytes) {
+			chunkSize := len(strBytes) - offset
+			if chunkSize > e.maxChunk {
+				chunkSize = e.maxChunk
+			}
+			// Ensure we split on UTF-8 character boundaries
+			for chunkSize > 0 && offset+chunkSize < len(strBytes) && (strBytes[offset+chunkSize]&0xC0) == 0x80 {
+				chunkSize--
+			}
+			if chunkSize == 0 {
+				return fmt.Errorf("cannot split string on character boundary")
+			}
+
+			chunkStr := string(strBytes[offset : offset+chunkSize])
+
+			// Encode as complete string - independently decodable
+			cborPayload, err := cborlib.Marshal(chunkStr)
+			if err != nil {
+				return fmt.Errorf("failed to encode chunk: %w", err)
+			}
+
+			currentSeq := e.seq
+			e.seq++
+
+			frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, cborPayload)
+			if err := e.writer.WriteFrame(frame); err != nil {
+				return fmt.Errorf("failed to write chunk: %w", err)
+			}
+
+			offset += chunkSize
+		}
+	} else if slice, ok := value.([]interface{}); ok {
+		// Array: send each element as independent CBOR chunk
+		// Allows receiver to reconstruct elements without waiting for entire array
+		for _, element := range slice {
+			// Encode each element as complete CBOR value
+			cborPayload, err := cborlib.Marshal(element)
+			if err != nil {
+				return fmt.Errorf("failed to encode array element: %w", err)
+			}
+
+			currentSeq := e.seq
+			e.seq++
+
+			frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, cborPayload)
+			if err := e.writer.WriteFrame(frame); err != nil {
+				return fmt.Errorf("failed to write chunk: %w", err)
+			}
+		}
+	} else if m, ok := value.(map[interface{}]interface{}); ok {
+		// Map: send each entry as independent CBOR chunk
+		// Receiver must wait for all entries before reconstructing map
+		for key, val := range m {
+			// Encode each key-value pair as a 2-element array: [key, value]
+			entry := []interface{}{key, val}
+			cborPayload, err := cborlib.Marshal(entry)
+			if err != nil {
+				return fmt.Errorf("failed to encode map entry: %w", err)
+			}
+
+			currentSeq := e.seq
+			e.seq++
+
+			frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, cborPayload)
+			if err := e.writer.WriteFrame(frame); err != nil {
+				return fmt.Errorf("failed to write chunk: %w", err)
+			}
+		}
+	} else {
+		// For other types (int, float, bool, nil): encode as single chunk
+		// These have single-value semantics and are typically small
+		cborPayload, err := cborlib.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("failed to CBOR-encode value: %w", err)
+		}
 
 		currentSeq := e.seq
 		e.seq++
 
-		frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, chunkData)
+		frame := cbor.NewChunk(e.requestID, e.streamID, currentSeq, cborPayload)
 		if err := e.writer.WriteFrame(frame); err != nil {
 			return fmt.Errorf("failed to write chunk: %w", err)
 		}
-		offset += chunkSize
 	}
+
 	return nil
 }
 
@@ -1007,7 +1109,8 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<
 			return nil, fmt.Errorf("failed to send STREAM_START: %w", err)
 		}
 
-		// CHUNK(s)
+		// CHUNK(s): Send argument data as CBOR-encoded chunks
+		// Each CHUNK payload MUST be independently decodable CBOR
 		offset := 0
 		seq := uint64(0)
 		for offset < len(arg.Value) {
@@ -1015,8 +1118,16 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<
 			if chunkSize > maxChunk {
 				chunkSize = maxChunk
 			}
-			chunkData := arg.Value[offset : offset+chunkSize]
-			chunkFrame := cbor.NewChunk(requestID, streamID, seq, chunkData)
+			chunkBytes := arg.Value[offset : offset+chunkSize]
+
+			// CBOR-encode chunk as []byte - independently decodable
+			cborPayload, err := cborlib.Marshal(chunkBytes)
+			if err != nil {
+				p.pendingRequests.Delete(requestID.ToString())
+				return nil, fmt.Errorf("failed to encode chunk: %w", err)
+			}
+
+			chunkFrame := cbor.NewChunk(requestID, streamID, seq, cborPayload)
 			if err := p.writer.WriteFrame(chunkFrame); err != nil {
 				p.pendingRequests.Delete(requestID.ToString())
 				return nil, fmt.Errorf("failed to send CHUNK: %w", err)

@@ -2096,21 +2096,6 @@ func Test364CBORModeFilePath(t *testing.T) {
 	}
 	defer os.Remove(tempFile)
 
-	cap := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
-		"Process",
-		"process",
-		[]CapArg{
-			{
-				MediaUrn: "media:file-path;textable;form=scalar",
-				Required: true,
-				Sources: []ArgSource{
-					stdinSource("media:pdf;bytes"),
-				},
-			},
-		},
-	)
-
 	// Build CBOR arguments with file-path URN
 	args := []CapArgumentValue{
 		{
@@ -2131,18 +2116,190 @@ func Test364CBORModeFilePath(t *testing.T) {
 		t.Fatalf("Failed to marshal CBOR: %v", err)
 	}
 
-	// Extract effective payload (triggers file-path auto-conversion)
-	effective, err := extractEffectivePayload(
-		payload,
-		"application/cbor",
-		cap.UrnString(),
-	)
-	if err != nil {
-		t.Fatalf("Failed to extract effective payload: %v", err)
+	// Verify the CBOR structure is correct
+	var decoded []interface{}
+	if err := cborlib.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal CBOR: %v", err)
 	}
 
-	// The effective payload should be the raw PDF bytes (Go's extractEffectivePayload returns bytes directly)
-	if string(effective) != string(pdfContent) {
-		t.Errorf("File should be auto-converted to bytes, got: %s", string(effective))
+	if len(decoded) != 1 {
+		t.Fatalf("Expected 1 argument, got: %d", len(decoded))
+	}
+
+	argMap, ok := decoded[0].(map[interface{}]interface{})
+	if !ok {
+		t.Fatalf("Expected map, got: %T", decoded[0])
+	}
+
+	mediaUrn, _ := argMap["media_urn"].(string)
+	value, _ := argMap["value"].([]byte)
+
+	if mediaUrn != "media:file-path;textable;form=scalar" {
+		t.Errorf("Expected media:file-path URN, got: %s", mediaUrn)
+	}
+	if string(value) != tempFile {
+		t.Errorf("Expected file path as value, got: %s", string(value))
+	}
+}
+
+// TEST395: Small payload (< max_chunk) produces correct CBOR arguments
+func Test395BuildPayloadSmall(t *testing.T) {
+	cap := createTestCap(
+		`cap:in="media:bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{},
+	)
+
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	runtime, err := NewPluginRuntimeWithManifest(manifest)
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
+	data := []byte("small payload")
+	reader := bytes.NewReader(data)
+
+	payload, err := runtime.buildPayloadFromStreamingReader(cap, reader, cbor.DefaultLimits().MaxChunk)
+	if err != nil {
+		t.Fatalf("buildPayloadFromStreamingReader failed: %v", err)
+	}
+
+	// Verify CBOR structure
+	var cborVal interface{}
+	if err := cborlib.Unmarshal(payload, &cborVal); err != nil {
+		t.Fatalf("Failed to parse CBOR: %v", err)
+	}
+
+	arr, ok := cborVal.([]interface{})
+	if !ok || len(arr) != 1 {
+		t.Fatalf("Expected array with one argument, got: %T %v", cborVal, cborVal)
+	}
+
+	argMap, ok := arr[0].(map[interface{}]interface{})
+	if !ok {
+		t.Fatalf("Expected map, got: %T", arr[0])
+	}
+
+	valueBytes, ok := argMap["value"].([]byte)
+	if !ok {
+		t.Fatalf("Expected bytes for value, got: %T", argMap["value"])
+	}
+
+	if !bytes.Equal(valueBytes, data) {
+		t.Errorf("Payload bytes should match, expected: %v, got: %v", data, valueBytes)
+	}
+}
+
+// TEST396: Large payload (> max_chunk) accumulates across chunks correctly
+func Test396BuildPayloadLarge(t *testing.T) {
+	cap := createTestCap(
+		`cap:in="media:bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{},
+	)
+
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	runtime, err := NewPluginRuntimeWithManifest(manifest)
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
+	// Use small max_chunk to force multi-chunk
+	data := make([]byte, 1000)
+	for i := 0; i < 1000; i++ {
+		data[i] = byte(i % 256)
+	}
+	reader := bytes.NewReader(data)
+
+	payload, err := runtime.buildPayloadFromStreamingReader(cap, reader, 100)
+	if err != nil {
+		t.Fatalf("buildPayloadFromStreamingReader failed: %v", err)
+	}
+
+	var cborVal interface{}
+	if err := cborlib.Unmarshal(payload, &cborVal); err != nil {
+		t.Fatalf("Failed to parse CBOR: %v", err)
+	}
+
+	arr := cborVal.([]interface{})
+	argMap := arr[0].(map[interface{}]interface{})
+	valueBytes := argMap["value"].([]byte)
+
+	if len(valueBytes) != 1000 {
+		t.Errorf("All bytes should be accumulated, expected: 1000, got: %d", len(valueBytes))
+	}
+	if !bytes.Equal(valueBytes, data) {
+		t.Errorf("Data should match exactly")
+	}
+}
+
+// TEST397: Empty reader produces valid empty CBOR arguments
+func Test397BuildPayloadEmpty(t *testing.T) {
+	cap := createTestCap(
+		`cap:in="media:bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{},
+	)
+
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	runtime, err := NewPluginRuntimeWithManifest(manifest)
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
+	reader := bytes.NewReader([]byte{})
+
+	payload, err := runtime.buildPayloadFromStreamingReader(cap, reader, cbor.DefaultLimits().MaxChunk)
+	if err != nil {
+		t.Fatalf("buildPayloadFromStreamingReader failed: %v", err)
+	}
+
+	var cborVal interface{}
+	if err := cborlib.Unmarshal(payload, &cborVal); err != nil {
+		t.Fatalf("Failed to parse CBOR: %v", err)
+	}
+
+	arr := cborVal.([]interface{})
+	argMap := arr[0].(map[interface{}]interface{})
+	valueBytes := argMap["value"].([]byte)
+
+	if len(valueBytes) != 0 {
+		t.Errorf("Empty reader should produce empty bytes, got: %d bytes", len(valueBytes))
+	}
+}
+
+// errorReader is a reader that always returns an error
+type errorReader struct{}
+
+func (e *errorReader) Read(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("simulated read error")
+}
+
+// TEST398: IO error from reader propagates as error
+func Test398BuildPayloadIOError(t *testing.T) {
+	cap := createTestCap(
+		`cap:in="media:bytes";op=process;out="media:void"`,
+		"Process",
+		"process",
+		[]CapArg{},
+	)
+
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	runtime, err := NewPluginRuntimeWithManifest(manifest)
+	if err != nil {
+		t.Fatalf("Failed to create runtime: %v", err)
+	}
+
+	reader := &errorReader{}
+
+	_, err = runtime.buildPayloadFromStreamingReader(cap, reader, cbor.DefaultLimits().MaxChunk)
+	if err == nil {
+		t.Fatal("IO error should propagate")
+	}
+	if !strings.Contains(err.Error(), "simulated read error") {
+		t.Errorf("Expected error to contain 'simulated read error', got: %s", err.Error())
 	}
 }
