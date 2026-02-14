@@ -24,7 +24,7 @@ func TestRelaySwitchSingleMasterReqResponse(t *testing.T) {
 
 		// Send initial RelayNotify
 		manifest := map[string]interface{}{
-			"capabilities": []string{`cap:in="media:void";op=echo;out="media:void"`},
+			"capabilities": []string{`cap:in=media:;out=media:`},
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		limits := cbor.DefaultLimits()
@@ -57,7 +57,7 @@ func TestRelaySwitchSingleMasterReqResponse(t *testing.T) {
 	// Send REQ
 	req := cbor.NewReq(
 		cbor.NewMessageIdFromUint(1),
-		`cap:in="media:void";op=echo;out="media:void"`,
+		`cap:in=media:;out=media:`,
 		[]byte{1, 2, 3},
 		"text/plain",
 	)
@@ -97,7 +97,7 @@ func TestRelaySwitchMultiMasterCapRouting(t *testing.T) {
 		writer := cbor.NewFrameWriter(slaveWrite1)
 
 		manifest := map[string]interface{}{
-			"capabilities": []string{`cap:in="media:void";op=echo;out="media:void"`},
+			"capabilities": []string{`cap:in=media:;out=media:`},
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, cbor.DefaultLimits())
@@ -153,7 +153,7 @@ func TestRelaySwitchMultiMasterCapRouting(t *testing.T) {
 	// Send REQ for echo
 	req1 := cbor.NewReq(
 		cbor.NewMessageIdFromUint(1),
-		`cap:in="media:void";op=echo;out="media:void"`,
+		`cap:in=media:;out=media:`,
 		[]byte{},
 		"text/plain",
 	)
@@ -189,7 +189,7 @@ func TestRelaySwitchUnknownCapReturnsError(t *testing.T) {
 		writer := cbor.NewFrameWriter(slaveWrite)
 
 		manifest := map[string]interface{}{
-			"capabilities": []string{`cap:in="media:void";op=echo;out="media:void"`},
+			"capabilities": []string{`cap:in=media:;out=media:`},
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, cbor.DefaultLimits())
@@ -241,7 +241,7 @@ func TestRelaySwitchFindMasterForCap(t *testing.T) {
 		reader := cbor.NewFrameReader(slaveRead1)
 		writer := cbor.NewFrameWriter(slaveWrite1)
 		manifest := map[string]interface{}{
-			"capabilities": []string{`cap:in="media:void";op=echo;out="media:void"`},
+			"capabilities": []string{`cap:in=media:;out=media:`},
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, cbor.DefaultLimits())
@@ -284,7 +284,7 @@ func TestRelaySwitchFindMasterForCap(t *testing.T) {
 	defer sw.mu.Unlock()
 
 	// Verify routing
-	idx1, err := sw.findMasterForCap(`cap:in="media:void";op=echo;out="media:void"`)
+	idx1, err := sw.findMasterForCap(`cap:in=media:;out=media:`)
 	if err != nil || idx1 != 0 {
 		t.Errorf("Expected master 0 for echo, got %d (err=%v)", idx1, err)
 	}
@@ -318,7 +318,7 @@ func TestRelaySwitchTieBreaking(t *testing.T) {
 	done1 := make(chan bool)
 	done2 := make(chan bool)
 
-	sameCap := `cap:in="media:void";op=echo;out="media:void"`
+	sameCap := `cap:in=media:;out=media:`
 
 	// Slave 1 responds with [1]
 	go func() {
@@ -497,7 +497,7 @@ func TestRelaySwitchCapabilityAggregationDeduplicates(t *testing.T) {
 		writer := cbor.NewFrameWriter(slaveWrite1)
 		manifest := map[string]interface{}{
 			"capabilities": []string{
-				`cap:in="media:void";op=echo;out="media:void"`,
+				`cap:in=media:;out=media:`,
 				`cap:in="media:void";op=double;out="media:void"`,
 			},
 		}
@@ -516,7 +516,7 @@ func TestRelaySwitchCapabilityAggregationDeduplicates(t *testing.T) {
 		writer := cbor.NewFrameWriter(slaveWrite2)
 		manifest := map[string]interface{}{
 			"capabilities": []string{
-				`cap:in="media:void";op=echo;out="media:void"`, // Duplicate
+				`cap:in=media:;out=media:`, // Duplicate
 				`cap:in="media:void";op=triple;out="media:void"`,
 			},
 		}

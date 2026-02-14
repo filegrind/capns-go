@@ -1,6 +1,14 @@
 // Package capns provides standard capability URN builders
 package capns
 
+// =============================================================================
+// STANDARD CAP URN CONSTANTS
+// =============================================================================
+
+// CapEcho is the standard echo capability URN
+// Accepts any media type as input and outputs any media type
+const CapEcho = "cap:in=media:;out=media:"
+
 // LlmConversationUrn builds a URN for LLM conversation capability
 func LlmConversationUrn(langCode string) *CapUrn {
 	urn, err := NewCapUrnBuilder().

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testHostManifest = `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=echo"}]}`
+const testHostManifest = `{"name":"Test","version":"1.0","caps":[{"urn":"cap:in=media:;out=media:"}]}`
 
 // simulatePlugin runs a fake plugin: handshake + handler on the plugin side of a pipe.
 // handler receives the FrameReader/FrameWriter after handshake and can read/write frames.
@@ -99,7 +99,7 @@ func TestReqTriggersSpawn(t *testing.T) {
 
 // TEST416: AttachPlugin performs HELLO handshake, extracts manifest, updates capabilities
 func TestAttachPluginHandshake(t *testing.T) {
-	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=echo"}]}`
+	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:in=media:;out=media:"}]}`
 
 	hostRead, pluginWrite := net.Pipe()
 	pluginRead, hostWrite := net.Pipe()
@@ -122,12 +122,12 @@ func TestAttachPluginHandshake(t *testing.T) {
 
 	host.mu.Lock()
 	assert.True(t, host.plugins[0].running, "attached plugin must be running")
-	assert.Equal(t, []string{"cap:op=echo"}, host.plugins[0].caps)
+	assert.Equal(t, []string{"cap:in=media:;out=media:"}, host.plugins[0].caps)
 	host.mu.Unlock()
 
 	caps := host.Capabilities()
 	assert.NotNil(t, caps, "running plugin must produce capabilities")
-	assert.Contains(t, string(caps), "cap:op=echo")
+	assert.Contains(t, string(caps), "cap:in=media:;out=media:")
 
 	// Clean up
 	hostRead.Close()

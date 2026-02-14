@@ -510,7 +510,7 @@ func TestRequestResponseSimple(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, cbor.FrameTypeReq, frame.FrameType)
 		assert.NotNil(t, frame.Cap)
-		assert.Equal(t, "cap:op=echo", *frame.Cap)
+		assert.Equal(t, "cap:in=media:;out=media:", *frame.Cap)
 		assert.Equal(t, []byte("hello"), frame.Payload)
 
 		// Send response
@@ -531,7 +531,7 @@ func TestRequestResponseSimple(t *testing.T) {
 
 	// Send request
 	requestID := cbor.NewMessageIdRandom()
-	request := cbor.NewReq(requestID, "cap:op=echo", []byte("hello"), "application/json")
+	request := cbor.NewReq(requestID, "cap:in=media:;out=media:", []byte("hello"), "application/json")
 	err = writer.WriteFrame(request)
 	require.NoError(t, err)
 
@@ -1001,7 +1001,7 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testCBORManifest))
 	require.NoError(t, err)
 
-	runtime.Register(`cap:in="media:void";op=echo;out="media:void"`,
+	runtime.Register(CapEcho,
 		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
 			payload, err := CollectFirstArg(frames)
 			if err != nil {
@@ -1016,7 +1016,7 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 		})
 
 	// Exact match
-	assert.NotNil(t, runtime.FindHandler(`cap:in="media:void";op=echo;out="media:void"`))
+	assert.NotNil(t, runtime.FindHandler(CapEcho))
 	assert.NotNil(t, runtime.FindHandler(`cap:in="media:void";op=transform;out="media:void"`))
 
 	// Non-existent
