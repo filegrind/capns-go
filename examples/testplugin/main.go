@@ -16,7 +16,7 @@ func main() {
 		"Test plugin for Go",
 		[]capns.Cap{
 			{
-				Urn:     mustParseCapUrn(capns.CapEcho),
+				Urn:     mustParseCapUrn(capns.CapIdentity),
 				Title:   "Echo",
 				Command: "echo",
 			},
@@ -36,7 +36,7 @@ func main() {
 	}
 
 	// Register echo handler
-	runtime.Register(capns.CapEcho,
+	runtime.Register(capns.CapIdentity,
 		func(payload []byte, emitter capns.StreamEmitter, peer capns.PeerInvoker) error {
 			// Parse input JSON
 			var input map[string]interface{}

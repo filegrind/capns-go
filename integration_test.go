@@ -1001,7 +1001,7 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testCBORManifest))
 	require.NoError(t, err)
 
-	runtime.Register(CapEcho,
+	runtime.Register(CapIdentity,
 		func(frames <-chan cbor.Frame, emitter StreamEmitter, peer PeerInvoker) error {
 			payload, err := CollectFirstArg(frames)
 			if err != nil {
@@ -1016,7 +1016,7 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 		})
 
 	// Exact match
-	assert.NotNil(t, runtime.FindHandler(CapEcho))
+	assert.NotNil(t, runtime.FindHandler(CapIdentity))
 	assert.NotNil(t, runtime.FindHandler(`cap:in="media:void";op=transform;out="media:void"`))
 
 	// Non-existent
