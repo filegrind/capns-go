@@ -884,6 +884,7 @@ type threadSafeEmitter struct {
 	mediaUrn      string // Response media URN
 	streamStarted bool   // Track if STREAM_START was sent
 	seq           uint64
+	chunkIndex    uint64 // Track chunk index (required by protocol)
 	seqMu         sync.Mutex
 	maxChunk      int
 }

@@ -172,6 +172,8 @@ type Frame struct {
 	Offset      *uint64                // Byte offset in chunked stream
 	Eof         *bool                  // End of stream marker
 	Cap         *string                // Cap URN (for REQ frames)
+	ChunkIndex  *uint64                // Chunk index within stream (required for CHUNK frames)
+	Checksum    *uint64                // Payload checksum (CRC64 of payload bytes)
 }
 
 // New creates a new frame with required fields (matches Rust Frame::new)
@@ -203,11 +205,13 @@ func NewReq(id MessageId, capUrn string, payload []byte, contentType string) *Fr
 //   - payload: Chunk data
 //
 // (matches Rust Frame::chunk)
-func NewChunk(reqId MessageId, streamId string, seq uint64, payload []byte) *Frame {
+func NewChunk(reqId MessageId, streamId string, seq uint64, payload []byte, chunkIndex uint64, checksum uint64) *Frame {
 	frame := newFrame(FrameTypeChunk, reqId)
 	frame.StreamId = &streamId
 	frame.Seq = seq
 	frame.Payload = payload
+	frame.ChunkIndex = &chunkIndex
+	frame.Checksum = &checksum
 	return frame
 }
 
