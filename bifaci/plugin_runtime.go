@@ -252,10 +252,11 @@ func (pr *PluginRuntime) runCBORMode() error {
 	}
 
 	type pendingIncomingRequest struct {
-		capUrn  string
-		handler HandlerFunc
-		streams []streamEntry // Ordered list of streams
-		ended   bool          // True after END frame - any stream activity after is FATAL
+		capUrn    string
+		handler   HandlerFunc
+		routingId *MessageId    // XID from the REQ frame (preserved for response routing)
+		streams   []streamEntry // Ordered list of streams
+		ended     bool          // True after END frame - any stream activity after is FATAL
 	}
 	pendingIncoming := make(map[string]*pendingIncomingRequest)
 	pendingIncomingMu := &sync.Mutex{}
@@ -308,10 +309,11 @@ func (pr *PluginRuntime) runCBORMode() error {
 			// Start tracking this request - streams will be added via STREAM_START
 			pendingIncomingMu.Lock()
 			pendingIncoming[frame.Id.ToString()] = &pendingIncomingRequest{
-				capUrn:  capUrn,
-				handler: handler,
-				streams: []streamEntry{}, // Streams added via STREAM_START
-				ended:   false,
+				capUrn:    capUrn,
+				handler:   handler,
+				routingId: frame.RoutingId, // Preserve XID for response routing
+				streams:   []streamEntry{}, // Streams added via STREAM_START
+				ended:     false,
 			}
 			pendingIncomingMu.Unlock()
 			fmt.Fprintf(os.Stderr, "[PluginRuntime] REQ: req_id=%s cap=%s - waiting for streams\n", frame.Id.ToString(), capUrn)
@@ -432,8 +434,8 @@ func (pr *PluginRuntime) runCBORMode() error {
 					streamID := fmt.Sprintf("resp-%s", requestID.ToString()[:8])
 					mediaUrn := "media:bytes" // Default output media URN
 
-					// Create emitter with stream multiplexing
-					emitter := newThreadSafeEmitter(writer, requestID, streamID, mediaUrn, negotiatedLimits.MaxChunk)
+					// Create emitter with stream multiplexing (preserve routing_id for response routing)
+					emitter := newThreadSafeEmitter(writer, requestID, pendingReq.routingId, streamID, mediaUrn, negotiatedLimits.MaxChunk)
 					peerInvoker := newPeerInvokerImpl(writer, pendingPeerRequests, negotiatedLimits.MaxChunk)
 
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] END: Invoking handler for cap=%s with %d streams\n", capUrn, len(pendingReq.streams))
@@ -465,6 +467,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 					err := handler(framesChan, emitter, peerInvoker)
 					if err != nil {
 						errFrame := NewErr(requestID, "HANDLER_ERROR", err.Error())
+						errFrame.RoutingId = pendingReq.routingId
 						if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 							fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
 						}
@@ -929,22 +932,35 @@ func toBytes(v interface{}) []byte {
 	}
 }
 
-// syncFrameWriter wraps FrameWriter with a mutex for concurrent access.
-// FrameWriter.WriteFrame does two Write() calls (length prefix + CBOR data)
-// which interleave when called from multiple goroutines.
+// syncFrameWriter wraps FrameWriter with a mutex for concurrent access and
+// centralized seq assignment. All frames pass through the SeqAssigner before
+// writing, ensuring monotonically increasing seq per flow (RID + XID).
+// (matches Rust PluginRuntime writer thread with SeqAssigner)
 type syncFrameWriter struct {
-	mu     sync.Mutex
-	writer *FrameWriter
+	mu          sync.Mutex
+	writer      *FrameWriter
+	seqAssigner *SeqAssigner
 }
 
 func newSyncFrameWriter(w *FrameWriter) *syncFrameWriter {
-	return &syncFrameWriter{writer: w}
+	return &syncFrameWriter{
+		writer:      w,
+		seqAssigner: NewSeqAssigner(),
+	}
 }
 
 func (s *syncFrameWriter) WriteFrame(frame *Frame) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.writer.WriteFrame(frame)
+	// Centralized seq assignment — all flow frames get monotonic seq per flow
+	s.seqAssigner.Assign(frame)
+	err := s.writer.WriteFrame(frame)
+	// Clean up flow tracking after terminal frames
+	if err == nil && (frame.FrameType == FrameTypeEnd || frame.FrameType == FrameTypeErr) {
+		key := FlowKeyFromFrame(frame)
+		s.seqAssigner.Remove(key)
+	}
+	return err
 }
 
 func (s *syncFrameWriter) SetLimits(limits Limits) {
@@ -957,19 +973,21 @@ func (s *syncFrameWriter) SetLimits(limits Limits) {
 type threadSafeEmitter struct {
 	writer        *syncFrameWriter
 	requestID     MessageId
-	streamID      string // Response stream ID
-	mediaUrn      string // Response media URN
-	streamStarted bool   // Track if STREAM_START was sent
+	routingId     *MessageId // XID from incoming request (preserved for response routing)
+	streamID      string     // Response stream ID
+	mediaUrn      string     // Response media URN
+	streamStarted bool       // Track if STREAM_START was sent
 	seq           uint64
 	chunkIndex    uint64 // Track chunk index (required by protocol)
 	seqMu         sync.Mutex
 	maxChunk      int
 }
 
-func newThreadSafeEmitter(writer *syncFrameWriter, requestID MessageId, streamID string, mediaUrn string, maxChunk int) *threadSafeEmitter {
+func newThreadSafeEmitter(writer *syncFrameWriter, requestID MessageId, routingId *MessageId, streamID string, mediaUrn string, maxChunk int) *threadSafeEmitter {
 	return &threadSafeEmitter{
 		writer:        writer,
 		requestID:     requestID,
+		routingId:     routingId,
 		streamID:      streamID,
 		mediaUrn:      mediaUrn,
 		streamStarted: false,
@@ -995,6 +1013,7 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 	if !e.streamStarted {
 		e.streamStarted = true
 		startFrame := NewStreamStart(e.requestID, e.streamID, e.mediaUrn)
+		startFrame.RoutingId = e.routingId
 		if err := e.writer.WriteFrame(startFrame); err != nil {
 			return fmt.Errorf("failed to write STREAM_START: %w", err)
 		}
@@ -1024,6 +1043,7 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 			checksum := ComputeChecksum(cborPayload)
 
 			frame := NewChunk(e.requestID, e.streamID, currentSeq, cborPayload, currentIndex, checksum)
+			frame.RoutingId = e.routingId
 			if err := e.writer.WriteFrame(frame); err != nil {
 				return fmt.Errorf("failed to write chunk: %w", err)
 			}
@@ -1062,6 +1082,7 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 			checksum := ComputeChecksum(cborPayload)
 
 			frame := NewChunk(e.requestID, e.streamID, currentSeq, cborPayload, currentIndex, checksum)
+			frame.RoutingId = e.routingId
 			if err := e.writer.WriteFrame(frame); err != nil {
 				return fmt.Errorf("failed to write chunk: %w", err)
 			}
@@ -1085,6 +1106,7 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 			checksum := ComputeChecksum(cborPayload)
 
 			frame := NewChunk(e.requestID, e.streamID, currentSeq, cborPayload, currentIndex, checksum)
+			frame.RoutingId = e.routingId
 			if err := e.writer.WriteFrame(frame); err != nil {
 				return fmt.Errorf("failed to write chunk: %w", err)
 			}
@@ -1107,6 +1129,7 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 			checksum := ComputeChecksum(cborPayload)
 
 			frame := NewChunk(e.requestID, e.streamID, currentSeq, cborPayload, currentIndex, checksum)
+			frame.RoutingId = e.routingId
 			if err := e.writer.WriteFrame(frame); err != nil {
 				return fmt.Errorf("failed to write chunk: %w", err)
 			}
@@ -1126,6 +1149,7 @@ func (e *threadSafeEmitter) EmitCbor(value interface{}) error {
 		checksum := ComputeChecksum(cborPayload)
 
 		frame := NewChunk(e.requestID, e.streamID, currentSeq, cborPayload, currentIndex, checksum)
+		frame.RoutingId = e.routingId
 		if err := e.writer.WriteFrame(frame); err != nil {
 			return fmt.Errorf("failed to write chunk: %w", err)
 		}
@@ -1143,6 +1167,7 @@ func (e *threadSafeEmitter) Finalize() {
 	if !e.streamStarted {
 		e.streamStarted = true
 		startFrame := NewStreamStart(e.requestID, e.streamID, e.mediaUrn)
+		startFrame.RoutingId = e.routingId
 		if err := e.writer.WriteFrame(startFrame); err != nil {
 			fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write STREAM_START: %v\n", err)
 			return
@@ -1151,6 +1176,7 @@ func (e *threadSafeEmitter) Finalize() {
 
 	// STREAM_END: Close this stream
 	streamEndFrame := NewStreamEnd(e.requestID, e.streamID, e.chunkIndex)
+	streamEndFrame.RoutingId = e.routingId
 	if err := e.writer.WriteFrame(streamEndFrame); err != nil {
 		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write STREAM_END: %v\n", err)
 		return
@@ -1158,6 +1184,7 @@ func (e *threadSafeEmitter) Finalize() {
 
 	// END: Close the entire request
 	endFrame := NewEnd(e.requestID, nil)
+	endFrame.RoutingId = e.routingId
 	if err := e.writer.WriteFrame(endFrame); err != nil {
 		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write END: %v\n", err)
 	}
@@ -1165,6 +1192,7 @@ func (e *threadSafeEmitter) Finalize() {
 
 func (e *threadSafeEmitter) EmitLog(level, message string) {
 	frame := NewLog(e.requestID, level, message)
+	frame.RoutingId = e.routingId
 	if err := e.writer.WriteFrame(frame); err != nil {
 		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write log: %v\n", err)
 	}

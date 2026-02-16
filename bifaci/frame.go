@@ -441,3 +441,76 @@ func ComputeChecksum(data []byte) uint64 {
 func (f *Frame) IsEof() bool {
 	return f.Eof != nil && *f.Eof
 }
+
+// IsFlowFrame returns true if this frame type participates in flow ordering (seq tracking).
+// Non-flow frames (Hello, Heartbeat, RelayNotify, RelayState) bypass seq assignment
+// and reorder buffers entirely. (matches Rust Frame::is_flow_frame)
+func (f *Frame) IsFlowFrame() bool {
+	switch f.FrameType {
+	case FrameTypeHello, FrameTypeHeartbeat, FrameTypeRelayNotify, FrameTypeRelayState:
+		return false
+	default:
+		return true
+	}
+}
+
+// =============================================================================
+// FLOW KEY — Composite key for frame ordering (RID + optional XID)
+// =============================================================================
+
+// FlowKey is a composite key identifying a frame flow for seq ordering.
+// Absence of XID (RoutingId) is a valid separate flow from presence of XID.
+// (matches Rust FlowKey)
+type FlowKey struct {
+	rid string // Serialized RID for map key
+	xid string // Serialized XID for map key (empty = no XID)
+}
+
+// FlowKeyFromFrame extracts a FlowKey from a frame.
+func FlowKeyFromFrame(frame *Frame) FlowKey {
+	xid := ""
+	if frame.RoutingId != nil {
+		xid = frame.RoutingId.ToString()
+	}
+	return FlowKey{
+		rid: frame.Id.ToString(),
+		xid: xid,
+	}
+}
+
+// =============================================================================
+// SEQ ASSIGNER — Centralized seq assignment at output stages
+// =============================================================================
+
+// SeqAssigner assigns monotonically increasing seq numbers per FlowKey.
+// Used at output stages (writer threads) to ensure each flow's frames
+// carry a contiguous, gap-free seq sequence starting at 0.
+// Non-flow frames (Hello, Heartbeat, RelayNotify, RelayState) are skipped.
+// (matches Rust SeqAssigner)
+type SeqAssigner struct {
+	counters map[FlowKey]uint64
+}
+
+// NewSeqAssigner creates a new SeqAssigner.
+func NewSeqAssigner() *SeqAssigner {
+	return &SeqAssigner{
+		counters: make(map[FlowKey]uint64),
+	}
+}
+
+// Assign assigns the next seq number to a frame.
+// Non-flow frames are left unchanged (seq stays 0).
+func (sa *SeqAssigner) Assign(frame *Frame) {
+	if !frame.IsFlowFrame() {
+		return
+	}
+	key := FlowKeyFromFrame(frame)
+	counter := sa.counters[key]
+	frame.Seq = counter
+	sa.counters[key] = counter + 1
+}
+
+// Remove removes tracking for a flow (call after END/ERR delivery).
+func (sa *SeqAssigner) Remove(key FlowKey) {
+	delete(sa.counters, key)
+}
