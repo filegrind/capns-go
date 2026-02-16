@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/filegrind/capns-go/media"
+	"github.com/filegrind/capns-go/standard"
+	"github.com/filegrind/capns-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +21,7 @@ func capTestUrn(tags string) string {
 
 // TEST108: Test creating new cap with URN, title, and command verifies correct initialization
 func TestCapCreation(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=transform;format=json;data_processing"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json;data_processing"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Transform JSON Data", "test-command")
@@ -37,7 +40,7 @@ func TestCapCreation(t *testing.T) {
 
 // TEST109: Test creating cap with metadata initializes and retrieves metadata correctly
 func TestCapWithMetadata(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=arithmetic;compute;subtype=math"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=arithmetic;compute;subtype=math"))
 	require.NoError(t, err)
 
 	metadata := map[string]string{
@@ -64,7 +67,7 @@ func TestCapWithMetadata(t *testing.T) {
 // TEST110: Test cap matching with subset semantics for request fulfillment
 func TestCapMatching(t *testing.T) {
 	// Use type=data_processing key-value instead of flag for proper matching
-	id, err := NewCapUrnFromString(capTestUrn("op=transform;format=json;type=data_processing"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Transform JSON Data", "test-command")
@@ -77,7 +80,7 @@ func TestCapMatching(t *testing.T) {
 
 // TEST111: Test getting and setting cap title updates correctly
 func TestCapTitle(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=extract;target=metadata"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Extract Document Metadata", "extract-metadata")
@@ -92,9 +95,9 @@ func TestCapTitle(t *testing.T) {
 
 // TEST112: Test cap equality based on URN and title matching
 func TestCapDefinitionEquality(t *testing.T) {
-	id1, err := NewCapUrnFromString(capTestUrn("op=transform;format=json"))
+	id1, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json"))
 	require.NoError(t, err)
-	id2, err := NewCapUrnFromString(capTestUrn("op=transform;format=json"))
+	id2, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json"))
 	require.NoError(t, err)
 
 	cap1 := NewCap(id1, "Transform JSON Data", "transform")
@@ -108,7 +111,7 @@ func TestCapDefinitionEquality(t *testing.T) {
 
 // TEST113: Test cap stdin support via args with stdin source and serialization roundtrip
 func TestCapStdin(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=generate;target=embeddings"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=generate;target=embeddings"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Generate Embeddings", "generate")
@@ -225,7 +228,7 @@ func TestCapArgConstructors(t *testing.T) {
 // Additional existing tests below (not part of TEST108-116 sequence)
 
 func TestCapRequestHandling(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=extract;target=metadata"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap1 := NewCap(id, "Extract Metadata", "extract-cmd")
@@ -233,7 +236,7 @@ func TestCapRequestHandling(t *testing.T) {
 
 	assert.True(t, cap1.AcceptsRequest(cap2.Urn))
 
-	otherId, err := NewCapUrnFromString(capTestUrn("op=generate;image"))
+	otherId, err := urn.NewCapUrnFromString(capTestUrn("op=generate;image"))
 	require.NoError(t, err)
 	cap3 := NewCap(otherId, "Generate Image", "generate-cmd")
 
@@ -241,7 +244,7 @@ func TestCapRequestHandling(t *testing.T) {
 }
 
 func TestCapDescription(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=parse;format=json;data"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=parse;format=json;data"))
 	require.NoError(t, err)
 
 	cap1 := NewCapWithDescription(id, "Parse JSON Data", "parse-cmd", "Parse JSON data")
@@ -254,16 +257,16 @@ func TestCapDescription(t *testing.T) {
 
 func TestCapWithMediaSpecs(t *testing.T) {
 	// Use proper in/out in the URN - custom media URN in out
-	id, err := NewCapUrnFromString(`cap:in="media:string";op=query;out="media:result";target=structured`)
+	id, err := urn.NewCapUrnFromString(`cap:in="media:string";op=query;out="media:result";target=structured`)
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Query Structured Data", "query-cmd")
 
-	// Add media spec for MediaString (required for resolution)
-	cap.AddMediaSpec(NewMediaSpecDef(MediaString, "text/plain", ProfileStr))
+	// Add media spec for standard.MediaString (required for resolution)
+	cap.AddMediaSpec(media.NewMediaSpecDef(standard.MediaString, "text/plain", media.ProfileStr))
 
 	// Add a custom media spec for the result type
-	cap.AddMediaSpec(NewMediaSpecDefWithSchema(
+	cap.AddMediaSpec(media.NewMediaSpecDefWithSchema(
 		"media:result",
 		"application/json",
 		"https://example.com/schema/result",
@@ -279,7 +282,7 @@ func TestCapWithMediaSpecs(t *testing.T) {
 	cliFlag := "--query"
 	pos := 0
 	cap.AddArg(CapArg{
-		MediaUrn:       MediaString,
+		MediaUrn:       standard.MediaString,
 		Required:       true,
 		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "The query string",
@@ -298,7 +301,7 @@ func TestCapWithMediaSpecs(t *testing.T) {
 	resolved, err := arg.Resolve(cap.GetMediaSpecs(), registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
-	assert.Equal(t, ProfileStr, resolved.ProfileURI)
+	assert.Equal(t, media.ProfileStr, resolved.ProfileURI)
 
 	// Resolve the output spec
 	outResolved, err := cap.Output.Resolve(cap.GetMediaSpecs(), registry)
@@ -308,19 +311,19 @@ func TestCapWithMediaSpecs(t *testing.T) {
 }
 
 func TestCapJSONRoundTrip(t *testing.T) {
-	id, err := NewCapUrnFromString(capTestUrn("op=test"))
+	id, err := urn.NewCapUrnFromString(capTestUrn("op=test"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Test Cap", "test-command")
 	cliFlag := "--input"
 	pos := 0
 	cap.AddArg(CapArg{
-		MediaUrn:       MediaString,
+		MediaUrn:       standard.MediaString,
 		Required:       true,
 		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "Input text",
 	})
-	cap.SetOutput(NewCapOutput(MediaObject, "Output object"))
+	cap.SetOutput(NewCapOutput(standard.MediaObject, "Output object"))
 
 	// Serialize to JSON
 	jsonData, err := json.Marshal(cap)

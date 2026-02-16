@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/filegrind/capns-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -63,7 +64,7 @@ func TestRegistryValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a test cap
-	capUrn, err := NewCapUrnFromString(regTestUrn("op=test;target=fake"))
+	capUrn, err := urn.NewCapUrnFromString(regTestUrn("op=test;target=fake"))
 	require.NoError(t, err)
 	cap := NewCap(capUrn, "Test Command", "test-cmd")
 
@@ -127,9 +128,9 @@ func TestCapExists(t *testing.T) {
 // URL Encoding Tests - Guard against the bug where encoding "cap:" causes 404s
 
 // buildRegistryURL replicates the URL construction logic from fetchFromRegistry
-func buildRegistryURL(urn string) string {
-	normalizedUrn := urn
-	if parsed, err := NewCapUrnFromString(urn); err == nil {
+func buildRegistryURL(capUrn string) string {
+	normalizedUrn := capUrn
+	if parsed, err := urn.NewCapUrnFromString(capUrn); err == nil {
 		normalizedUrn = parsed.String()
 	}
 	tagsPart := strings.TrimPrefix(normalizedUrn, "cap:")

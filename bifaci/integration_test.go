@@ -26,7 +26,7 @@ func intTestUrn(tags string) string {
 func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	// Test case 1: Create cap without version parameter
 	// Use type=data_processing key=value instead of flag
-	urn, err := NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
+	urn, err := urn.NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	cap := NewCap(urn, "Data Transformer", "transform-command")
@@ -45,7 +45,7 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	assert.True(t, cap.Equals(cap))
 
 	// Different caps should not be equal
-	urn2, _ := NewCapUrnFromString(intTestUrn("op=generate;format=pdf"))
+	urn2, _ := urn.NewCapUrnFromString(intTestUrn("op=generate;format=pdf"))
 	cap3 := NewCap(urn2, "PDF Generator", "generate-command")
 	assert.False(t, cap.Equals(cap3))
 }
@@ -53,10 +53,10 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 // TestIntegrationCaseInsensitiveUrns verifies URNs are case-insensitive
 func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 	// Test case 1: Different case inputs should produce same URN
-	urn1, err := NewCapUrnFromString(intTestUrn("OP=Transform;FORMAT=JSON;Type=Data_Processing"))
+	urn1, err := urn.NewCapUrnFromString(intTestUrn("OP=Transform;FORMAT=JSON;Type=Data_Processing"))
 	require.NoError(t, err)
 
-	urn2, err := NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
+	urn2, err := urn.NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
 	// URNs should be equal (case-insensitive keys and unquoted values)
@@ -95,7 +95,7 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	registry := testRegistry(t)
 	// Setup test cap definition with media URNs - use proper tags
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
@@ -110,7 +110,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	// Add required argument using new architecture
 	cliFlag := "--input"
 	pos := 0
-	capDef.AddArg(CapArg{
+	capDef.AddArg(cap.CapArg{
 		MediaUrn:       MediaString,
 		Required:       true,
 		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
@@ -129,7 +129,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 
 	// Test call with unified argument
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []CapArgumentValue{
+	response, err := caller.Call(ctx, []cap.CapArgumentValue{
 		NewCapArgumentValueFromStr(MediaString, "test.pdf"),
 	}, registry)
 	require.NoError(t, err)
@@ -157,7 +157,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 func TestIntegrationBinaryCapHandling(t *testing.T) {
 	registry := testRegistry(t)
 	// Setup binary cap - use raw type with binary tag
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
@@ -180,7 +180,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 
 	// Test binary response
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []CapArgumentValue{}, registry)
+	response, err := caller.Call(ctx, []cap.CapArgumentValue{}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -199,7 +199,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 func TestIntegrationTextCapHandling(t *testing.T) {
 	registry := testRegistry(t)
 	// Setup text cap - use proper tags
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Text Formatter", "format-text")
@@ -213,7 +213,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 	// Add required argument using new architecture
 	cliFlag := "--input"
 	pos := 0
-	capDef.AddArg(CapArg{
+	capDef.AddArg(cap.CapArg{
 		MediaUrn:       MediaString,
 		Required:       true,
 		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
@@ -231,7 +231,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 
 	// Test text response
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []CapArgumentValue{
+	response, err := caller.Call(ctx, []cap.CapArgumentValue{
 		NewCapArgumentValueFromStr(MediaString, "input text"),
 	}, registry)
 	require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 	registry := testRegistry(t)
 	// Setup cap with custom media spec - use proper tags
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Query", "query-data")
@@ -287,7 +287,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 
 	// Test call
 	ctx := context.Background()
-	response, err := caller.Call(ctx, []CapArgumentValue{}, registry)
+	response, err := caller.Call(ctx, []cap.CapArgumentValue{}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
 
@@ -305,7 +305,7 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator := NewCapValidationCoordinator()
 
 	// Create a cap with arguments - use proper tags
-	urn, err := NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable";target=data`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable";target=data`)
 	require.NoError(t, err)
 
 	capDef := NewCap(urn, "Data Processor", "process-data")
@@ -319,7 +319,7 @@ func TestIntegrationCapValidation(t *testing.T) {
 	// Add required string argument using new architecture
 	cliFlag1 := "--input"
 	pos1 := 0
-	capDef.AddArg(CapArg{
+	capDef.AddArg(cap.CapArg{
 		MediaUrn:       MediaString,
 		Required:       true,
 		Sources:        []ArgSource{{CliFlag: &cliFlag1}, {Position: &pos1}},
@@ -508,8 +508,8 @@ func TestRequestResponseSimple(t *testing.T) {
 		frame, err := reader.ReadFrame()
 		require.NoError(t, err)
 		assert.Equal(t, FrameTypeReq, frame.FrameType)
-		assert.NotNil(t, frame.Cap)
-		assert.Equal(t, "cap:in=media:;out=media:", *frame.Cap)
+		assert.NotNil(t, frame.Cap.Cap)
+		assert.Equal(t, "cap:in=media:;out=media:", *frame.Cap.Cap)
 		assert.Equal(t, []byte("hello"), frame.Payload)
 
 		// Send response
@@ -706,7 +706,7 @@ func TestPluginErrorResponse(t *testing.T) {
 		require.NoError(t, err)
 
 		// Send error
-		errFrame := NewErr(frame.Id, "NOT_FOUND", "Cap not found: cap:op=missing")
+		errFrame := NewErr(frame.Id, "NOT_FOUND", "cap.Cap not found: cap:op=missing")
 		err = writer.WriteFrame(errFrame)
 		require.NoError(t, err)
 	}()
@@ -731,7 +731,7 @@ func TestPluginErrorResponse(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, FrameTypeErr, response.FrameType)
 	assert.Equal(t, "NOT_FOUND", response.ErrorCode())
-	assert.Contains(t, response.ErrorMessage(), "Cap not found")
+	assert.Contains(t, response.ErrorMessage(), "cap.Cap not found")
 
 	wg.Wait()
 }
@@ -1259,7 +1259,7 @@ func TestArgumentsRoundtrip(t *testing.T) {
 	writer.SetLimits(limits)
 
 	// Create arguments
-	args := []CapArgumentValue{
+	args := []cap.CapArgumentValue{
 		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
 	}
 
@@ -1613,7 +1613,7 @@ func TestArgumentsMultiple(t *testing.T) {
 	writer.SetLimits(limits)
 
 	// Create multiple arguments
-	args := []CapArgumentValue{
+	args := []cap.CapArgumentValue{
 		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
 		NewCapArgumentValue("media:pdf;bytes", []byte{0x89, 0x50, 0x4E, 0x47}),
 	}
@@ -1974,8 +1974,8 @@ func DecodeCBORValue(data []byte, v interface{}) error {
 	return cbor2.Unmarshal(data, v)
 }
 
-// EncodeCapArgumentValues encodes CapArgumentValue slice to CBOR
-func EncodeCapArgumentValues(args []CapArgumentValue) ([]byte, error) {
+// EncodeCapArgumentValues encodes cap.CapArgumentValue slice to CBOR
+func EncodeCapArgumentValues(args []cap.CapArgumentValue) ([]byte, error) {
 	// Convert to CBOR-friendly format
 	var cborArgs []map[string]interface{}
 	for _, arg := range args {

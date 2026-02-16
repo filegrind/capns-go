@@ -29,8 +29,8 @@ func TestReqFrameRoundtrip(t *testing.T) {
 	if decoded.FrameType != original.FrameType {
 		t.Error("FrameType mismatch")
 	}
-	if decoded.Cap == nil || original.Cap == nil || *decoded.Cap != *original.Cap {
-		t.Errorf("Cap mismatch: expected %v, got %v", original.Cap, decoded.Cap)
+	if decoded.cap.Cap == nil || original.cap.Cap == nil || *decoded.cap.Cap != *original.cap.Cap {
+		t.Errorf("cap.Cap mismatch: expected %v, got %v", original.cap.Cap, decoded.cap.Cap)
 	}
 	if string(decoded.Payload) != string(original.Payload) {
 		t.Error("Payload mismatch")
@@ -238,8 +238,8 @@ func TestFrameIOroundtrip(t *testing.T) {
 		t.Fatalf("ReadFrame failed: %v", err)
 	}
 
-	if decoded.Cap == nil || original.Cap == nil || *decoded.Cap != *original.Cap {
-		t.Error("Cap mismatch after I/O roundtrip")
+	if decoded.cap.Cap == nil || original.cap.Cap == nil || *decoded.cap.Cap != *original.cap.Cap {
+		t.Error("cap.Cap mismatch after I/O roundtrip")
 	}
 }
 

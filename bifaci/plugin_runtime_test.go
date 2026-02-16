@@ -252,7 +252,7 @@ func TestHandlerIsSendSync(t *testing.T) {
 // TEST254: Test NoPeerInvoker always returns PeerRequest error regardless of arguments
 func TestNoPeerInvoker(t *testing.T) {
 	peer := &noPeerInvoker{}
-	_, err := peer.Invoke(`cap:in="media:void";op=test;out="media:void"`, []CapArgumentValue{})
+	_, err := peer.Invoke(`cap:in="media:void";op=test;out="media:void"`, []cap.CapArgumentValue{})
 	if err == nil {
 		t.Fatal("Expected error from NoPeerInvoker, got nil")
 	}
@@ -264,7 +264,7 @@ func TestNoPeerInvoker(t *testing.T) {
 // TEST255: Test NoPeerInvoker returns error even with valid arguments
 func TestNoPeerInvokerWithArguments(t *testing.T) {
 	peer := &noPeerInvoker{}
-	args := []CapArgumentValue{
+	args := []cap.CapArgumentValue{
 		NewCapArgumentValueFromStr("media:test", "value"),
 	}
 	_, err := peer.Invoke(`cap:in="media:void";op=test;out="media:void"`, args)
@@ -531,12 +531,12 @@ func (e *PluginRuntimeError) Error() string {
 }
 
 // Helper to create test caps for file-path tests
-func createTestCap(urnStr, title, command string, args []CapArg) *Cap {
-	urn, err := NewCapUrnFromString(urnStr)
+func createTestCap(urnStr, title, command string, args []cap.CapArg) *cap.Cap {
+	urn, err := urn.NewCapUrnFromString(urnStr)
 	if err != nil {
 		panic(fmt.Sprintf("Invalid cap URN: %v", err))
 	}
-	return &Cap{
+	return &cap.Cap{
 		Urn:     urn,
 		Title:   title,
 		Command: command,
@@ -560,8 +560,8 @@ func cliFlagSource(flag string) ArgSource {
 }
 
 // Helper to create test manifest
-func createTestManifest(name, version, description string, caps []*Cap) *CapManifest {
-	capSlice := make([]Cap, len(caps))
+func createTestManifest(name, version, description string, caps []*cap.Cap) *CapManifest {
+	capSlice := make([]cap.Cap, len(caps))
 	for i, cap := range caps {
 		capSlice[i] = *cap
 	}
@@ -584,7 +584,7 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
 		"Process PDF",
 		"process",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -596,7 +596,7 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -659,7 +659,7 @@ func Test337FilePathWithoutStdinPassesString(t *testing.T) {
 		`cap:in="media:void";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -670,7 +670,7 @@ func Test337FilePathWithoutStdinPassesString(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -700,7 +700,7 @@ func Test338FilePathViaCliFlag(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -712,7 +712,7 @@ func Test338FilePathViaCliFlag(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -749,7 +749,7 @@ func Test339FilePathArrayGlobExpansion(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Batch",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
@@ -761,7 +761,7 @@ func Test339FilePathArrayGlobExpansion(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -803,7 +803,7 @@ func Test340FileNotFoundClearError(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -815,7 +815,7 @@ func Test340FileNotFoundClearError(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -848,7 +848,7 @@ func Test341StdinPrecedenceOverFilePath(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -860,7 +860,7 @@ func Test341StdinPrecedenceOverFilePath(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -890,7 +890,7 @@ func Test342FilePathPositionZeroReadsFirstArg(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -902,7 +902,7 @@ func Test342FilePathPositionZeroReadsFirstArg(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -925,7 +925,7 @@ func Test343NonFilePathArgsUnaffected(t *testing.T) {
 		`cap:in="media:void";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:model-spec;textable;form=scalar", // NOT file-path
 				Required: true,
@@ -937,7 +937,7 @@ func Test343NonFilePathArgsUnaffected(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -961,7 +961,7 @@ func Test344FilePathArrayInvalidJSONFails(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Test",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
@@ -973,7 +973,7 @@ func Test344FilePathArrayInvalidJSONFails(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1007,7 +1007,7 @@ func Test345FilePathArrayOneFileMissingFailsHard(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Test",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
@@ -1019,7 +1019,7 @@ func Test345FilePathArrayOneFileMissingFailsHard(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1057,7 +1057,7 @@ func Test346LargeFileReadsSuccessfully(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1069,7 +1069,7 @@ func Test346LargeFileReadsSuccessfully(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1097,7 +1097,7 @@ func Test347EmptyFileReadsAsEmptyBytes(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1109,7 +1109,7 @@ func Test347EmptyFileReadsAsEmptyBytes(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1138,7 +1138,7 @@ func Test348FilePathConversionRespectsSourceOrder(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1150,7 +1150,7 @@ func Test348FilePathConversionRespectsSourceOrder(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1180,7 +1180,7 @@ func Test349FilePathMultipleSourcesFallback(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1193,7 +1193,7 @@ func Test349FilePathMultipleSourcesFallback(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1223,7 +1223,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=process;out="media:result;textable"`,
 		"Process PDF",
 		"process",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1235,7 +1235,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1293,7 +1293,7 @@ func Test351FilePathArrayEmptyArray(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Test",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: false, // Not required
@@ -1305,7 +1305,7 @@ func Test351FilePathArrayEmptyArray(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1349,7 +1349,7 @@ func Test352FilePermissionDeniedClearError(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1361,7 +1361,7 @@ func Test352FilePermissionDeniedClearError(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1384,7 +1384,7 @@ func Test353CBORPayloadFormatConsistency(t *testing.T) {
 		`cap:in="media:text;textable";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:text;textable;form=scalar",
 				Required: true,
@@ -1396,7 +1396,7 @@ func Test353CBORPayloadFormatConsistency(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1444,7 +1444,7 @@ func Test354GlobPatternNoMatchesEmptyArray(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Test",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
@@ -1456,7 +1456,7 @@ func Test354GlobPatternNoMatchesEmptyArray(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1504,7 +1504,7 @@ func Test355GlobPatternSkipsDirectories(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Test",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
@@ -1516,7 +1516,7 @@ func Test355GlobPatternSkipsDirectories(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1568,7 +1568,7 @@ func Test356MultipleGlobPatternsCombined(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Test",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
@@ -1580,7 +1580,7 @@ func Test356MultipleGlobPatternsCombined(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1642,7 +1642,7 @@ func Test357SymlinksFollowed(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1654,7 +1654,7 @@ func Test357SymlinksFollowed(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1683,7 +1683,7 @@ func Test358BinaryFileNonUTF8(t *testing.T) {
 		`cap:in="media:bytes";op=test;out="media:void"`,
 		"Test",
 		"test",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1695,7 +1695,7 @@ func Test358BinaryFileNonUTF8(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1723,7 +1723,7 @@ func Test359InvalidGlobPatternFails(t *testing.T) {
 		`cap:in="media:bytes";op=batch;out="media:void"`,
 		"Test",
 		"batch",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
@@ -1735,7 +1735,7 @@ func Test359InvalidGlobPatternFails(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1767,7 +1767,7 @@ func Test360ExtractEffectivePayloadWithFileData(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1779,7 +1779,7 @@ func Test360ExtractEffectivePayloadWithFileData(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1818,7 +1818,7 @@ func Test361CLIModeFilePath(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
@@ -1830,7 +1830,7 @@ func Test361CLIModeFilePath(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1859,7 +1859,7 @@ func Test361CLIModeFilePath(t *testing.T) {
 // This test simulates real-world conditions:
 // - Pure binary data piped to stdin (NOT CBOR)
 // - CLI mode detected (command arg present)
-// - Cap accepts stdin source
+// - cap.Cap accepts stdin source
 // - Binary is chunked on-the-fly and accumulated
 // - Handler receives complete CBOR payload
 func Test362CLIModePipedBinary(t *testing.T) {
@@ -1874,7 +1874,7 @@ func Test362CLIModePipedBinary(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:pdf;bytes",
 				Required: true,
@@ -1885,7 +1885,7 @@ func Test362CLIModePipedBinary(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -1996,7 +1996,7 @@ func Test363CBORModeChunkedContent(t *testing.T) {
 		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{
+		[]cap.CapArg{
 			{
 				MediaUrn: "media:pdf;bytes",
 				Required: true,
@@ -2007,7 +2007,7 @@ func Test363CBORModeChunkedContent(t *testing.T) {
 		},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -2015,7 +2015,7 @@ func Test363CBORModeChunkedContent(t *testing.T) {
 	runtime.Register(cap.UrnString(), handler)
 
 	// Build CBOR payload
-	args := []CapArgumentValue{
+	args := []cap.CapArgumentValue{
 		{
 			MediaUrn: "media:pdf;bytes",
 			Value:    pdfContent,
@@ -2101,7 +2101,7 @@ func Test364CBORModeFilePath(t *testing.T) {
 	defer os.Remove(tempFile)
 
 	// Build CBOR arguments with file-path URN
-	args := []CapArgumentValue{
+	args := []cap.CapArgumentValue{
 		{
 			MediaUrn: "media:file-path;textable;form=scalar",
 			Value:    []byte(tempFile),
@@ -2152,10 +2152,10 @@ func Test395BuildPayloadSmall(t *testing.T) {
 		`cap:in="media:bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{},
+		[]cap.CapArg{},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -2201,10 +2201,10 @@ func Test396BuildPayloadLarge(t *testing.T) {
 		`cap:in="media:bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{},
+		[]cap.CapArg{},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -2245,10 +2245,10 @@ func Test397BuildPayloadEmpty(t *testing.T) {
 		`cap:in="media:bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{},
+		[]cap.CapArg{},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -2288,10 +2288,10 @@ func Test398BuildPayloadIOError(t *testing.T) {
 		`cap:in="media:bytes";op=process;out="media:void"`,
 		"Process",
 		"process",
-		[]CapArg{},
+		[]cap.CapArg{},
 	)
 
-	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*Cap{cap})
+	manifest := createTestManifest("TestPlugin", "1.0.0", "Test", []*cap.Cap{cap})
 	runtime, err := NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)

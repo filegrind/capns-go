@@ -48,12 +48,12 @@ func TestLlmConversationUrnSpecs(t *testing.T) {
 	// Compare semantically via TaggedUrn matching (tag order may differ)
 	inSpec, err := taggedurn.NewTaggedUrnFromString(urn.InSpec())
 	require.NoError(t, err, "in_spec must parse")
-	expectedIn, err := taggedurn.NewTaggedUrnFromString(MediaString)
-	require.NoError(t, err, "MediaString must parse")
+	expectedIn, err := taggedurn.NewTaggedUrnFromString(standard.MediaString)
+	require.NoError(t, err, "standard.MediaString must parse")
 	matches, err := inSpec.ConformsTo(expectedIn)
 	require.NoError(t, err)
 	assert.True(t, matches,
-		"in_spec '%s' must match MediaString '%s'", urn.InSpec(), MediaString)
+		"in_spec '%s' must match standard.MediaString '%s'", urn.InSpec(), standard.MediaString)
 
 	outSpec, err := taggedurn.NewTaggedUrnFromString(urn.OutSpec())
 	require.NoError(t, err, "out_spec must parse")

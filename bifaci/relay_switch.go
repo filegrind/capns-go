@@ -214,14 +214,14 @@ func (sw *RelaySwitch) SendToMaster(frame *Frame) error {
 
 	switch frame.FrameType {
 	case FrameTypeReq:
-		if frame.Cap == nil {
+		if frame.Cap.Cap == nil {
 			return &RelaySwitchError{
 				Type:    RelaySwitchErrorTypeProtocol,
 				Message: "REQ frame missing cap URN",
 			}
 		}
 
-		destIdx, err := sw.findMasterForCap(*frame.Cap)
+		destIdx, err := sw.findMasterForCap(*frame.Cap.Cap)
 		if err != nil {
 			return err
 		}
@@ -311,10 +311,10 @@ func (sw *RelaySwitch) findMasterForCap(capURN string) (int, error) {
 	}
 
 	// Try URN-level matching
-	requestURN, err := NewCapUrnFromString(capURN)
+	requestURN, err := urn.NewCapUrnFromString(capURN)
 	if err == nil {
 		for _, entry := range sw.capTable {
-			registeredURN, err := NewCapUrnFromString(entry.CapURN)
+			registeredURN, err := urn.NewCapUrnFromString(entry.CapURN)
 			if err == nil {
 				if requestURN.Accepts(registeredURN) {
 					return entry.MasterIdx, nil
@@ -334,14 +334,14 @@ func (sw *RelaySwitch) handleMasterFrame(sourceIdx int, frame *Frame) (*Frame, e
 	switch frame.FrameType {
 	case FrameTypeReq:
 		// Peer request
-		if frame.Cap == nil {
+		if frame.Cap.Cap == nil {
 			return nil, &RelaySwitchError{
 				Type:    RelaySwitchErrorTypeProtocol,
 				Message: "REQ frame missing cap URN",
 			}
 		}
 
-		destIdx, err := sw.findMasterForCap(*frame.Cap)
+		destIdx, err := sw.findMasterForCap(*frame.Cap.Cap)
 		if err != nil {
 			return nil, err
 		}

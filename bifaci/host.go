@@ -6,6 +6,9 @@ import (
 	"io"
 	"os/exec"
 	"sync"
+
+	"github.com/filegrind/capns-go/cap"
+	"github.com/filegrind/capns-go/urn"
 )
 
 // CapHandler is a function that handles a peer invoke request.
@@ -205,7 +208,7 @@ func (h *PluginHost) AttachPlugin(pluginRead io.Reader, pluginWrite io.Writer) (
 	reader := NewFrameReader(pluginRead)
 	writer := NewFrameWriter(pluginWrite)
 
-	manifest, limits, err := cbor.HandshakeInitiate(reader, writer)
+	manifest, limits, err := HandshakeInitiate(reader, writer)
 	if err != nil {
 		return -1, fmt.Errorf("handshake failed: %w", err)
 	}
@@ -267,13 +270,13 @@ func (h *PluginHost) findPluginForCapLocked(capUrn string) (int, bool) {
 	}
 
 	// URN-level matching: request is pattern, registered cap is instance
-	requestUrn, err := NewCapUrnFromString(capUrn)
+	requestUrn, err := urn.NewCapUrnFromString(capUrn)
 	if err != nil {
 		return -1, false
 	}
 
 	for _, entry := range h.capTable {
-		registeredUrn, err := NewCapUrnFromString(entry.capUrn)
+		registeredUrn, err := urn.NewCapUrnFromString(entry.capUrn)
 		if err != nil {
 			continue
 		}
@@ -342,8 +345,8 @@ func (h *PluginHost) handleRelayFrame(frame *Frame, relayWriter *FrameWriter) er
 	switch frame.FrameType {
 	case FrameTypeReq:
 		capUrn := ""
-		if frame.Cap != nil {
-			capUrn = *frame.Cap
+		if frame.Cap.Cap != nil {
+			capUrn = *frame.Cap.Cap
 		}
 
 		pluginIdx, found := h.findPluginForCapLocked(capUrn)
@@ -545,7 +548,7 @@ func (h *PluginHost) spawnPluginLocked(pluginIdx int) error {
 	reader := NewFrameReader(stdout)
 	writer := NewFrameWriter(stdin)
 
-	manifest, limits, err := cbor.HandshakeInitiate(reader, writer)
+	manifest, limits, err := HandshakeInitiate(reader, writer)
 	if err != nil {
 		plugin.helloFailed = true
 		cmd.Process.Kill()

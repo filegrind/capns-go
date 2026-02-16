@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/filegrind/capns-go/standard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -165,13 +166,13 @@ func TestMediaUrnRoundtrip(t *testing.T) {
 // TEST072: Test all media URN constants parse successfully
 func TestMediaUrnConstants(t *testing.T) {
 	constants := []string{
-		MediaVoid,
-		MediaString,
-		MediaBinary,
-		MediaObject,
-		MediaInteger,
+		standard.MediaVoid,
+		standard.MediaString,
+		standard.MediaBinary,
+		standard.MediaObject,
+		standard.MediaInteger,
 		MediaNumber,
-		MediaBoolean,
+		standard.MediaBoolean,
 	}
 
 	for _, constant := range constants {

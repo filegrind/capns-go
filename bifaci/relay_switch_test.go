@@ -225,7 +225,7 @@ func TestRelaySwitchUnknownCapReturnsError(t *testing.T) {
 	}
 }
 
-// TEST429: Cap routing logic (find_master_for_cap)
+// TEST429: cap.Cap routing logic (find_master_for_cap)
 func TestRelaySwitchFindMasterForCap(t *testing.T) {
 	engineRead1, slaveWrite1 := net.Pipe()
 	slaveRead1, engineWrite1 := net.Pipe()

@@ -739,7 +739,7 @@ func TestTEST333PluginRepoClientGetAllCaps(t *testing.T) {
 				Caps: []PluginCapSummary{
 					{
 						Urn:         cap1,
-						Title:       "Cap 1",
+						Title:       "cap.Cap 1",
 						Description: "",
 					},
 				},
@@ -769,7 +769,7 @@ func TestTEST333PluginRepoClientGetAllCaps(t *testing.T) {
 				Caps: []PluginCapSummary{
 					{
 						Urn:         cap2,
-						Title:       "Cap 2",
+						Title:       "cap.Cap 2",
 						Description: "",
 					},
 				},
@@ -865,7 +865,7 @@ func TestTEST335PluginRepoServerClientIntegration(t *testing.T) {
 		Caps: []PluginCapSummary{
 			{
 				Urn:         capUrn,
-				Title:       "Test Cap",
+				Title:       "Test cap.Cap",
 				Description: "Test capability",
 			},
 		},

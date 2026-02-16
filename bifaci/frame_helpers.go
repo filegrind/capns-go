@@ -3,8 +3,10 @@ package bifaci
 import (
 	"fmt"
 
-	taggedurn "github.com/filegrind/tagged-urn-go"
 	cborlib "github.com/fxamacker/cbor/v2"
+
+	"github.com/filegrind/capns-go/cap"
+	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
 // CollectArgsByMediaUrn collects all argument streams that match the given media URN pattern.
@@ -211,8 +213,8 @@ func CollectPeerResponse(frames <-chan Frame) (map[string][]byte, error) {
 // Returns a slice of {media_urn, data} pairs.
 //
 // This is useful for handlers that need to inspect all arguments.
-func CollectAllArgs(frames <-chan Frame) ([]CapArgumentValue, error) {
-	var results []CapArgumentValue
+func CollectAllArgs(frames <-chan Frame) ([]cap.CapArgumentValue, error) {
+	var results []cap.CapArgumentValue
 	var currentStreamID string
 	var currentChunks [][]byte
 	var currentMediaUrn string
@@ -246,7 +248,7 @@ func CollectAllArgs(frames <-chan Frame) ([]CapArgumentValue, error) {
 				fullData = append(fullData, chunk...)
 			}
 
-			results = append(results, CapArgumentValue{
+			results = append(results, cap.CapArgumentValue{
 				MediaUrn: currentMediaUrn,
 				Value:    fullData,
 			})

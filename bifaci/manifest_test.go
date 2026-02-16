@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/filegrind/capns-go/cap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ func manifestTestUrn(tags string) string {
 
 // TEST148: Test creating cap manifest with name, version, description, and caps
 func TestCapManifestCreation(t *testing.T) {
-	id, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
@@ -27,7 +28,7 @@ func TestCapManifestCreation(t *testing.T) {
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	)
 
 	assert.Equal(t, "TestComponent", manifest.Name)
@@ -39,7 +40,7 @@ func TestCapManifestCreation(t *testing.T) {
 
 // TEST149: Test cap manifest with author field sets author correctly
 func TestCapManifestWithAuthor(t *testing.T) {
-	id, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
@@ -48,7 +49,7 @@ func TestCapManifestWithAuthor(t *testing.T) {
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	).WithAuthor("Test Author")
 
 	require.NotNil(t, manifest.Author)
@@ -56,7 +57,7 @@ func TestCapManifestWithAuthor(t *testing.T) {
 }
 
 func TestCapManifestWithPageUrl(t *testing.T) {
-	id, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
@@ -65,7 +66,7 @@ func TestCapManifestWithPageUrl(t *testing.T) {
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	).WithAuthor("Test Author").WithPageUrl("https://github.com/example/test")
 
 	require.NotNil(t, manifest.PageUrl)
@@ -80,13 +81,13 @@ func TestCapManifestWithPageUrl(t *testing.T) {
 
 // TEST150: Test cap manifest JSON serialization and deserialization roundtrip
 func TestCapManifestJSONSerialization(t *testing.T) {
-	id, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
 	stdinUrn := "media:pdf;bytes"
-	cap.AddArg(CapArg{
+	cap.AddArg(cap.CapArg{
 		MediaUrn: MediaBinary,
 		Required: true,
 		Sources:  []ArgSource{{Stdin: &stdinUrn}},
@@ -96,7 +97,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	).WithAuthor("Test Author")
 
 	// Test serialization
@@ -145,11 +146,11 @@ func TestCapManifestRequiredFields(t *testing.T) {
 
 // TEST152: Test cap manifest with multiple caps stores and retrieves all capabilities
 func TestCapManifestWithMultipleCaps(t *testing.T) {
-	id1, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
+	id1, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 	cap1 := NewCap(id1, "Metadata Extractor", "extract-metadata")
 
-	id2, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=outline"))
+	id2, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=outline"))
 	require.NoError(t, err)
 	metadata := map[string]string{"supports_outline": "true"}
 	cap2 := NewCapWithMetadata(id2, "Outline Extractor", "extract-outline", metadata)
@@ -158,7 +159,7 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 		"MultiCapComponent",
 		"1.0.0",
 		"Component with multiple caps",
-		[]Cap{*cap1, *cap2},
+		[]cap.Cap{*cap1, *cap2},
 	)
 
 	assert.Len(t, manifest.Caps, 2)
@@ -176,7 +177,7 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 		"EmptyComponent",
 		"1.0.0",
 		"Component with no caps",
-		[]Cap{},
+		[]cap.Cap{},
 	)
 
 	assert.Len(t, manifest.Caps, 0)
@@ -193,7 +194,7 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 
 // TEST154: Test cap manifest optional author field skipped in serialization when None
 func TestCapManifestOptionalFields(t *testing.T) {
-	id, err := NewCapUrnFromString(manifestTestUrn("op=validate;file"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=validate;file"))
 	require.NoError(t, err)
 	cap := NewCap(id, "File Validator", "validate")
 
@@ -201,7 +202,7 @@ func TestCapManifestOptionalFields(t *testing.T) {
 		"ValidatorComponent",
 		"1.0.0",
 		"File validation component",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	)
 
 	// Serialize manifest without optional fields
@@ -223,7 +224,7 @@ func TestCapManifestOptionalFields(t *testing.T) {
 // Test component that implements ComponentMetadata interface
 type testComponent struct {
 	name string
-	caps []Cap
+	caps []cap.Cap
 }
 
 // Implement the ComponentMetadata interface
@@ -236,20 +237,20 @@ func (tc *testComponent) ComponentManifest() *CapManifest {
 	)
 }
 
-func (tc *testComponent) Caps() []Cap {
+func (tc *testComponent) Caps() []cap.Cap {
 	return tc.ComponentManifest().Caps
 }
 
 // TEST155: Test ComponentMetadata trait provides manifest and caps accessor methods
 func TestComponentMetadataInterface(t *testing.T) {
 	// Use type=component key=value instead of component flag
-	id, err := NewCapUrnFromString(manifestTestUrn("op=test;type=component"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=test;type=component"))
 	require.NoError(t, err)
 	cap := NewCap(id, "Test Component", "test")
 
 	component := &testComponent{
 		name: "TestImpl",
-		caps: []Cap{*cap},
+		caps: []cap.Cap{*cap},
 	}
 
 	manifest := component.ComponentManifest()
@@ -263,13 +264,13 @@ func TestComponentMetadataInterface(t *testing.T) {
 
 func TestCapManifestValidation(t *testing.T) {
 	// Test that manifest with valid caps works
-	id, err := NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
 	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
 	stdinUrn := "media:pdf;bytes"
-	cap.AddArg(CapArg{
+	cap.AddArg(cap.CapArg{
 		MediaUrn: MediaBinary,
 		Required: true,
 		Sources:  []ArgSource{{Stdin: &stdinUrn}},
@@ -279,7 +280,7 @@ func TestCapManifestValidation(t *testing.T) {
 		"ValidComponent",
 		"1.0.0",
 		"Valid component for testing",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	)
 
 	// Validate that all required fields are present
@@ -291,14 +292,14 @@ func TestCapManifestValidation(t *testing.T) {
 	// Validate cap integrity
 	assert.Len(t, manifest.Caps, 1)
 	capInManifest := manifest.Caps[0]
-	// Version field removed from Cap struct
+	// Version field removed from cap.Cap struct
 	assert.Equal(t, "extract-metadata", capInManifest.Command)
 	assert.True(t, capInManifest.AcceptsStdin())
 }
 
 func TestCapManifestCompatibility(t *testing.T) {
 	// Test that manifest format is compatible between different types
-	id, err := NewCapUrnFromString(manifestTestUrn("op=process"))
+	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=process"))
 	require.NoError(t, err)
 	cap := NewCap(id, "Data Processor", "process")
 
@@ -307,7 +308,7 @@ func TestCapManifestCompatibility(t *testing.T) {
 		"PluginComponent",
 		"0.1.0",
 		"Plugin-style component",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	)
 
 	// Create manifest similar to what a provider would have
@@ -315,7 +316,7 @@ func TestCapManifestCompatibility(t *testing.T) {
 		"ProviderComponent",
 		"0.1.0",
 		"Provider-style component",
-		[]Cap{*cap},
+		[]cap.Cap{*cap},
 	)
 
 	// Both should serialize to the same structure

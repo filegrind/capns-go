@@ -12,6 +12,8 @@ import (
 
 	cborlib "github.com/fxamacker/cbor/v2"
 
+	"github.com/filegrind/capns-go/cap"
+	"github.com/filegrind/capns-go/urn"
 	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
@@ -34,7 +36,7 @@ type StreamEmitter interface {
 // STREAM_END, END, ERR) as they arrive from the host. The consumer processes
 // frames directly - no decoding, no wrapper types.
 type PeerInvoker interface {
-	Invoke(capUrn string, arguments []CapArgumentValue) (<-chan Frame, error)
+	Invoke(capUrn string, arguments []cap.CapArgumentValue) (<-chan Frame, error)
 }
 
 // StreamChunk removed - handlers now receive bare CBOR Frame objects directly
@@ -105,13 +107,13 @@ func (pr *PluginRuntime) FindHandler(capUrn string) HandlerFunc {
 	}
 
 	// Then try pattern matching via CapUrn
-	requestUrn, err := NewCapUrnFromString(capUrn)
+	requestUrn, err := urn.NewCapUrnFromString(capUrn)
 	if err != nil {
 		return nil
 	}
 
 	for pattern, handler := range pr.handlers {
-		patternUrn, err := NewCapUrnFromString(pattern)
+		patternUrn, err := urn.NewCapUrnFromString(pattern)
 		if err != nil {
 			continue
 		}
@@ -199,7 +201,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 		switch frame.FrameType {
 		case FrameTypeReq:
-			if frame.Cap == nil || *frame.Cap == "" {
+			if frame.Cap.Cap == nil || *frame.Cap.Cap == "" {
 				errFrame := NewErr(frame.Id, "INVALID_REQUEST", "Request missing cap URN")
 				if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
@@ -207,7 +209,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 				continue
 			}
 
-			capUrn := *frame.Cap
+			capUrn := *frame.Cap.Cap
 			rawPayload := frame.Payload
 
 			// Protocol v2: REQ must have empty payload - arguments come as streams
@@ -713,7 +715,7 @@ func (pr *PluginRuntime) runCLIMode(args []string) error {
 }
 
 // findCapByCommand finds a cap by its command name
-func (pr *PluginRuntime) findCapByCommand(commandName string) *Cap {
+func (pr *PluginRuntime) findCapByCommand(commandName string) *cap.Cap {
 	if pr.manifest == nil {
 		return nil
 	}
@@ -751,13 +753,13 @@ func (pr *PluginRuntime) printHelp() {
 }
 
 // printCapHelp prints help for a specific cap
-func (pr *PluginRuntime) printCapHelp(cap *Cap) {
-	fmt.Fprintf(os.Stderr, "%s\n", cap.Title)
-	if cap.CapDescription != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", *cap.CapDescription)
+func (pr *PluginRuntime) printCapHelp(capDef *cap.Cap) {
+	fmt.Fprintf(os.Stderr, "%s\n", capDef.Title)
+	if capDef.CapDescription != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", *capDef.CapDescription)
 	}
 	fmt.Fprintf(os.Stderr, "\nUSAGE:\n")
-	fmt.Fprintf(os.Stderr, "    plugin %s [OPTIONS]\n\n", cap.Command)
+	fmt.Fprintf(os.Stderr, "    plugin %s [OPTIONS]\n\n", capDef.Command)
 }
 
 // extractEffectivePayload extracts the effective payload from a REQ frame.
@@ -775,7 +777,7 @@ func extractEffectivePayload(payload []byte, contentType string, capUrn string) 
 	}
 
 	// Parse the cap URN to get the expected input media URN
-	capUrnParsed, err := NewCapUrnFromString(capUrn)
+	capUrnParsed, err := urn.NewCapUrnFromString(capUrn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cap URN '%s': %w", capUrn, err)
 	}
@@ -1148,7 +1150,7 @@ func newPeerInvokerImpl(writer *syncFrameWriter, pendingRequests *sync.Map, maxC
 	}
 }
 
-func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<-chan Frame, error) {
+func (p *peerInvokerImpl) Invoke(capUrn string, arguments []cap.CapArgumentValue) (<-chan Frame, error) {
 	// Generate a new message ID for this request
 	requestID := NewMessageIdRandom()
 
@@ -1235,7 +1237,7 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []CapArgumentValue) (<
 // noPeerInvoker is a no-op PeerInvoker that always returns an error
 type noPeerInvoker struct{}
 
-func (n *noPeerInvoker) Invoke(capUrn string, arguments []CapArgumentValue) (<-chan Frame, error) {
+func (n *noPeerInvoker) Invoke(capUrn string, arguments []cap.CapArgumentValue) (<-chan Frame, error) {
 	return nil, errors.New("peer invocation not supported in this context")
 }
 
@@ -1258,7 +1260,7 @@ func (pr *PluginRuntime) Limits() Limits {
 // - CLI piped binary → chunk reader → payload
 // - CBOR chunked → payload
 // - CBOR file path → auto-convert → payload
-func (pr *PluginRuntime) buildPayloadFromStreamingReader(cap *Cap, reader io.Reader, maxChunk int) ([]byte, error) {
+func (pr *PluginRuntime) buildPayloadFromStreamingReader(capDef *cap.Cap, reader io.Reader, maxChunk int) ([]byte, error) {
 	// Accumulate chunks
 	var chunks [][]byte
 	totalBytes := 0
@@ -1286,13 +1288,13 @@ func (pr *PluginRuntime) buildPayloadFromStreamingReader(cap *Cap, reader io.Rea
 	}
 
 	// Build CBOR arguments array (same format as CBOR mode)
-	capUrn, err := NewCapUrnFromString(cap.UrnString())
+	capUrn, err := urn.NewCapUrnFromString(capDef.UrnString())
 	if err != nil {
 		return nil, fmt.Errorf("invalid cap URN: %w", err)
 	}
 	expectedMediaUrn := capUrn.InSpec()
 
-	arg := CapArgumentValue{
+	arg := cap.CapArgumentValue{
 		MediaUrn: expectedMediaUrn,
 		Value:    completePayload,
 	}
@@ -1314,8 +1316,8 @@ func (pr *PluginRuntime) buildPayloadFromStreamingReader(cap *Cap, reader io.Rea
 }
 
 // buildPayloadFromCLI builds CBOR payload from CLI arguments based on cap's arg definitions.
-// Returns CBOR-encoded array of CapArgumentValue objects.
-func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte, error) {
+// Returns CBOR-encoded array of cap.CapArgumentValue objects.
+func (pr *PluginRuntime) buildPayloadFromCLI(capDef *cap.Cap, cliArgs []string) ([]byte, error) {
 	// Read stdin if available (non-blocking check)
 	stdinData, err := pr.readStdinIfAvailable()
 	if err != nil {
@@ -1323,7 +1325,7 @@ func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte
 	}
 
 	// If no args defined, check for stdin data
-	if len(cap.Args) == 0 {
+	if len(capDef.Args) == 0 {
 		if stdinData != nil {
 			return stdinData, nil
 		}
@@ -1332,10 +1334,10 @@ func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte
 	}
 
 	// Build CBOR arguments array (same format as CBOR mode)
-	var arguments []CapArgumentValue
+	var arguments []cap.CapArgumentValue
 
-	for i := range cap.Args {
-		argDef := &cap.Args[i]
+	for i := range capDef.Args {
+		argDef := &capDef.Args[i]
 
 		// Extract argument value (handles file-path conversion)
 		value, err := pr.extractArgValue(argDef, cliArgs, stdinData)
@@ -1349,10 +1351,10 @@ func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte
 			mediaUrn := argDef.MediaUrn
 
 			// Check if this is a file-path arg using pattern matching
-			argMediaUrn, parseErr := NewMediaUrnFromString(argDef.MediaUrn)
+			argMediaUrn, parseErr := urn.NewMediaUrnFromString(argDef.MediaUrn)
 			if parseErr == nil {
-				filePathPattern, _ := NewMediaUrnFromString(MediaFilePath)
-				filePathArrayPattern, _ := NewMediaUrnFromString(MediaFilePathArray)
+				filePathPattern, _ := urn.NewMediaUrnFromString(MediaFilePath)
+				filePathArrayPattern, _ := urn.NewMediaUrnFromString(MediaFilePathArray)
 
 				// Pattern matching: check if patterns accept this instance
 				isFilePath := false
@@ -1374,7 +1376,7 @@ func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte
 				}
 			}
 
-			arguments = append(arguments, CapArgumentValue{
+			arguments = append(arguments, cap.CapArgumentValue{
 				MediaUrn: mediaUrn,
 				Value:    value,
 			})
@@ -1406,18 +1408,18 @@ func (pr *PluginRuntime) buildPayloadFromCLI(cap *Cap, cliArgs []string) ([]byte
 
 // extractArgValue extracts a single argument value from CLI args or stdin.
 // Handles automatic file-path to bytes conversion when appropriate.
-func (pr *PluginRuntime) extractArgValue(argDef *CapArg, cliArgs []string, stdinData []byte) ([]byte, error) {
+func (pr *PluginRuntime) extractArgValue(argDef *cap.CapArg, cliArgs []string, stdinData []byte) ([]byte, error) {
 	// Check if this arg requires file-path to bytes conversion using pattern matching
-	argMediaUrn, err := NewMediaUrnFromString(argDef.MediaUrn)
+	argMediaUrn, err := urn.NewMediaUrnFromString(argDef.MediaUrn)
 	if err != nil {
 		return nil, fmt.Errorf("invalid media URN '%s': %w", argDef.MediaUrn, err)
 	}
 
-	filePathPattern, err := NewMediaUrnFromString(MediaFilePath)
+	filePathPattern, err := urn.NewMediaUrnFromString(MediaFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse MediaFilePath constant: %w", err)
 	}
-	filePathArrayPattern, err := NewMediaUrnFromString(MediaFilePathArray)
+	filePathArrayPattern, err := urn.NewMediaUrnFromString(MediaFilePathArray)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse MediaFilePathArray constant: %w", err)
 	}

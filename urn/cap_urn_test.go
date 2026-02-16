@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/filegrind/capns-go/standard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -13,11 +14,11 @@ import (
 // Media URNs must be quoted in cap URNs because they contain semicolons
 // Use proper tags for is_binary/is_json/is_text detection
 func testUrn(tags string) string {
-	// Use MediaObject constant for consistent canonical form
+	// Use standard.MediaObject constant for consistent canonical form
 	if tags == "" {
-		return `cap:in="media:void";out="` + MediaObject + `"`
+		return `cap:in="media:void";out="` + standard.MediaObject + `"`
 	}
-	return `cap:in="media:void";out="` + MediaObject + `";` + tags
+	return `cap:in="media:void";out="` + standard.MediaObject + `";` + tags
 }
 
 func testUrnWithIO(inSpec, outSpec, tags string) string {
@@ -49,8 +50,8 @@ func TestCapUrnCreation(t *testing.T) {
 	assert.Equal(t, "json", format)
 
 	// Direction specs are required and accessible
-	assert.Equal(t, MediaVoid, capUrn.InSpec())
-	assert.Equal(t, MediaObject, capUrn.OutSpec())
+	assert.Equal(t, standard.MediaVoid, capUrn.InSpec())
+	assert.Equal(t, standard.MediaObject, capUrn.OutSpec())
 }
 
 // TEST002: Test that missing 'in' or 'out' spec defaults to "media:" (wildcard)
@@ -107,9 +108,9 @@ func TestCanonicalStringFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should be sorted alphabetically with in/out in their sorted positions
-	// Media URNs with semicolons (like MediaObject) need quoting, but simple ones (like MediaVoid) don't
+	// Media URNs with semicolons (like standard.MediaObject) need quoting, but simple ones (like standard.MediaVoid) don't
 	// Alphabetical order: ext < in < op < out < target
-	assert.Equal(t, `cap:ext=pdf;in=`+MediaVoid+`;op=generate;out="`+MediaObject+`";target=thumbnail`, capUrn.ToString())
+	assert.Equal(t, `cap:ext=pdf;in=`+standard.MediaVoid+`;op=generate;out="`+standard.MediaObject+`";target=thumbnail`, capUrn.ToString())
 }
 
 // TEST015: Test that cap: prefix is required and case-insensitive
@@ -265,7 +266,7 @@ func TestSpecificity(t *testing.T) {
 	assert.Equal(t, 4, cap3.Specificity())
 
 	// Wildcard in direction doesn't count
-	cap4, err := NewCapUrnFromString(`cap:in=*;out="` + MediaObject + `";op=test`)
+	cap4, err := NewCapUrnFromString(`cap:in=*;out="` + standard.MediaObject + `";op=test`)
 	require.NoError(t, err)
 	// cap4: in wildcard=0 + object tags + op(1) = 3
 	assert.Equal(t, 3, cap4.Specificity())
@@ -328,18 +329,18 @@ func TestConvenienceMethods(t *testing.T) {
 	// GetTag works for in/out
 	inVal, exists := cap.GetTag("in")
 	assert.True(t, exists)
-	assert.Equal(t, MediaVoid, inVal)
+	assert.Equal(t, standard.MediaVoid, inVal)
 
 	outVal, exists := cap.GetTag("out")
 	assert.True(t, exists)
-	assert.Equal(t, MediaObject, outVal)
+	assert.Equal(t, standard.MediaObject, outVal)
 }
 
 // TEST021: Test builder creates cap URN with correct tags and direction specs
 func TestBuilder(t *testing.T) {
 	cap, err := NewCapUrnBuilder().
-		InSpec(MediaVoid).
-		OutSpec(MediaObject).
+		InSpec(standard.MediaVoid).
+		OutSpec(standard.MediaObject).
 		Tag("op", "generate").
 		Tag("target", "thumbnail").
 		Tag("ext", "pdf").
@@ -350,30 +351,30 @@ func TestBuilder(t *testing.T) {
 	assert.True(t, exists)
 	assert.Equal(t, "generate", op)
 
-	assert.Equal(t, MediaVoid, cap.InSpec())
-	assert.Equal(t, MediaObject, cap.OutSpec())
+	assert.Equal(t, standard.MediaVoid, cap.InSpec())
+	assert.Equal(t, standard.MediaObject, cap.OutSpec())
 }
 
 // TEST022: Test builder requires both in_spec and out_spec
 func TestBuilderRequiresDirection(t *testing.T) {
 	// Missing inSpec should fail
 	_, err := NewCapUrnBuilder().
-		OutSpec(MediaObject).
+		OutSpec(standard.MediaObject).
 		Tag("op", "test").
 		Build()
 	assert.Error(t, err)
 
 	// Missing outSpec should fail
 	_, err = NewCapUrnBuilder().
-		InSpec(MediaVoid).
+		InSpec(standard.MediaVoid).
 		Tag("op", "test").
 		Build()
 	assert.Error(t, err)
 
 	// Both present should succeed
 	_, err = NewCapUrnBuilder().
-		InSpec(MediaVoid).
-		OutSpec(MediaObject).
+		InSpec(standard.MediaVoid).
+		OutSpec(standard.MediaObject).
 		Build()
 	assert.NoError(t, err)
 }
@@ -394,8 +395,8 @@ func TestWithTag(t *testing.T) {
 	assert.Equal(t, "pdf", ext)
 
 	// Direction specs preserved (testUrn uses constants with tags)
-	assert.Equal(t, MediaVoid, modified.InSpec())
-	assert.Equal(t, MediaObject, modified.OutSpec())
+	assert.Equal(t, standard.MediaVoid, modified.InSpec())
+	assert.Equal(t, standard.MediaObject, modified.OutSpec())
 }
 
 func TestWithoutTag(t *testing.T) {
@@ -414,8 +415,8 @@ func TestWithoutTag(t *testing.T) {
 	assert.Equal(t, "pdf", ext)
 
 	// Direction specs preserved (testUrn uses constants with tags)
-	assert.Equal(t, MediaVoid, modified.InSpec())
-	assert.Equal(t, MediaObject, modified.OutSpec())
+	assert.Equal(t, standard.MediaVoid, modified.InSpec())
+	assert.Equal(t, standard.MediaObject, modified.OutSpec())
 }
 
 func TestWithInSpecOutSpec(t *testing.T) {
@@ -423,16 +424,16 @@ func TestWithInSpecOutSpec(t *testing.T) {
 	require.NoError(t, err)
 
 	// Change input spec (using constant with coercion tags)
-	modified1 := original.WithInSpec(MediaBinary)
-	assert.Equal(t, MediaBinary, modified1.InSpec())
-	assert.Equal(t, MediaObject, modified1.OutSpec()) // testUrn uses MediaObject
+	modified1 := original.WithInSpec(standard.MediaBinary)
+	assert.Equal(t, standard.MediaBinary, modified1.InSpec())
+	assert.Equal(t, standard.MediaObject, modified1.OutSpec()) // testUrn uses standard.MediaObject
 	// Original unchanged
-	assert.Equal(t, MediaVoid, original.InSpec())
+	assert.Equal(t, standard.MediaVoid, original.InSpec())
 
 	// Change output spec (using constant with coercion tags)
-	modified2 := original.WithOutSpec(MediaInteger)
-	assert.Equal(t, MediaVoid, modified2.InSpec()) // testUrn uses MediaVoid
-	assert.Equal(t, MediaInteger, modified2.OutSpec())
+	modified2 := original.WithOutSpec(standard.MediaInteger)
+	assert.Equal(t, standard.MediaVoid, modified2.InSpec()) // testUrn uses standard.MediaVoid
+	assert.Equal(t, standard.MediaInteger, modified2.OutSpec())
 }
 
 // TEST027: Test with_wildcard_tag sets tag to wildcard, including in/out
@@ -469,8 +470,8 @@ func TestSubset(t *testing.T) {
 	assert.False(t, opExists)
 
 	// Direction specs preserved (testUrn uses constants with tags)
-	assert.Equal(t, MediaVoid, subset.InSpec())
-	assert.Equal(t, MediaObject, subset.OutSpec())
+	assert.Equal(t, standard.MediaVoid, subset.InSpec())
+	assert.Equal(t, standard.MediaObject, subset.OutSpec())
 }
 
 // TEST026: Test merge combines tags from both caps, subset keeps only specified tags
@@ -704,32 +705,32 @@ func TestInvalidEscapeSequenceError(t *testing.T) {
 // TEST011: Test that serialization uses smart quoting (no quotes for simple lowercase, quotes for special chars/uppercase)
 func TestSerializationSmartQuoting(t *testing.T) {
 	// Simple lowercase value - no quoting needed (but media URNs in in/out are quoted)
-	// MediaVoid has no coercion tags (no quotes needed), MediaObject has ;textable;form=map (quotes needed)
+	// standard.MediaVoid has no coercion tags (no quotes needed), standard.MediaObject has ;textable;form=map (quotes needed)
 	cap, err := NewCapUrnBuilder().
-		InSpec(MediaVoid).
-		OutSpec(MediaObject).
+		InSpec(standard.MediaVoid).
+		OutSpec(standard.MediaObject).
 		Tag("key", "simple").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in=media:void;key=simple;out="`+MediaObject+`"`, cap.ToString())
+	assert.Equal(t, `cap:in=media:void;key=simple;out="`+standard.MediaObject+`"`, cap.ToString())
 
 	// Value with spaces - needs quoting
 	cap2, err := NewCapUrnBuilder().
-		InSpec(MediaVoid).
-		OutSpec(MediaObject).
+		InSpec(standard.MediaVoid).
+		OutSpec(standard.MediaObject).
 		Tag("key", "has spaces").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in=media:void;key="has spaces";out="`+MediaObject+`"`, cap2.ToString())
+	assert.Equal(t, `cap:in=media:void;key="has spaces";out="`+standard.MediaObject+`"`, cap2.ToString())
 
 	// Value with uppercase - needs quoting to preserve
 	cap4, err := NewCapUrnBuilder().
-		InSpec(MediaVoid).
-		OutSpec(MediaObject).
+		InSpec(standard.MediaVoid).
+		OutSpec(standard.MediaObject).
 		Tag("key", "HasUpper").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in=media:void;key="HasUpper";out="`+MediaObject+`"`, cap4.ToString())
+	assert.Equal(t, `cap:in=media:void;key="HasUpper";out="`+standard.MediaObject+`"`, cap4.ToString())
 }
 
 // TEST012: Test that simple cap URN round-trips (parse -> serialize -> parse equals original)
@@ -790,8 +791,8 @@ func TestMatchingCaseSensitiveValues(t *testing.T) {
 // TEST023: Test builder lowercases keys but preserves value case
 func TestBuilderPreservesCase(t *testing.T) {
 	cap, err := NewCapUrnBuilder().
-		InSpec(MediaVoid).
-		OutSpec(MediaObject).
+		InSpec(standard.MediaVoid).
+		OutSpec(standard.MediaObject).
 		Tag("KEY", "ValueWithCase").
 		Build()
 	require.NoError(t, err)
@@ -819,13 +820,13 @@ func TestHasTagCaseSensitive(t *testing.T) {
 	assert.True(t, cap.HasTag("Key", "Value"))
 
 	// HasTag works for in/out (testUrn uses constants with tags)
-	assert.True(t, cap.HasTag("in", MediaVoid))
-	assert.True(t, cap.HasTag("out", MediaObject))
+	assert.True(t, cap.HasTag("in", standard.MediaVoid))
+	assert.True(t, cap.HasTag("out", standard.MediaObject))
 }
 
 // TEST036: Test with_tag preserves value case
 func TestWithTagPreservesValue(t *testing.T) {
-	cap := NewCapUrn(MediaVoid, MediaObject, map[string]string{})
+	cap := NewCapUrn(standard.MediaVoid, standard.MediaObject, map[string]string{})
 	modified := cap.WithTag("key", "ValueWithCase")
 
 	value, exists := modified.GetTag("key")
@@ -835,7 +836,7 @@ func TestWithTagPreservesValue(t *testing.T) {
 
 // TEST037: Test with_tag rejects empty value
 func TestWithTagRejectsEmptyValue(t *testing.T) {
-	cap := NewCapUrn(MediaVoid, MediaObject, map[string]string{})
+	cap := NewCapUrn(standard.MediaVoid, standard.MediaObject, map[string]string{})
 	modified, err := cap.WithTagValidated("key", "")
 	assert.Error(t, err, "with_tag should reject empty value")
 	assert.Nil(t, modified)
@@ -1098,17 +1099,17 @@ func TestMatchingSemantics_Test7_FallbackPattern(t *testing.T) {
 func TestMatchingSemantics_Test7b_ThumbnailVoidInput(t *testing.T) {
 	// Test 7b: Cap missing ext does NOT match request with ext=wav
 	outBin := "media:binary"
-	cap, err := NewCapUrnFromString(fmt.Sprintf(`cap:in="%s";op=generate_thumbnail;out="%s"`, MediaVoid, outBin))
+	cap, err := NewCapUrnFromString(fmt.Sprintf(`cap:in="%s";op=generate_thumbnail;out="%s"`, standard.MediaVoid, outBin))
 	require.NoError(t, err)
 
-	request, err := NewCapUrnFromString(fmt.Sprintf(`cap:ext=wav;in="%s";op=generate_thumbnail;out="%s"`, MediaVoid, outBin))
+	request, err := NewCapUrnFromString(fmt.Sprintf(`cap:ext=wav;in="%s";op=generate_thumbnail;out="%s"`, standard.MediaVoid, outBin))
 	require.NoError(t, err)
 
 	// Cap missing ext → NOT a wildcard → NO MATCH
 	assert.False(t, cap.Accepts(request), "Test 7b: Cap missing ext should NOT match request with ext=wav")
 
 	// Cap with ext=* properly declares fallback
-	capWithWildcard, err := NewCapUrnFromString(fmt.Sprintf(`cap:ext=*;in="%s";op=generate_thumbnail;out="%s"`, MediaVoid, outBin))
+	capWithWildcard, err := NewCapUrnFromString(fmt.Sprintf(`cap:ext=*;in="%s";op=generate_thumbnail;out="%s"`, standard.MediaVoid, outBin))
 	require.NoError(t, err)
 	assert.True(t, capWithWildcard.Accepts(request), "Test 7b: Cap with ext=* should match request with ext=wav")
 }
@@ -1163,10 +1164,10 @@ func TestMatchingSemantics_Test10_DirectionMismatch(t *testing.T) {
 	// Test 10: Direction mismatch prevents matching
 	// media:string has tags {textable:*, form:scalar}, media:bytes has tags {bytes:*}
 	// Neither can provide input for the other (completely different marker tags)
-	cap, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="` + MediaObject + `"`)
+	cap, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="` + standard.MediaObject + `"`)
 	require.NoError(t, err)
 
-	request, err := NewCapUrnFromString(`cap:in="media:bytes";op=generate;out="` + MediaObject + `"`)
+	request, err := NewCapUrnFromString(`cap:in="media:bytes";op=generate;out="` + standard.MediaObject + `"`)
 	require.NoError(t, err)
 
 	assert.False(t, cap.Accepts(request), "Test 10: Direction mismatch should not match")
