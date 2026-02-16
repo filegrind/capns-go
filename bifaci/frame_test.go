@@ -629,7 +629,7 @@ func TestStreamEndFrame(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-xyz-456"
 
-	frame := NewStreamEnd(reqId, streamId)
+	frame := NewStreamEnd(reqId, streamId, 0)
 
 	if frame.FrameType != FrameTypeStreamEnd {
 		t.Errorf("Expected STREAM_END frame type, got %v", frame.FrameType)

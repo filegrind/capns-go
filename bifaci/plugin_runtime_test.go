@@ -67,7 +67,7 @@ func bytesToFrameChannel(payload []byte) <-chan Frame {
 		}
 
 		// STREAM_END
-		ch <- *NewStreamEnd(requestID, streamID)
+		ch <- *NewStreamEnd(requestID, streamID, 1)
 
 		// END
 		ch <- *NewEnd(requestID, nil)
@@ -2070,7 +2070,7 @@ func Test363CBORModeChunkedContent(t *testing.T) {
 	}
 
 	// Send STREAM_END and END
-	frameChan <- *NewStreamEnd(requestID, streamID)
+	frameChan <- *NewStreamEnd(requestID, streamID, seq)
 	frameChan <- *NewEnd(requestID, nil)
 	close(frameChan)
 

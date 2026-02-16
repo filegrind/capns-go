@@ -120,10 +120,10 @@ func (fw *FrameWriter) WriteResponseWithChunking(requestId MessageId, streamId s
 	}
 
 	// Send CHUNKs if payload is large
+	chunkIndex := uint64(0)
 	if len(payload) > 0 {
 		offset := 0
 		seq := uint64(0)
-		chunkIndex := uint64(0)
 
 		for offset < len(payload) {
 			remaining := len(payload) - offset
@@ -143,7 +143,7 @@ func (fw *FrameWriter) WriteResponseWithChunking(requestId MessageId, streamId s
 	}
 
 	// Send STREAM_END
-	endStreamFrame := NewStreamEnd(requestId, streamId)
+	endStreamFrame := NewStreamEnd(requestId, streamId, chunkIndex)
 	if err := fw.WriteFrame(endStreamFrame); err != nil {
 		return err
 	}

@@ -826,7 +826,7 @@ func TestStreamEndRoundtrip(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-end-456"
 
-	original := NewStreamEnd(reqId, streamId)
+	original := NewStreamEnd(reqId, streamId, 0)
 	encoded, err := EncodeFrame(original)
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)

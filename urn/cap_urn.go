@@ -421,19 +421,15 @@ func (c *CapUrn) Accepts(request *CapUrn) bool {
 	// "media:" on the PATTERN side means "I accept any input" — skip check.
 	// "media:" on the INSTANCE side is just the least specific — still check.
 	if c.inSpec != "media:" {
-		capIn, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
+		capIn, err := NewMediaUrnFromString(c.inSpec)
 		if err != nil {
-			panic(fmt.Sprintf("CU2: cap in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
+			panic(fmt.Sprintf("CU2: cap in_spec '%s' is not a valid MediaUrn: %v", c.inSpec, err))
 		}
-		requestIn, err := taggedurn.NewTaggedUrnFromString(request.inSpec)
+		requestIn, err := NewMediaUrnFromString(request.inSpec)
 		if err != nil {
-			panic(fmt.Sprintf("CU2: request in_spec '%s' is not a valid media URN: %v", request.inSpec, err))
+			panic(fmt.Sprintf("CU2: request in_spec '%s' is not a valid MediaUrn: %v", request.inSpec, err))
 		}
-		accepts, err := capIn.Accepts(requestIn)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec matching: %v", err))
-		}
-		if !accepts {
+		if !capIn.Accepts(requestIn) {
 			return false
 		}
 	}
@@ -442,19 +438,15 @@ func (c *CapUrn) Accepts(request *CapUrn) bool {
 	// "media:" on the PATTERN side means "I accept any output" — skip check.
 	// "media:" on the INSTANCE side is just the least specific — still check.
 	if c.outSpec != "media:" {
-		capOut, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
+		capOut, err := NewMediaUrnFromString(c.outSpec)
 		if err != nil {
-			panic(fmt.Sprintf("CU2: cap out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
+			panic(fmt.Sprintf("CU2: cap out_spec '%s' is not a valid MediaUrn: %v", c.outSpec, err))
 		}
-		requestOut, err := taggedurn.NewTaggedUrnFromString(request.outSpec)
+		requestOut, err := NewMediaUrnFromString(request.outSpec)
 		if err != nil {
-			panic(fmt.Sprintf("CU2: request out_spec '%s' is not a valid media URN: %v", request.outSpec, err))
+			panic(fmt.Sprintf("CU2: request out_spec '%s' is not a valid MediaUrn: %v", request.outSpec, err))
 		}
-		conforms, err := capOut.ConformsTo(requestOut)
-		if err != nil {
-			panic(fmt.Sprintf("CU2: media URN prefix mismatch in direction spec matching: %v", err))
-		}
-		if !conforms {
+		if !capOut.ConformsTo(requestOut) {
 			return false
 		}
 	}
@@ -508,18 +500,18 @@ func (c *CapUrn) Specificity() int {
 	count := 0
 	// "media:" is the wildcard (contributes 0 to specificity)
 	if c.inSpec != "media:" {
-		inParsed, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
+		inMedia, err := NewMediaUrnFromString(c.inSpec)
 		if err != nil {
-			panic(fmt.Sprintf("CU2: in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
+			panic(fmt.Sprintf("CU2: in_spec '%s' is not a valid MediaUrn: %v", c.inSpec, err))
 		}
-		count += len(inParsed.AllTags())
+		count += inMedia.Specificity()
 	}
 	if c.outSpec != "media:" {
-		outParsed, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
+		outMedia, err := NewMediaUrnFromString(c.outSpec)
 		if err != nil {
-			panic(fmt.Sprintf("CU2: out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
+			panic(fmt.Sprintf("CU2: out_spec '%s' is not a valid MediaUrn: %v", c.outSpec, err))
 		}
-		count += len(outParsed.AllTags())
+		count += outMedia.Specificity()
 	}
 	// Count non-wildcard tags
 	for _, value := range c.tags {

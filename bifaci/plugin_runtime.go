@@ -385,7 +385,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 							}
 
 							// STREAM_END
-							endStreamFrame := NewStreamEnd(requestID, entry.streamID)
+							endStreamFrame := NewStreamEnd(requestID, entry.streamID, uint64(len(entry.stream.chunks)))
 							framesChan <- *endStreamFrame
 						}
 
@@ -693,7 +693,7 @@ func (pr *PluginRuntime) runCLIMode(args []string) error {
 			framesChan <- *chunkFrame
 
 			// STREAM_END
-			endStreamFrame := NewStreamEnd(requestID, streamID)
+			endStreamFrame := NewStreamEnd(requestID, streamID, 1)
 			framesChan <- *endStreamFrame
 		}
 
@@ -1082,7 +1082,7 @@ func (e *threadSafeEmitter) Finalize() {
 	}
 
 	// STREAM_END: Close this stream
-	streamEndFrame := NewStreamEnd(e.requestID, e.streamID)
+	streamEndFrame := NewStreamEnd(e.requestID, e.streamID, e.chunkIndex)
 	if err := e.writer.WriteFrame(streamEndFrame); err != nil {
 		fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write STREAM_END: %v\n", err)
 		return
@@ -1223,7 +1223,7 @@ func (p *peerInvokerImpl) Invoke(capUrn string, arguments []cap.CapArgumentValue
 		}
 
 		// STREAM_END
-		endFrame := NewStreamEnd(requestID, streamID)
+		endFrame := NewStreamEnd(requestID, streamID, chunkIndex)
 		if err := p.writer.WriteFrame(endFrame); err != nil {
 			p.pendingRequests.Delete(requestID.ToString())
 			return nil, fmt.Errorf("failed to send STREAM_END: %w", err)

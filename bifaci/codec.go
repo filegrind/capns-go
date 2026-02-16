@@ -23,6 +23,10 @@ const (
 	keyCap         = 10 // cap (tstr, optional - cap URN for requests)
 	keyStreamId    = 11 // stream_id (tstr, optional - stream ID for multiplexed streaming)
 	keyMediaUrn    = 12 // media_urn (tstr, optional - media URN for stream type)
+	keyRoutingId   = 13 // routing_id (bytes[16] or uint, optional - relay routing)
+	keyChunkIndex  = 14 // chunk_index (u64, REQUIRED for CHUNK frames)
+	keyChunkCount  = 15 // chunk_count (u64, REQUIRED for STREAM_END frames)
+	keyChecksum    = 16 // checksum (u64, REQUIRED for CHUNK frames - FNV-1a hash)
 )
 
 // EncodeFrame encodes a Frame to CBOR bytes using integer keys (matches Rust)
@@ -93,6 +97,30 @@ func EncodeFrame(frame *Frame) ([]byte, error) {
 	// 12: media_urn (optional - for STREAM_START frames)
 	if frame.MediaUrn != nil && *frame.MediaUrn != "" {
 		m[keyMediaUrn] = *frame.MediaUrn
+	}
+
+	// 13: routing_id (optional - for relay routing)
+	if frame.RoutingId != nil {
+		if frame.RoutingId.IsUuid() {
+			m[keyRoutingId] = frame.RoutingId.uuidBytes
+		} else if frame.RoutingId.uintValue != nil {
+			m[keyRoutingId] = *frame.RoutingId.uintValue
+		}
+	}
+
+	// 14: chunk_index (REQUIRED for CHUNK frames)
+	if frame.ChunkIndex != nil {
+		m[keyChunkIndex] = *frame.ChunkIndex
+	}
+
+	// 15: chunk_count (REQUIRED for STREAM_END frames)
+	if frame.ChunkCount != nil {
+		m[keyChunkCount] = *frame.ChunkCount
+	}
+
+	// 16: checksum (REQUIRED for CHUNK frames)
+	if frame.Checksum != nil {
+		m[keyChecksum] = *frame.Checksum
 	}
 
 	return cbor.Marshal(m)
@@ -234,6 +262,88 @@ func DecodeFrame(data []byte) (*Frame, error) {
 	if mediaUrnVal, ok := m[keyMediaUrn]; ok {
 		if mediaUrn, ok := mediaUrnVal.(string); ok {
 			frame.MediaUrn = &mediaUrn
+		}
+	}
+
+	// 13: routing_id (optional - for relay routing)
+	if routingIdVal, ok := m[keyRoutingId]; ok {
+		switch v := routingIdVal.(type) {
+		case []byte:
+			if len(v) == 16 {
+				rid, err := NewMessageIdFromUuid(v)
+				if err == nil {
+					frame.RoutingId = &rid
+				}
+			}
+		case uint64:
+			rid := NewMessageIdFromUint(v)
+			frame.RoutingId = &rid
+		}
+	}
+
+	// 14: chunk_index (REQUIRED for CHUNK frames)
+	if chunkIndexVal, ok := m[keyChunkIndex]; ok {
+		switch v := chunkIndexVal.(type) {
+		case uint64:
+			frame.ChunkIndex = &v
+		case int64:
+			u := uint64(v)
+			frame.ChunkIndex = &u
+		case int:
+			u := uint64(v)
+			frame.ChunkIndex = &u
+		case uint:
+			u := uint64(v)
+			frame.ChunkIndex = &u
+		}
+	}
+
+	// 15: chunk_count (REQUIRED for STREAM_END frames)
+	if chunkCountVal, ok := m[keyChunkCount]; ok {
+		switch v := chunkCountVal.(type) {
+		case uint64:
+			frame.ChunkCount = &v
+		case int64:
+			u := uint64(v)
+			frame.ChunkCount = &u
+		case int:
+			u := uint64(v)
+			frame.ChunkCount = &u
+		case uint:
+			u := uint64(v)
+			frame.ChunkCount = &u
+		}
+	}
+
+	// 16: checksum (REQUIRED for CHUNK frames)
+	if checksumVal, ok := m[keyChecksum]; ok {
+		switch v := checksumVal.(type) {
+		case uint64:
+			frame.Checksum = &v
+		case int64:
+			u := uint64(v)
+			frame.Checksum = &u
+		case int:
+			u := uint64(v)
+			frame.Checksum = &u
+		case uint:
+			u := uint64(v)
+			frame.Checksum = &u
+		}
+	}
+
+	// Validate required fields based on frame type
+	if frame.FrameType == FrameTypeChunk {
+		if frame.ChunkIndex == nil {
+			return nil, errors.New("CHUNK frame missing required field: chunk_index")
+		}
+		if frame.Checksum == nil {
+			return nil, errors.New("CHUNK frame missing required field: checksum")
+		}
+	}
+	if frame.FrameType == FrameTypeStreamEnd {
+		if frame.ChunkCount == nil {
+			return nil, errors.New("STREAM_END frame missing required field: chunk_count")
 		}
 	}
 

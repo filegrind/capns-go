@@ -172,8 +172,10 @@ type Frame struct {
 	Offset      *uint64                // Byte offset in chunked stream
 	Eof         *bool                  // End of stream marker
 	Cap         *string                // Cap URN (for REQ frames)
-	ChunkIndex  *uint64                // Chunk index within stream (required for CHUNK frames)
-	Checksum    *uint64                // Payload checksum (CRC64 of payload bytes)
+	RoutingId   *MessageId             // Routing ID for relay (optional)
+	ChunkIndex  *uint64                // Chunk index within stream (REQUIRED for CHUNK frames)
+	ChunkCount  *uint64                // Total chunk count (REQUIRED for STREAM_END frames)
+	Checksum    *uint64                // Payload checksum (FNV-1a hash, REQUIRED for CHUNK frames)
 }
 
 // New creates a new frame with required fields (matches Rust Frame::new)
@@ -236,11 +238,13 @@ func NewStreamStart(reqId MessageId, streamId string, mediaUrn string) *Frame {
 // Arguments:
 //   - reqId: The request ID this stream belongs to
 //   - streamId: The stream being ended
+//   - chunkCount: Total number of chunks sent in this stream (by source's reckoning)
 //
 // (matches Rust Frame::stream_end)
-func NewStreamEnd(reqId MessageId, streamId string) *Frame {
+func NewStreamEnd(reqId MessageId, streamId string, chunkCount uint64) *Frame {
 	frame := newFrame(FrameTypeStreamEnd, reqId)
 	frame.StreamId = &streamId
+	frame.ChunkCount = &chunkCount
 	return frame
 }
 

@@ -304,7 +304,7 @@ func TestRouteContinuationByReqId(t *testing.T) {
 		payload := []byte("payload-data")
 		checksum := ComputeChecksum(payload)
 		writer.WriteFrame(NewChunk(reqId, "arg-0", 0, payload, 0, checksum))
-		writer.WriteFrame(NewStreamEnd(reqId, "arg-0"))
+		writer.WriteFrame(NewStreamEnd(reqId, "arg-0", 1))
 		writer.WriteFrame(NewEnd(reqId, nil))
 
 		// Read response
@@ -435,7 +435,7 @@ func TestPluginFramesForwardedToRelay(t *testing.T) {
 			payload := []byte("data")
 			checksum := ComputeChecksum(payload)
 			w.WriteFrame(NewChunk(reqId, "output", 0, payload, 0, checksum))
-			w.WriteFrame(NewStreamEnd(reqId, "output"))
+			w.WriteFrame(NewStreamEnd(reqId, "output", 1))
 			w.WriteFrame(NewEnd(reqId, nil))
 		})
 		pluginReadP.Close()
