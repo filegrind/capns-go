@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/filegrind/capns-go/cap"
+	"github.com/filegrind/capns-go/urn"
 	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
@@ -46,8 +48,8 @@ func NewRegistryError(message string) *CapMatrixError {
 // capSetEntry represents a registered capability host
 type capSetEntry struct {
 	name         string
-	host         CapSet
-	capabilities []*Cap
+	host         cap.CapSet
+	capabilities []*cap.Cap
 }
 
 // CapMatrix provides unified registry for cap sets (providers and plugins)
@@ -63,70 +65,70 @@ func NewCapMatrix() *CapMatrix {
 }
 
 // RegisterCapSet registers a capability host with its supported capabilities
-func (r *CapMatrix) RegisterCapSet(name string, host CapSet, capabilities []*Cap) error {
+func (r *CapMatrix) RegisterCapSet(name string, host cap.CapSet, capabilities []*cap.Cap) error {
 	entry := &capSetEntry{
 		name:         name,
 		host:         host,
 		capabilities: capabilities,
 	}
-	
+
 	r.sets[name] = entry
 	return nil
 }
 
 // FindCapSets finds cap sets that can handle the requested capability
 // Uses subset matching: host capabilities must be a subset of or match the request
-func (r *CapMatrix) FindCapSets(requestUrn string) ([]CapSet, error) {
-	request, err := NewCapUrnFromString(requestUrn)
+func (r *CapMatrix) FindCapSets(requestUrn string) ([]cap.CapSet, error) {
+	request, err := urn.NewCapUrnFromString(requestUrn)
 	if err != nil {
 		return nil, NewInvalidUrnError(requestUrn, err.Error())
 	}
-	
-	var matchingHosts []CapSet
-	
+
+	var matchingHosts []cap.CapSet
+
 	for _, entry := range r.sets {
 		for _, cap := range entry.capabilities {
-			capUrn, err := NewCapUrnFromString(cap.Urn.String())
+			capUrn, err := urn.NewCapUrnFromString(cap.Urn.String())
 			if err != nil {
 				return nil, NewRegistryError(
 					fmt.Sprintf("Invalid capability URN in registry for host %s: %s", entry.name, err.Error()),
 				)
 			}
-			
+
 			if capUrn.Accepts(request) {
 				matchingHosts = append(matchingHosts, entry.host)
 				break // Found a matching capability for this host, no need to check others
 			}
 		}
 	}
-	
+
 	if len(matchingHosts) == 0 {
 		return nil, NewNoSetsFoundError(requestUrn)
 	}
-	
+
 	return matchingHosts, nil
 }
 
 // FindBestCapSet finds the best capability host and cap definition for the request using specificity ranking
-func (r *CapMatrix) FindBestCapSet(requestUrn string) (CapSet, *Cap, error) {
-	request, err := NewCapUrnFromString(requestUrn)
+func (r *CapMatrix) FindBestCapSet(requestUrn string) (cap.CapSet, *cap.Cap, error) {
+	request, err := urn.NewCapUrnFromString(requestUrn)
 	if err != nil {
 		return nil, nil, NewInvalidUrnError(requestUrn, err.Error())
 	}
-	
-	var bestHost CapSet
-	var bestCap *Cap
+
+	var bestHost cap.CapSet
+	var bestCap *cap.Cap
 	var bestSpecificity int = -1
-	
+
 	for _, entry := range r.sets {
 		for _, cap := range entry.capabilities {
-			capUrn, err := NewCapUrnFromString(cap.Urn.String())
+			capUrn, err := urn.NewCapUrnFromString(cap.Urn.String())
 			if err != nil {
 				return nil, nil, NewRegistryError(
 					fmt.Sprintf("Invalid capability URN in registry for host %s: %s", entry.name, err.Error()),
 				)
 			}
-			
+
 			if capUrn.Accepts(request) {
 				specificity := capUrn.Specificity()
 				if bestSpecificity == -1 || specificity > bestSpecificity {
@@ -138,11 +140,11 @@ func (r *CapMatrix) FindBestCapSet(requestUrn string) (CapSet, *Cap, error) {
 			}
 		}
 	}
-	
+
 	if bestHost == nil {
 		return nil, nil, NewNoSetsFoundError(requestUrn)
 	}
-	
+
 	return bestHost, bestCap, nil
 }
 
@@ -156,8 +158,8 @@ func (r *CapMatrix) GetHostNames() []string {
 }
 
 // GetAllCapabilities returns all capabilities from all registered sets
-func (r *CapMatrix) GetAllCapabilities() []*Cap {
-	var capabilities []*Cap
+func (r *CapMatrix) GetAllCapabilities() []*cap.Cap {
+	var capabilities []*cap.Cap
 	for _, entry := range r.sets {
 		capabilities = append(capabilities, entry.capabilities...)
 	}
@@ -190,9 +192,9 @@ func (r *CapMatrix) Clear() {
 
 // BestCapSetMatch represents the result of finding the best match across registries
 type BestCapSetMatch struct {
-	Cap          *Cap   // The Cap definition that matched
-	Specificity  int    // The specificity score of the match
-	RegistryName string // The name of the registry that provided this match
+	Cap          *cap.Cap // The Cap definition that matched
+	Specificity  int      // The specificity score of the match
+	RegistryName string   // The name of the registry that provided this match
 }
 
 // registryEntry holds a named registry for CapBlock
@@ -274,7 +276,7 @@ func (c *CapBlock) GetRegistryNames() []string {
 // This is the main entry point for capability lookup - preserves the can().call() pattern.
 // Finds the best (most specific) match across all child registries and returns
 // a CapCaller ready to execute the capability.
-func (c *CapBlock) Can(capUrn string) (*CapCaller, error) {
+func (c *CapBlock) Can(capUrn string) (*cap.CapCaller, error) {
 	// Find the best match to get the cap definition
 	bestMatch, err := c.FindBestCapSet(capUrn)
 	if err != nil {
@@ -292,7 +294,7 @@ func (c *CapBlock) Can(capUrn string) (*CapCaller, error) {
 		mu:         &c.mu,
 	}
 
-	return NewCapCaller(capUrn, compositeHost, bestMatch.Cap), nil
+	return cap.NewCapCaller(capUrn, compositeHost, bestMatch.Cap), nil
 }
 
 // FindBestCapSet finds the best capability host across ALL child registries.
@@ -300,7 +302,7 @@ func (c *CapBlock) Can(capUrn string) (*CapCaller, error) {
 // Returns the cap definition and specificity of the best match.
 // On specificity tie, returns the match from the first registry (priority order).
 func (c *CapBlock) FindBestCapSet(requestUrn string) (*BestCapSetMatch, error) {
-	request, err := NewCapUrnFromString(requestUrn)
+	request, err := urn.NewCapUrnFromString(requestUrn)
 	if err != nil {
 		return nil, NewInvalidUrnError(requestUrn, err.Error())
 	}
@@ -345,8 +347,8 @@ func (c *CapBlock) AcceptsRequest(requestUrn string) bool {
 
 // findBestInRegistry finds the best match within a single registry
 // Returns (Cap, specificity) for the best match, or (nil, 0) if no match
-func (c *CapBlock) findBestInRegistry(registry *CapMatrix, request *CapUrn) (*Cap, int) {
-	var bestCap *Cap
+func (c *CapBlock) findBestInRegistry(registry *CapMatrix, request *CapUrn) (*cap.Cap, int) {
+	var bestCap *cap.Cap
 	bestSpecificity := -1
 
 	for _, entry := range registry.sets {
@@ -373,16 +375,16 @@ func (c *CapBlock) findBestInRegistry(registry *CapMatrix, request *CapUrn) (*Ca
 func (cs *CompositeCapSet) ExecuteCap(
 	ctx context.Context,
 	capUrn string,
-	arguments []CapArgumentValue,
-) (*HostResult, error) {
+	arguments []cap.CapArgumentValue,
+) (*cap.HostResult, error) {
 	// Parse the request URN
-	request, err := NewCapUrnFromString(capUrn)
+	request, err := urn.NewCapUrnFromString(capUrn)
 	if err != nil {
 		return nil, fmt.Errorf("invalid cap URN '%s': %w", capUrn, err)
 	}
 
 	// Find the best matching CapSet across all registries
-	var bestHost CapSet
+	var bestHost cap.CapSet
 	bestSpecificity := -1
 
 	for _, entry := range cs.registries {
@@ -421,11 +423,11 @@ func (cs *CompositeCapSet) Graph() *CapGraph {
 // CapGraphEdge represents a conversion from one MediaSpec to another.
 // Each edge corresponds to a capability that can transform data.
 type CapGraphEdge struct {
-	FromSpec     string // The input MediaSpec ID (e.g., "media:binary")
-	ToSpec       string // The output MediaSpec ID (e.g., "media:string")
-	Cap          *Cap   // The capability that performs this conversion
-	RegistryName string // The registry that provided this capability
-	Specificity  int    // Specificity score for ranking multiple paths
+	FromSpec     string   // The input MediaSpec ID (e.g., "media:binary")
+	ToSpec       string   // The output MediaSpec ID (e.g., "media:string")
+	Cap          *cap.Cap // The capability that performs this conversion
+	RegistryName string   // The registry that provided this capability
+	Specificity  int      // Specificity score for ranking multiple paths
 }
 
 // CapGraphStats provides statistics about a capability graph.
@@ -457,10 +459,10 @@ func NewCapGraph() *CapGraph {
 
 // AddCap adds a capability as an edge in the graph.
 // The cap's in_spec becomes the source node and out_spec becomes the target node.
-func (g *CapGraph) AddCap(cap *Cap, registryName string) {
-	fromSpec := cap.Urn.InSpec()
-	toSpec := cap.Urn.OutSpec()
-	specificity := cap.Urn.Specificity()
+func (g *CapGraph) AddCap(capability *cap.Cap, registryName string) {
+	fromSpec := capability.Urn.InSpec()
+	toSpec := capability.Urn.OutSpec()
+	specificity := capability.Urn.Specificity()
 
 	// Add nodes
 	g.nodes[fromSpec] = true
@@ -471,7 +473,7 @@ func (g *CapGraph) AddCap(cap *Cap, registryName string) {
 	edge := CapGraphEdge{
 		FromSpec:     fromSpec,
 		ToSpec:       toSpec,
-		Cap:          cap,
+		Cap:          capability,
 		RegistryName: registryName,
 		Specificity:  specificity,
 	}

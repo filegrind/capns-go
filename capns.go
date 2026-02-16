@@ -1,0 +1,68 @@
+// Package capns provides flat re-exports of all submodules
+// This file should be created as capns.go in the root after reorganization
+// Matches Rust's src/lib.rs flat pub use re-exports
+package capns
+
+// Re-export URN module
+import (
+	"github.com/filegrind/capns-go/bifaci"
+	"github.com/filegrind/capns-go/cap"
+	"github.com/filegrind/capns-go/media"
+	"github.com/filegrind/capns-go/standard"
+	"github.com/filegrind/capns-go/urn"
+)
+
+// URN types and functions
+type CapUrn = urn.CapUrn
+type MediaUrn = urn.MediaUrn
+type CapMatrix = urn.CapMatrix
+type CapUrnError = urn.CapUrnError
+type MediaUrnError = urn.MediaUrnError
+
+var NewCapUrnFromString = urn.NewCapUrnFromString
+var NewCapUrnFromTags = urn.NewCapUrnFromTags
+var NewCapUrn = urn.NewCapUrn
+var NewMediaUrnFromString = urn.NewMediaUrnFromString
+var NewMediaUrnFromTags = urn.NewMediaUrnFromTags
+
+// Cap types and functions
+type Cap = cap.Cap
+type CapDefinition = cap.CapDefinition
+type CapArgument = cap.CapArgument
+type CapArgumentValue = cap.CapArgumentValue
+type CapSet = cap.CapSet
+type CapCaller = cap.CapCaller
+type CapManifest = cap.CapManifest
+type CapResponse = cap.CapResponse
+
+// Media types
+type MediaSpec = media.MediaSpec
+type MediaRegistry = media.MediaRegistry
+
+// Bifaci (protocol) types - core frame types
+type Frame = bifaci.Frame
+type FrameType = bifaci.FrameType
+type MessageId = bifaci.MessageId
+type Limits = bifaci.Limits
+type FrameReader = bifaci.FrameReader
+type FrameWriter = bifaci.FrameWriter
+type PluginRuntime = bifaci.PluginRuntime
+type StreamEmitter = bifaci.StreamEmitter
+type PeerInvoker = bifaci.PeerInvoker
+type HandlerFunc = bifaci.HandlerFunc
+
+var NewMessageIdFromUuid = bifaci.NewMessageIdFromUuid
+var NewMessageIdFromUint = bifaci.NewMessageIdFromUint
+var NewMessageIdRandom = bifaci.NewMessageIdRandom
+var NewFrameReader = bifaci.NewFrameReader
+var NewFrameWriter = bifaci.NewFrameWriter
+var NewPluginRuntime = bifaci.NewPluginRuntime
+
+// Standard caps
+var CAP_IDENTITY = standard.CAP_IDENTITY
+var CAP_DISCARD = standard.CAP_DISCARD
+
+// Protocol constants
+const ProtocolVersion = bifaci.ProtocolVersion
+const DefaultMaxFrame = bifaci.DefaultMaxFrame
+const DefaultMaxChunk = bifaci.DefaultMaxChunk
