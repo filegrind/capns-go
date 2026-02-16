@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"sync"
 
-	"github.com/filegrind/capns-go/cap"
 	"github.com/filegrind/capns-go/urn"
 )
 
@@ -345,8 +344,8 @@ func (h *PluginHost) handleRelayFrame(frame *Frame, relayWriter *FrameWriter) er
 	switch frame.FrameType {
 	case FrameTypeReq:
 		capUrn := ""
-		if frame.Cap.Cap != nil {
-			capUrn = *frame.Cap.Cap
+		if frame.Cap != nil {
+			capUrn = *frame.Cap
 		}
 
 		pluginIdx, found := h.findPluginForCapLocked(capUrn)

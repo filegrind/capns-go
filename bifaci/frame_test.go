@@ -227,8 +227,8 @@ func TestFrameReq(t *testing.T) {
 	if frame.FrameType != FrameTypeReq {
 		t.Errorf("Expected REQ frame type, got %v", frame.FrameType)
 	}
-	if frame.Cap.Cap == nil || *frame.Cap.Cap != cap {
-		t.Errorf("Expected cap %s, got %v", cap, frame.Cap.Cap)
+	if frame.Cap == nil || *frame.Cap != cap {
+		t.Errorf("Expected cap %s, got %v", cap, frame.Cap)
 	}
 	if string(frame.Payload) != string(payload) {
 		t.Error("Payload mismatch")
@@ -355,7 +355,7 @@ func TestFrameHeartbeat(t *testing.T) {
 	if len(frame.Payload) != 0 {
 		t.Error("HEARTBEAT should have empty payload")
 	}
-	if frame.Cap.Cap != nil {
+	if frame.Cap != nil {
 		t.Error("HEARTBEAT should have no cap")
 	}
 }
@@ -433,7 +433,7 @@ func TestFrameNewDefaults(t *testing.T) {
 	if frame.Eof != nil {
 		t.Error("Eof should be nil")
 	}
-	if frame.Cap.Cap != nil {
+	if frame.Cap != nil {
 		t.Error("cap.Cap should be nil")
 	}
 }

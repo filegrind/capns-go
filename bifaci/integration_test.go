@@ -9,10 +9,22 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/filegrind/capns-go/cap"
+	"github.com/filegrind/capns-go/media"
+	"github.com/filegrind/capns-go/standard"
+	"github.com/filegrind/capns-go/urn"
 	cbor2 "github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Helper to create test registry
+func createTestRegistry(t *testing.T) *media.MediaUrnRegistry {
+	t.Helper()
+	registry, err := media.NewMediaUrnRegistry()
+	require.NoError(t, err)
+	return registry
+}
 
 // Test helper for integration tests - use proper media URNs with tags
 func intTestUrn(tags string) string {
@@ -22,32 +34,52 @@ func intTestUrn(tags string) string {
 	return `cap:in="media:void";out="media:form=map;textable";` + tags
 }
 
+// MockCapSet implements CapSet for testing
+type MockCapSet struct {
+	expectedCapUrn string
+	returnResult   *cap.HostResult
+	returnError    error
+}
+
+func (m *MockCapSet) ExecuteCap(
+	ctx context.Context,
+	capUrn string,
+	arguments []cap.CapArgumentValue,
+) (*cap.HostResult, error) {
+	if m.expectedCapUrn != "" {
+		if capUrn != m.expectedCapUrn {
+			return nil, assert.AnError
+		}
+	}
+	return m.returnResult, m.returnError
+}
+
 // TestIntegrationVersionlessCapCreation verifies caps can be created without version fields
 func TestIntegrationVersionlessCapCreation(t *testing.T) {
 	// Test case 1: Create cap without version parameter
 	// Use type=data_processing key=value instead of flag
-	urn, err := urn.NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
+	capUrn, err := urn.NewCapUrnFromString(intTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
 
-	cap := NewCap(urn, "Data Transformer", "transform-command")
+	capDef := cap.NewCap(capUrn, "Data Transformer", "transform-command")
 
 	// Verify the cap has direction specs in canonical form
-	assert.Contains(t, cap.UrnString(), `in=media:void`)
-	assert.Contains(t, cap.UrnString(), `out="media:form=map;textable"`)
-	assert.Equal(t, "transform-command", cap.Command)
+	assert.Contains(t, capDef.UrnString(), `in=media:void`)
+	assert.Contains(t, capDef.UrnString(), `out="media:form=map;textable"`)
+	assert.Equal(t, "transform-command", capDef.Command)
 
 	// Test case 2: Create cap with description but no version
-	cap2 := NewCapWithDescription(urn, "Data Transformer", "transform-command", "Transforms data")
-	assert.NotNil(t, cap2.CapDescription)
-	assert.Equal(t, "Transforms data", *cap2.CapDescription)
+	capDef2 := cap.NewCapWithDescription(capUrn, "Data Transformer", "transform-command", "Transforms data")
+	assert.NotNil(t, capDef2.CapDescription)
+	assert.Equal(t, "Transforms data", *capDef2.CapDescription)
 
 	// Test case 3: Verify caps can be compared without version
-	assert.True(t, cap.Equals(cap))
+	assert.True(t, capDef.Equals(capDef))
 
 	// Different caps should not be equal
 	urn2, _ := urn.NewCapUrnFromString(intTestUrn("op=generate;format=pdf"))
-	cap3 := NewCap(urn2, "PDF Generator", "generate-command")
-	assert.False(t, cap.Equals(cap3))
+	capDef3 := cap.NewCap(urn2, "PDF Generator", "generate-command")
+	assert.False(t, capDef.Equals(capDef3))
 }
 
 // TestIntegrationCaseInsensitiveUrns verifies URNs are case-insensitive
@@ -79,9 +111,9 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 	assert.False(t, urn1.HasTag("op", "TRANSFORM"))
 
 	// Test case 4: Builder preserves value case
-	urn3, err := NewCapUrnBuilder().
-		InSpec(MediaVoid).
-		OutSpec(MediaObject).
+	urn3, err := urn.NewCapUrnBuilder().
+		InSpec(standard.MediaVoid).
+		OutSpec(standard.MediaObject).
 		Tag("OP", "Transform").
 		Tag("Format", "JSON").
 		Build()
@@ -93,44 +125,44 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 
 // TestIntegrationCallerAndResponseSystem verifies the caller and response system
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
-	registry := testRegistry(t)
+	registry := createTestRegistry(t)
 	// Setup test cap definition with media URNs - use proper tags
 	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`)
 	require.NoError(t, err)
 
-	capDef := NewCap(urn, "Metadata Extractor", "extract-metadata")
-	capDef.SetOutput(NewCapOutput(MediaObject, "Extracted metadata"))
+	capDef := cap.NewCap(urn, "Metadata Extractor", "extract-metadata")
+	capDef.SetOutput(cap.NewCapOutput(standard.MediaObject, "Extracted metadata"))
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs([]MediaSpecDef{
-		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
-		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
+	capDef.SetMediaSpecs([]media.MediaSpecDef{
+		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
 	})
 
 	// Add required argument using new architecture
 	cliFlag := "--input"
 	pos := 0
 	capDef.AddArg(cap.CapArg{
-		MediaUrn:       MediaString,
+		MediaUrn:       standard.MediaString,
 		Required:       true,
-		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		Sources:        []cap.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "Input file path",
 	})
 
 	// Mock host that returns JSON
 	mockHost := &MockCapSet{
-		returnResult: &HostResult{
+		returnResult: &cap.HostResult{
 			TextOutput: `{"title": "Test Document", "pages": 10}`,
 		},
 	}
 
 	// Create caller
-	caller := NewCapCaller(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`, mockHost, capDef)
 
 	// Test call with unified argument
 	ctx := context.Background()
 	response, err := caller.Call(ctx, []cap.CapArgumentValue{
-		NewCapArgumentValueFromStr(MediaString, "test.pdf"),
+		cap.NewCapArgumentValueFromStr(standard.MediaString, "test.pdf"),
 	}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
@@ -155,28 +187,28 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 
 // TestIntegrationBinaryCapHandling verifies binary cap handling
 func TestIntegrationBinaryCapHandling(t *testing.T) {
-	registry := testRegistry(t)
+	registry := createTestRegistry(t)
 	// Setup binary cap - use raw type with binary tag
 	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`)
 	require.NoError(t, err)
 
-	capDef := NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
-	capDef.SetOutput(NewCapOutput(MediaBinary, "Generated thumbnail"))
+	capDef := cap.NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
+	capDef.SetOutput(cap.NewCapOutput(standard.MediaBinary, "Generated thumbnail"))
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs([]MediaSpecDef{
-		{Urn: MediaBinary, MediaType: "application/octet-stream"},
+	capDef.SetMediaSpecs([]media.MediaSpecDef{
+		{Urn: standard.MediaBinary, MediaType: "application/octet-stream"},
 	})
 
 	// Mock host that returns binary data
 	pngHeader := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 	mockHost := &MockCapSet{
-		returnResult: &HostResult{
+		returnResult: &cap.HostResult{
 			BinaryOutput: pngHeader,
 		},
 	}
 
-	caller := NewCapCaller(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`, mockHost, capDef)
 
 	// Test binary response
 	ctx := context.Background()
@@ -197,42 +229,42 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 
 // TestIntegrationTextCapHandling verifies text cap handling
 func TestIntegrationTextCapHandling(t *testing.T) {
-	registry := testRegistry(t)
+	registry := createTestRegistry(t)
 	// Setup text cap - use proper tags
 	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`)
 	require.NoError(t, err)
 
-	capDef := NewCap(urn, "Text Formatter", "format-text")
-	capDef.SetOutput(NewCapOutput(MediaString, "Formatted text"))
+	capDef := cap.NewCap(urn, "Text Formatter", "format-text")
+	capDef.SetOutput(cap.NewCapOutput(standard.MediaString, "Formatted text"))
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs([]MediaSpecDef{
-		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
+	capDef.SetMediaSpecs([]media.MediaSpecDef{
+		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
 	})
 
 	// Add required argument using new architecture
 	cliFlag := "--input"
 	pos := 0
 	capDef.AddArg(cap.CapArg{
-		MediaUrn:       MediaString,
+		MediaUrn:       standard.MediaString,
 		Required:       true,
-		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		Sources:        []cap.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "Input text",
 	})
 
 	// Mock host that returns text
 	mockHost := &MockCapSet{
-		returnResult: &HostResult{
+		returnResult: &cap.HostResult{
 			TextOutput: "Formatted output text",
 		},
 	}
 
-	caller := NewCapCaller(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`, mockHost, capDef)
 
 	// Test text response
 	ctx := context.Background()
 	response, err := caller.Call(ctx, []cap.CapArgumentValue{
-		NewCapArgumentValueFromStr(MediaString, "input text"),
+		cap.NewCapArgumentValueFromStr(standard.MediaString, "input text"),
 	}, registry)
 	require.NoError(t, err)
 	require.NotNil(t, response)
@@ -249,15 +281,15 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 
 // TestIntegrationCapWithMediaSpecs verifies caps with custom media specs
 func TestIntegrationCapWithMediaSpecs(t *testing.T) {
-	registry := testRegistry(t)
+	registry := createTestRegistry(t)
 	// Setup cap with custom media spec - use proper tags
 	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`)
 	require.NoError(t, err)
 
-	capDef := NewCap(urn, "Data Query", "query-data")
+	capDef := cap.NewCap(urn, "Data Query", "query-data")
 
 	// Add custom media spec with schema
-	capDef.AddMediaSpec(NewMediaSpecDefWithSchema(
+	capDef.AddMediaSpec(media.NewMediaSpecDefWithSchema(
 		"media:result;textable;form=map",
 		"application/json",
 		"https://example.com/schema/result",
@@ -274,16 +306,16 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 		},
 	))
 
-	capDef.SetOutput(NewCapOutput("media:result;textable;form=map", "Query result"))
+	capDef.SetOutput(cap.NewCapOutput("media:result;textable;form=map", "Query result"))
 
 	// Mock host
 	mockHost := &MockCapSet{
-		returnResult: &HostResult{
+		returnResult: &cap.HostResult{
 			TextOutput: `{"items": ["a", "b", "c"], "count": 3}`,
 		},
 	}
 
-	caller := NewCapCaller(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`, mockHost, capDef)
 
 	// Test call
 	ctx := context.Background()
@@ -301,33 +333,33 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 
 // TestIntegrationCapValidation verifies cap schema validation
 func TestIntegrationCapValidation(t *testing.T) {
-	registry := testRegistry(t)
-	coordinator := NewCapValidationCoordinator()
+	registry := createTestRegistry(t)
+	coordinator := cap.NewCapValidationCoordinator()
 
 	// Create a cap with arguments - use proper tags
 	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable";target=data`)
 	require.NoError(t, err)
 
-	capDef := NewCap(urn, "Data Processor", "process-data")
+	capDef := cap.NewCap(urn, "Data Processor", "process-data")
 
 	// Add mediaSpecs for resolution
-	capDef.SetMediaSpecs([]MediaSpecDef{
-		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
-		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
+	capDef.SetMediaSpecs([]media.MediaSpecDef{
+		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
 	})
 
 	// Add required string argument using new architecture
 	cliFlag1 := "--input"
 	pos1 := 0
 	capDef.AddArg(cap.CapArg{
-		MediaUrn:       MediaString,
+		MediaUrn:       standard.MediaString,
 		Required:       true,
-		Sources:        []ArgSource{{CliFlag: &cliFlag1}, {Position: &pos1}},
+		Sources:        []cap.ArgSource{{CliFlag: &cliFlag1}, {Position: &pos1}},
 		ArgDescription: "Input path",
 	})
 
 	// Set output
-	capDef.SetOutput(NewCapOutput(MediaObject, "Processing result"))
+	capDef.SetOutput(cap.NewCapOutput(standard.MediaObject, "Processing result"))
 
 	// Register cap
 	coordinator.RegisterCap(capDef)
@@ -343,26 +375,26 @@ func TestIntegrationCapValidation(t *testing.T) {
 
 // TestIntegrationMediaUrnResolution verifies media URN resolution
 func TestIntegrationMediaUrnResolution(t *testing.T) {
-	registry := testRegistry(t)
+	registry := createTestRegistry(t)
 
 	// mediaSpecs for resolution - no built-in resolution, must provide specs
-	mediaSpecs := []MediaSpecDef{
-		{Urn: MediaString, MediaType: "text/plain", ProfileURI: ProfileStr},
-		{Urn: MediaObject, MediaType: "application/json", ProfileURI: ProfileObj},
-		{Urn: MediaBinary, MediaType: "application/octet-stream"},
+	mediaSpecs := []media.MediaSpecDef{
+		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
+		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaBinary, MediaType: "application/octet-stream"},
 	}
 
 	// Test string media URN resolution
-	resolved, err := ResolveMediaUrn(MediaString, mediaSpecs, registry)
+	resolved, err := media.ResolveMediaUrn(standard.MediaString, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
-	assert.Equal(t, ProfileStr, resolved.ProfileURI)
+	assert.Equal(t, media.ProfileStr, resolved.ProfileURI)
 	assert.False(t, resolved.IsBinary())
 	assert.False(t, resolved.IsJSON())
 	assert.True(t, resolved.IsText())
 
 	// Test object media URN
-	resolved, err = ResolveMediaUrn(MediaObject, mediaSpecs, registry)
+	resolved, err = media.ResolveMediaUrn(standard.MediaObject, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.True(t, resolved.IsMap())
@@ -370,40 +402,40 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.False(t, resolved.IsJSON())
 
 	// Test binary media URN
-	resolved, err = ResolveMediaUrn(MediaBinary, mediaSpecs, registry)
+	resolved, err = media.ResolveMediaUrn(standard.MediaBinary, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.True(t, resolved.IsBinary())
 
 	// Test custom media URN resolution
-	customSpecs := []MediaSpecDef{
+	customSpecs := []media.MediaSpecDef{
 		{Urn: "media:custom;textable", MediaType: "text/html", ProfileURI: "https://example.com/schema/html"},
 	}
 
-	resolved, err = ResolveMediaUrn("media:custom;textable", customSpecs, registry)
+	resolved, err = media.ResolveMediaUrn("media:custom;textable", customSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/html", resolved.MediaType)
 	assert.Equal(t, "https://example.com/schema/html", resolved.ProfileURI)
 
 	// Test unknown media URN fails
-	_, err = ResolveMediaUrn("media:unknown", nil, registry)
+	_, err = media.ResolveMediaUrn("media:unknown", nil, registry)
 	assert.Error(t, err)
 }
 
-// TestIntegrationMediaSpecDefConstruction verifies MediaSpecDef construction
+// TestIntegrationMediaSpecDefConstruction verifies media.MediaSpecDef construction
 func TestIntegrationMediaSpecDefConstruction(t *testing.T) {
 	// Test basic construction
-	def := NewMediaSpecDef("media:test;textable", "text/plain", "https://capns.org/schema/str")
+	def := media.NewMediaSpecDef("media:test;textable", "text/plain", "https://capns.org/schema/str")
 	assert.Equal(t, "media:test;textable", def.Urn)
 	assert.Equal(t, "text/plain", def.MediaType)
 	assert.Equal(t, "https://capns.org/schema/str", def.ProfileURI)
 
 	// Test with title
-	defWithTitle := NewMediaSpecDefWithTitle("media:test;textable", "text/plain", "https://example.com/schema", "Test Title")
+	defWithTitle := media.NewMediaSpecDefWithTitle("media:test;textable", "text/plain", "https://example.com/schema", "Test Title")
 	assert.Equal(t, "Test Title", defWithTitle.Title)
 
 	// Test object form with schema
 	schema := map[string]interface{}{"type": "object"}
-	schemaDef := NewMediaSpecDefWithSchema("media:test;json", "application/json", "https://example.com/schema", schema)
+	schemaDef := media.NewMediaSpecDefWithSchema("media:test;json", "application/json", "https://example.com/schema", schema)
 	assert.NotNil(t, schemaDef.Schema)
 }
 
@@ -457,7 +489,7 @@ func TestHandshakeHostPlugin(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		assert.True(t, limits.MaxFrame > 0)
 		assert.True(t, limits.MaxChunk > 0)
@@ -468,7 +500,7 @@ func TestHandshakeHostPlugin(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	manifest, hostLimits, err := cbor.HandshakeInitiate(reader, writer)
+	manifest, hostLimits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 
 	// Verify manifest received
@@ -499,7 +531,7 @@ func TestRequestResponseSimple(t *testing.T) {
 		writer := NewFrameWriter(pluginWrite)
 
 		// Handshake
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -508,8 +540,8 @@ func TestRequestResponseSimple(t *testing.T) {
 		frame, err := reader.ReadFrame()
 		require.NoError(t, err)
 		assert.Equal(t, FrameTypeReq, frame.FrameType)
-		assert.NotNil(t, frame.Cap.Cap)
-		assert.Equal(t, "cap:in=media:;out=media:", *frame.Cap.Cap)
+		assert.NotNil(t, frame.Cap)
+		assert.Equal(t, "cap:in=media:;out=media:", *frame.Cap)
 		assert.Equal(t, []byte("hello"), frame.Payload)
 
 		// Send response
@@ -522,7 +554,7 @@ func TestRequestResponseSimple(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	manifest, limits, err := cbor.HandshakeInitiate(reader, writer)
+	manifest, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	assert.Equal(t, []byte(testCBORManifest), manifest)
 	reader.SetLimits(limits)
@@ -560,7 +592,7 @@ func TestStreamingChunks(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -593,7 +625,7 @@ func TestStreamingChunks(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -636,7 +668,7 @@ func TestHeartbeatFromHost(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -658,7 +690,7 @@ func TestHeartbeatFromHost(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -696,7 +728,7 @@ func TestPluginErrorResponse(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -715,7 +747,7 @@ func TestPluginErrorResponse(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -753,7 +785,7 @@ func TestLogFramesDuringRequest(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -782,7 +814,7 @@ func TestLogFramesDuringRequest(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -831,7 +863,7 @@ func TestLimitsNegotiation(t *testing.T) {
 		writer := NewFrameWriter(pluginWrite)
 
 		// Handshake
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		pluginLimits = limits
 	}()
@@ -840,7 +872,7 @@ func TestLimitsNegotiation(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, hostLimits, err := cbor.HandshakeInitiate(reader, writer)
+	_, hostLimits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -875,7 +907,7 @@ func TestBinaryPayloadRoundtrip(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -901,7 +933,7 @@ func TestBinaryPayloadRoundtrip(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -945,7 +977,7 @@ func TestMessageIdUniqueness(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -969,7 +1001,7 @@ func TestMessageIdUniqueness(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1002,7 +1034,7 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testCBORManifest))
 	require.NoError(t, err)
 
-	runtime.Register(CapIdentity,
+	runtime.Register(standard.CapIdentity,
 		func(frames <-chan Frame, emitter StreamEmitter, peer PeerInvoker) error {
 			payload, err := CollectFirstArg(frames)
 			if err != nil {
@@ -1017,7 +1049,7 @@ func TestPluginRuntimeHandlerRegistration(t *testing.T) {
 		})
 
 	// Exact match
-	assert.NotNil(t, runtime.FindHandler(CapIdentity))
+	assert.NotNil(t, runtime.FindHandler(standard.CapIdentity))
 	assert.NotNil(t, runtime.FindHandler(`cap:in="media:void";op=transform;out="media:void"`))
 
 	// Non-existent
@@ -1041,7 +1073,7 @@ func TestHeartbeatDuringStreaming(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1084,7 +1116,7 @@ func TestHeartbeatDuringStreaming(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1139,7 +1171,7 @@ func TestHostInitiatedHeartbeatNoPingPong(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1173,7 +1205,7 @@ func TestHostInitiatedHeartbeatNoPingPong(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1221,7 +1253,7 @@ func TestArgumentsRoundtrip(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1253,14 +1285,14 @@ func TestArgumentsRoundtrip(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
 
 	// Create arguments
 	args := []cap.CapArgumentValue{
-		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
+		cap.NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
 	}
 
 	// Encode arguments to CBOR
@@ -1296,7 +1328,7 @@ func TestPluginSuddenDisconnect(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1314,7 +1346,7 @@ func TestPluginSuddenDisconnect(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1350,7 +1382,7 @@ func TestEmptyPayloadRoundtrip(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1370,7 +1402,7 @@ func TestEmptyPayloadRoundtrip(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1406,7 +1438,7 @@ func TestEndFrameNoPayload(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1425,7 +1457,7 @@ func TestEndFrameNoPayload(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1462,7 +1494,7 @@ func TestStreamingSequenceNumbers(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1491,7 +1523,7 @@ func TestStreamingSequenceNumbers(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1534,7 +1566,7 @@ func TestRequestAfterShutdown(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		_, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		_, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 
 		// Close immediately
@@ -1546,7 +1578,7 @@ func TestRequestAfterShutdown(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1581,7 +1613,7 @@ func TestArgumentsMultiple(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1607,15 +1639,15 @@ func TestArgumentsMultiple(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
 
 	// Create multiple arguments
 	args := []cap.CapArgumentValue{
-		NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
-		NewCapArgumentValue("media:pdf;bytes", []byte{0x89, 0x50, 0x4E, 0x47}),
+		cap.NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
+		cap.NewCapArgumentValue("media:pdf;bytes", []byte{0x89, 0x50, 0x4E, 0x47}),
 	}
 
 	// Encode arguments to CBOR
@@ -1653,7 +1685,7 @@ func TestAutoChunkingReassembly(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1677,7 +1709,7 @@ func TestAutoChunkingReassembly(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1739,7 +1771,7 @@ func TestExactMaxChunkSingleEnd(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1760,7 +1792,7 @@ func TestExactMaxChunkSingleEnd(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1804,7 +1836,7 @@ func TestMaxChunkPlusOneSplitsIntoTwo(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1825,7 +1857,7 @@ func TestMaxChunkPlusOneSplitsIntoTwo(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)
@@ -1913,7 +1945,7 @@ func TestChunkingDataIntegrity3x(t *testing.T) {
 		reader := NewFrameReader(pluginRead)
 		writer := NewFrameWriter(pluginWrite)
 
-		limits, err := cbor.HandshakeAccept(reader, writer, []byte(testCBORManifest))
+		limits, err := HandshakeAccept(reader, writer, []byte(testCBORManifest))
 		require.NoError(t, err)
 		reader.SetLimits(limits)
 		writer.SetLimits(limits)
@@ -1930,7 +1962,7 @@ func TestChunkingDataIntegrity3x(t *testing.T) {
 	reader := NewFrameReader(hostRead)
 	writer := NewFrameWriter(hostWrite)
 
-	_, limits, err := cbor.HandshakeInitiate(reader, writer)
+	_, limits, err := HandshakeInitiate(reader, writer)
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)

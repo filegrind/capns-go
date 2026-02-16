@@ -20,7 +20,7 @@ func simulatePlugin(t *testing.T, pluginRead, pluginWrite net.Conn, manifest str
 	reader := NewFrameReader(pluginRead)
 	writer := NewFrameWriter(pluginWrite)
 
-	limits, err := cbor.HandshakeAccept(reader, writer, []byte(manifest))
+	limits, err := HandshakeAccept(reader, writer, []byte(manifest))
 	require.NoError(t, err)
 	reader.SetLimits(limits)
 	writer.SetLimits(limits)

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/filegrind/capns-go/cap"
+	"github.com/filegrind/capns-go/standard"
+	"github.com/filegrind/capns-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,13 +24,13 @@ func TestCapManifestCreation(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
-	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
+	capDef := cap.NewCap(id, "Metadata Extractor", "extract-metadata")
 
 	manifest := NewCapManifest(
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	)
 
 	assert.Equal(t, "TestComponent", manifest.Name)
@@ -43,13 +45,13 @@ func TestCapManifestWithAuthor(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
-	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
+	capDef := cap.NewCap(id, "Metadata Extractor", "extract-metadata")
 
 	manifest := NewCapManifest(
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	).WithAuthor("Test Author")
 
 	require.NotNil(t, manifest.Author)
@@ -60,13 +62,13 @@ func TestCapManifestWithPageUrl(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
-	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
+	capDef := cap.NewCap(id, "Metadata Extractor", "extract-metadata")
 
 	manifest := NewCapManifest(
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	).WithAuthor("Test Author").WithPageUrl("https://github.com/example/test")
 
 	require.NotNil(t, manifest.PageUrl)
@@ -84,20 +86,20 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
-	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
+	capDef := cap.NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
 	stdinUrn := "media:pdf;bytes"
-	cap.AddArg(cap.CapArg{
-		MediaUrn: MediaBinary,
+	capDef.AddArg(cap.CapArg{
+		MediaUrn: standard.MediaBinary,
 		Required: true,
-		Sources:  []ArgSource{{Stdin: &stdinUrn}},
+		Sources:  []cap.ArgSource{{Stdin: &stdinUrn}},
 	})
 
 	manifest := NewCapManifest(
 		"TestComponent",
 		"0.1.0",
 		"A test component for validation",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	).WithAuthor("Test Author")
 
 	// Test serialization
@@ -148,12 +150,12 @@ func TestCapManifestRequiredFields(t *testing.T) {
 func TestCapManifestWithMultipleCaps(t *testing.T) {
 	id1, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
-	cap1 := NewCap(id1, "Metadata Extractor", "extract-metadata")
+	cap1 := cap.NewCap(id1, "Metadata Extractor", "extract-metadata")
 
 	id2, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=outline"))
 	require.NoError(t, err)
 	metadata := map[string]string{"supports_outline": "true"}
-	cap2 := NewCapWithMetadata(id2, "Outline Extractor", "extract-outline", metadata)
+	cap2 := cap.NewCapWithMetadata(id2, "Outline Extractor", "extract-outline", metadata)
 
 	manifest := NewCapManifest(
 		"MultiCapComponent",
@@ -196,13 +198,13 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 func TestCapManifestOptionalFields(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=validate;file"))
 	require.NoError(t, err)
-	cap := NewCap(id, "File Validator", "validate")
+	capDef := cap.NewCap(id, "File Validator", "validate")
 
 	manifestWithoutOptionals := NewCapManifest(
 		"ValidatorComponent",
 		"1.0.0",
 		"File validation component",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	)
 
 	// Serialize manifest without optional fields
@@ -246,11 +248,11 @@ func TestComponentMetadataInterface(t *testing.T) {
 	// Use type=component key=value instead of component flag
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=test;type=component"))
 	require.NoError(t, err)
-	cap := NewCap(id, "Test Component", "test")
+	capDef := cap.NewCap(id, "Test Component", "test")
 
 	component := &testComponent{
 		name: "TestImpl",
-		caps: []cap.Cap{*cap},
+		caps: []cap.Cap{*capDef},
 	}
 
 	manifest := component.ComponentManifest()
@@ -267,20 +269,20 @@ func TestCapManifestValidation(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
-	cap := NewCap(id, "Metadata Extractor", "extract-metadata")
+	capDef := cap.NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
 	stdinUrn := "media:pdf;bytes"
-	cap.AddArg(cap.CapArg{
-		MediaUrn: MediaBinary,
+	capDef.AddArg(cap.CapArg{
+		MediaUrn: standard.MediaBinary,
 		Required: true,
-		Sources:  []ArgSource{{Stdin: &stdinUrn}},
+		Sources:  []cap.ArgSource{{Stdin: &stdinUrn}},
 	})
 
 	manifest := NewCapManifest(
 		"ValidComponent",
 		"1.0.0",
 		"Valid component for testing",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	)
 
 	// Validate that all required fields are present
@@ -301,14 +303,14 @@ func TestCapManifestCompatibility(t *testing.T) {
 	// Test that manifest format is compatible between different types
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=process"))
 	require.NoError(t, err)
-	cap := NewCap(id, "Data Processor", "process")
+	capDef := cap.NewCap(id, "Data Processor", "process")
 
 	// Create manifest similar to what a plugin would have
 	pluginStyleManifest := NewCapManifest(
 		"PluginComponent",
 		"0.1.0",
 		"Plugin-style component",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	)
 
 	// Create manifest similar to what a provider would have
@@ -316,7 +318,7 @@ func TestCapManifestCompatibility(t *testing.T) {
 		"ProviderComponent",
 		"0.1.0",
 		"Provider-style component",
-		[]cap.Cap{*cap},
+		[]cap.Cap{*capDef},
 	)
 
 	// Both should serialize to the same structure

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"sync"
+
+	"github.com/filegrind/capns-go/urn"
 )
 
 // RelaySwitchError represents errors from relay switch operations
@@ -214,14 +216,14 @@ func (sw *RelaySwitch) SendToMaster(frame *Frame) error {
 
 	switch frame.FrameType {
 	case FrameTypeReq:
-		if frame.Cap.Cap == nil {
+		if frame.Cap == nil {
 			return &RelaySwitchError{
 				Type:    RelaySwitchErrorTypeProtocol,
 				Message: "REQ frame missing cap URN",
 			}
 		}
 
-		destIdx, err := sw.findMasterForCap(*frame.Cap.Cap)
+		destIdx, err := sw.findMasterForCap(*frame.Cap)
 		if err != nil {
 			return err
 		}
@@ -334,14 +336,14 @@ func (sw *RelaySwitch) handleMasterFrame(sourceIdx int, frame *Frame) (*Frame, e
 	switch frame.FrameType {
 	case FrameTypeReq:
 		// Peer request
-		if frame.Cap.Cap == nil {
+		if frame.Cap == nil {
 			return nil, &RelaySwitchError{
 				Type:    RelaySwitchErrorTypeProtocol,
 				Message: "REQ frame missing cap URN",
 			}
 		}
 
-		destIdx, err := sw.findMasterForCap(*frame.Cap.Cap)
+		destIdx, err := sw.findMasterForCap(*frame.Cap)
 		if err != nil {
 			return nil, err
 		}

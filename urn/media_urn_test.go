@@ -171,7 +171,7 @@ func TestMediaUrnConstants(t *testing.T) {
 		standard.MediaBinary,
 		standard.MediaObject,
 		standard.MediaInteger,
-		MediaNumber,
+		standard.MediaNumber,
 		standard.MediaBoolean,
 	}
 

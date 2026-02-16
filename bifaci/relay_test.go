@@ -258,8 +258,8 @@ func TestProtocolFramesPassThrough(t *testing.T) {
 		if frame.FrameType != FrameTypeReq {
 			t.Errorf("Expected REQ at runtime, got %v", frame.FrameType)
 		}
-		if frame.Cap.Cap == nil || *frame.Cap.Cap != "cap:op=test" {
-			t.Errorf("cap.Cap mismatch: got %v", frame.Cap.Cap)
+		if frame.Cap == nil || *frame.Cap != "cap:op=test" {
+			t.Errorf("cap.Cap mismatch: got %v", frame.Cap)
 		}
 		if string(frame.Payload) != "hello" {
 			t.Errorf("Payload mismatch: got %s", string(frame.Payload))

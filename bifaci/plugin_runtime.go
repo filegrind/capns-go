@@ -17,6 +17,12 @@ import (
 	taggedurn "github.com/filegrind/tagged-urn-go"
 )
 
+// Media URN constants for file-path conversion
+const (
+	MediaFilePath      = "media:file-path;form=scalar"
+	MediaFilePathArray = "media:file-path;form=list"
+)
+
 // StreamEmitter allows handlers to emit CBOR values and logs.
 // Handlers emit CBOR values via EmitCbor() or logs via EmitLog().
 // The value is CBOR-encoded once and sent as raw CBOR bytes in CHUNK frames.
@@ -145,7 +151,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 	// Perform handshake - send our manifest in the HELLO response
 	// Handshake is single-threaded so raw writer is safe here
-	negotiatedLimits, err := cbor.HandshakeAccept(reader, rawWriter, pr.manifestData)
+	negotiatedLimits, err := HandshakeAccept(reader, rawWriter, pr.manifestData)
 	if err != nil {
 		return fmt.Errorf("handshake failed: %w", err)
 	}
@@ -201,7 +207,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 		switch frame.FrameType {
 		case FrameTypeReq:
-			if frame.Cap.Cap == nil || *frame.Cap.Cap == "" {
+			if frame.Cap == nil || *frame.Cap == "" {
 				errFrame := NewErr(frame.Id, "INVALID_REQUEST", "Request missing cap URN")
 				if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
@@ -209,7 +215,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 				continue
 			}
 
-			capUrn := *frame.Cap.Cap
+			capUrn := *frame.Cap
 			rawPayload := frame.Payload
 
 			// Protocol v2: REQ must have empty payload - arguments come as streams
