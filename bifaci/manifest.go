@@ -3,6 +3,8 @@ package bifaci
 
 import (
 	"github.com/filegrind/capns-go/cap"
+	"github.com/filegrind/capns-go/standard"
+	"github.com/filegrind/capns-go/urn"
 )
 
 // CapManifest represents unified cap manifest for --manifest output
@@ -46,6 +48,37 @@ func (cm *CapManifest) WithAuthor(author string) *CapManifest {
 func (cm *CapManifest) WithPageUrl(pageUrl string) *CapManifest {
 	cm.PageUrl = &pageUrl
 	return cm
+}
+
+// EnsureIdentity ensures the manifest includes CAP_IDENTITY
+// Returns a new manifest with identity added if not present, or the same manifest if already present
+func (cm *CapManifest) EnsureIdentity() *CapManifest {
+	// Check if identity already present
+	identityUrn, err := urn.NewCapUrnFromString(standard.CapIdentity)
+	if err != nil {
+		panic("CAP_IDENTITY constant is invalid")
+	}
+
+	for _, cap := range cm.Caps {
+		if cap.Urn != nil && cap.Urn.Equals(identityUrn) {
+			return cm // Already has identity
+		}
+	}
+
+	// Add identity cap
+	identityCap := cap.NewCap(identityUrn, "Identity", "identity")
+	newCaps := make([]cap.Cap, 0, len(cm.Caps)+1)
+	newCaps = append(newCaps, *identityCap)
+	newCaps = append(newCaps, cm.Caps...)
+
+	return &CapManifest{
+		Name:        cm.Name,
+		Version:     cm.Version,
+		Description: cm.Description,
+		Caps:        newCaps,
+		Author:      cm.Author,
+		PageUrl:     cm.PageUrl,
+	}
 }
 
 // ComponentMetadata interface for components to provide metadata about themselves

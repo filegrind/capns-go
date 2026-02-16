@@ -5,9 +5,10 @@ package standard
 // STANDARD CAP URN CONSTANTS
 // =============================================================================
 
-// CapIdentity is the standard identity capability URN
+// CapIdentity is the standard identity capability URN (short form)
 // Accepts any media type as input and outputs the same type
-const CapIdentity = "cap:in=media:;out=media:"
+// This expands to "cap:in=media:;out=media:" during parsing
+const CapIdentity = "cap:"
 
 // CapDiscard is the standard discard capability URN
 // Accepts any media type as input and produces void output

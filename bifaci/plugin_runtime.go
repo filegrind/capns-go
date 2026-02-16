@@ -81,18 +81,86 @@ func NewPluginRuntime(manifestJSON []byte) (*PluginRuntime, error) {
 }
 
 // NewPluginRuntimeWithManifest creates a new plugin runtime with a pre-built CapManifest
+// Auto-injects CAP_IDENTITY into manifest and auto-registers identity handler
 func NewPluginRuntimeWithManifest(manifest *CapManifest) (*PluginRuntime, error) {
+	// Ensure identity is in the manifest
+	manifest = manifest.EnsureIdentity()
+
 	manifestData, err := json.Marshal(manifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal manifest: %w", err)
 	}
 
-	return &PluginRuntime{
+	runtime := &PluginRuntime{
 		handlers:     make(map[string]HandlerFunc),
 		manifestData: manifestData,
 		manifest:     manifest,
 		limits:       DefaultLimits(),
-	}, nil
+	}
+
+	// Auto-register identity handler if not already registered
+	runtime.autoRegisterIdentity()
+
+	return runtime, nil
+}
+
+// autoRegisterIdentity registers a default identity handler if none exists
+func (pr *PluginRuntime) autoRegisterIdentity() {
+	pr.mu.Lock()
+	defer pr.mu.Unlock()
+
+	// Check if identity handler already registered
+	if _, exists := pr.handlers["cap:"]; !exists {
+		// Register default identity handler (echo - returns input as-is)
+		pr.handlers["cap:"] = func(input <-chan Frame, output StreamEmitter, peer PeerInvoker) error {
+			// Collect all incoming frames
+			var chunks []interface{}
+			for frame := range input {
+				switch frame.FrameType {
+				case FrameTypeChunk:
+					if frame.Payload != nil {
+						// Decode each chunk as CBOR
+						var value interface{}
+						if err := cborlib.Unmarshal(frame.Payload, &value); err != nil {
+							return err
+						}
+						chunks = append(chunks, value)
+					}
+				case FrameTypeEnd:
+					goto done
+				}
+			}
+		done:
+			// Echo back - emit single value or concatenated chunks
+			if len(chunks) == 0 {
+				return output.EmitCbor([]byte{})
+			} else if len(chunks) == 1 {
+				return output.EmitCbor(chunks[0])
+			} else {
+				// Multiple chunks - try to concatenate if bytes/string, otherwise array
+				switch chunks[0].(type) {
+				case []byte:
+					var result []byte
+					for _, chunk := range chunks {
+						if b, ok := chunk.([]byte); ok {
+							result = append(result, b...)
+						}
+					}
+					return output.EmitCbor(result)
+				case string:
+					var result string
+					for _, chunk := range chunks {
+						if s, ok := chunk.(string); ok {
+							result += s
+						}
+					}
+					return output.EmitCbor(result)
+				default:
+					return output.EmitCbor(chunks)
+				}
+			}
+		}
+	}
 }
 
 // Register registers a handler for a cap URN
