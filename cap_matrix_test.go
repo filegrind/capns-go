@@ -254,8 +254,8 @@ func TestCapBlockMoreSpecificWins(t *testing.T) {
 	if best.RegistryName != "plugins" {
 		t.Errorf("Expected plugins registry to win, got %s", best.RegistryName)
 	}
-	if best.Specificity != 8 {
-		t.Errorf("Expected specificity 8, got %d", best.Specificity)
+	if best.Specificity != 4 {
+		t.Errorf("Expected specificity 4, got %d", best.Specificity)
 	}
 	if best.Cap.Title != "Plugin PDF Thumbnail Generator (specific)" {
 		t.Errorf("Expected plugin cap title, got %s", best.Cap.Title)
@@ -402,8 +402,8 @@ func TestCapBlockFallbackScenario(t *testing.T) {
 	if best.Cap.Title != "PDF Thumbnail Plugin" {
 		t.Errorf("Expected PDF Thumbnail Plugin, got %s", best.Cap.Title)
 	}
-	if best.Specificity != 8 {
-		t.Errorf("Expected specificity 8, got %d", best.Specificity)
+	if best.Specificity != 4 {
+		t.Errorf("Expected specificity 4, got %d", best.Specificity)
 	}
 
 	// Also test that for a different file type, provider wins (since plugin doesn't match ext=wav)

@@ -67,9 +67,40 @@ const (
 	ErrorInvalidMediaUrn       = 12
 )
 
-// isValidMediaUrnOrWildcard checks if a value is a valid media URN or wildcard
-func isValidMediaUrnOrWildcard(value string) bool {
-	return value == "*" || strings.HasPrefix(value, "media:")
+// processDirectionTag processes a direction tag (in or out) with wildcard expansion
+//
+// - Missing tag → "media:" (wildcard)
+// - tag=* → "media:" (wildcard)
+// - tag= (empty) → error
+// - tag=value → value (validated later)
+func processDirectionTag(taggedUrn *taggedurn.TaggedUrn, tagName string) (string, error) {
+	value, hasTag := taggedUrn.GetTag(tagName)
+	if !hasTag {
+		// Tag is missing - default to media: wildcard
+		return "media:", nil
+	}
+
+	if value == "*" {
+		// Replace * with media: wildcard
+		return "media:", nil
+	}
+
+	if value == "" {
+		// Empty value is not allowed (in= or out= with nothing after =)
+		if tagName == "in" {
+			return "", &CapUrnError{
+				Code:    ErrorInvalidMediaUrn,
+				Message: "Empty value for 'in' tag is not allowed",
+			}
+		}
+		return "", &CapUrnError{
+			Code:    ErrorInvalidMediaUrn,
+			Message: "Empty value for 'out' tag is not allowed",
+		}
+	}
+
+	// Regular value - will be validated as MediaUrn later
+	return value, nil
 }
 
 // Note: needsQuoting and quoteValue are delegated to TaggedUrn
@@ -147,37 +178,34 @@ func NewCapUrnFromString(s string) (*CapUrn, error) {
 		}
 	}
 
-	// Extract required 'in' tag
-	inSpec, hasIn := taggedUrn.GetTag("in")
-	if !hasIn || inSpec == "" {
-		return nil, &CapUrnError{
-			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:void for no input)",
-		}
+	// Process in and out tags with wildcard expansion
+	// Missing tag or tag=* → "media:" (the wildcard)
+	inSpec, err := processDirectionTag(taggedUrn, "in")
+	if err != nil {
+		return nil, err
 	}
 
-	// Validate in is a valid media URN or wildcard
-	if !isValidMediaUrnOrWildcard(inSpec) {
-		return nil, &CapUrnError{
-			Code:    ErrorInvalidMediaUrn,
-			Message: fmt.Sprintf("'in' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", inSpec),
-		}
+	outSpec, err := processDirectionTag(taggedUrn, "out")
+	if err != nil {
+		return nil, err
 	}
 
-	// Extract required 'out' tag
-	outSpec, hasOut := taggedUrn.GetTag("out")
-	if !hasOut || outSpec == "" {
-		return nil, &CapUrnError{
-			Code:    ErrorMissingOutSpec,
-			Message: "cap URN is missing required 'out' tag - caps must declare their output type",
+	// Validate that in and out specs are valid media URNs (or wildcard "media:")
+	// After processing, "media:" is the wildcard (not "*")
+	if inSpec != "media:" {
+		if _, err := NewMediaUrnFromString(inSpec); err != nil {
+			return nil, &CapUrnError{
+				Code:    ErrorInvalidMediaUrn,
+				Message: fmt.Sprintf("Invalid media URN for in spec '%s': %v", inSpec, err),
+			}
 		}
 	}
-
-	// Validate out is a valid media URN or wildcard
-	if !isValidMediaUrnOrWildcard(outSpec) {
-		return nil, &CapUrnError{
-			Code:    ErrorInvalidMediaUrn,
-			Message: fmt.Sprintf("'out' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", outSpec),
+	if outSpec != "media:" {
+		if _, err := NewMediaUrnFromString(outSpec); err != nil {
+			return nil, &CapUrnError{
+				Code:    ErrorInvalidMediaUrn,
+				Message: fmt.Sprintf("Invalid media URN for out spec '%s': %v", outSpec, err),
+			}
 		}
 	}
 
@@ -202,38 +230,54 @@ func NewCapUrnFromTags(tags map[string]string) (*CapUrn, error) {
 		result[strings.ToLower(k)] = v
 	}
 
-	// Extract required in and out specs
+	// Extract required in and out specs with wildcard expansion
 	inSpec, hasIn := result["in"]
 	if !hasIn {
+		// Missing tag defaults to wildcard
+		inSpec = "media:"
+	} else if inSpec == "*" {
+		// Wildcard expansion
+		inSpec = "media:"
+	} else if inSpec == "" {
 		return nil, &CapUrnError{
-			Code:    ErrorMissingInSpec,
-			Message: "cap URN is missing required 'in' tag - caps must declare their input type (use media:void for no input)",
+			Code:    ErrorInvalidMediaUrn,
+			Message: "Empty value for 'in' tag is not allowed",
 		}
 	}
 	delete(result, "in")
 
-	// Validate in is a valid media URN or wildcard
-	if !isValidMediaUrnOrWildcard(inSpec) {
-		return nil, &CapUrnError{
-			Code:    ErrorInvalidMediaUrn,
-			Message: fmt.Sprintf("'in' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", inSpec),
+	// Validate in spec
+	if inSpec != "media:" {
+		if _, err := NewMediaUrnFromString(inSpec); err != nil {
+			return nil, &CapUrnError{
+				Code:    ErrorInvalidMediaUrn,
+				Message: fmt.Sprintf("Invalid media URN for in spec '%s': %v", inSpec, err),
+			}
 		}
 	}
 
 	outSpec, hasOut := result["out"]
 	if !hasOut {
+		// Missing tag defaults to wildcard
+		outSpec = "media:"
+	} else if outSpec == "*" {
+		// Wildcard expansion
+		outSpec = "media:"
+	} else if outSpec == "" {
 		return nil, &CapUrnError{
-			Code:    ErrorMissingOutSpec,
-			Message: "cap URN is missing required 'out' tag - caps must declare their output type",
+			Code:    ErrorInvalidMediaUrn,
+			Message: "Empty value for 'out' tag is not allowed",
 		}
 	}
 	delete(result, "out")
 
-	// Validate out is a valid media URN or wildcard
-	if !isValidMediaUrnOrWildcard(outSpec) {
-		return nil, &CapUrnError{
-			Code:    ErrorInvalidMediaUrn,
-			Message: fmt.Sprintf("'out' value must be a media URN (starting with 'media:') or wildcard '*', got: %s", outSpec),
+	// Validate out spec
+	if outSpec != "media:" {
+		if _, err := NewMediaUrnFromString(outSpec); err != nil {
+			return nil, &CapUrnError{
+				Code:    ErrorInvalidMediaUrn,
+				Message: fmt.Sprintf("Invalid media URN for out spec '%s': %v", outSpec, err),
+			}
 		}
 	}
 
@@ -378,8 +422,10 @@ func (c *CapUrn) Accepts(request *CapUrn) bool {
 	}
 
 	// Direction specs: TaggedUrn semantic matching
-	// Check in_urn: cap's input pattern accepts request's input data
-	if c.inSpec != "*" && request.inSpec != "*" {
+	// Input direction: self.in_spec is pattern, request.in_spec is instance
+	// "media:" on the PATTERN side means "I accept any input" — skip check.
+	// "media:" on the INSTANCE side is just the least specific — still check.
+	if c.inSpec != "media:" {
 		capIn, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: cap in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
@@ -397,8 +443,10 @@ func (c *CapUrn) Accepts(request *CapUrn) bool {
 		}
 	}
 
-	// Check out_urn: cap's output conforms to what the request expects
-	if c.outSpec != "*" && request.outSpec != "*" {
+	// Output direction: self.out_spec is pattern, request.out_spec is instance
+	// "media:" on the PATTERN side means "I accept any output" — skip check.
+	// "media:" on the INSTANCE side is just the least specific — still check.
+	if c.outSpec != "media:" {
 		capOut, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: cap out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
@@ -537,47 +585,31 @@ func valuesMatch(inst, patt *string) bool {
 // More specific caps have higher scores and are preferred.
 //
 // Direction specs contribute their media URN tag count (more tags = more specific).
-// Other tags use graded scoring:
-//   - Exact value (K=v): 3 points (most specific)
-//   - Must-have-any (K=*): 2 points
-//   - Must-not-have (K=!): 1 point
-//   - Unspecified (K=?) or missing: 0 points (least specific)
+// Other tags contribute 1 per non-wildcard value.
 func (c *CapUrn) Specificity() int {
-	score := 0
-	// Direction specs contribute their media URN tag count
-	if c.inSpec != "*" && c.inSpec != "?" {
+	count := 0
+	// "media:" is the wildcard (contributes 0 to specificity)
+	if c.inSpec != "media:" {
 		inParsed, err := taggedurn.NewTaggedUrnFromString(c.inSpec)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: in_spec '%s' is not a valid media URN: %v", c.inSpec, err))
 		}
-		score += len(inParsed.AllTags())
+		count += len(inParsed.AllTags())
 	}
-	if c.outSpec != "*" && c.outSpec != "?" {
+	if c.outSpec != "media:" {
 		outParsed, err := taggedurn.NewTaggedUrnFromString(c.outSpec)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: out_spec '%s' is not a valid media URN: %v", c.outSpec, err))
 		}
-		score += len(outParsed.AllTags())
+		count += len(outParsed.AllTags())
 	}
-	// Score other tags using graded scoring
+	// Count non-wildcard tags
 	for _, value := range c.tags {
-		score += valueScore(value)
+		if value != "*" {
+			count++
+		}
 	}
-	return score
-}
-
-// valueScore returns the graded specificity score for a single value
-func valueScore(value string) int {
-	switch value {
-	case "?":
-		return 0
-	case "!":
-		return 1
-	case "*":
-		return 2
-	default:
-		return 3 // exact value
-	}
+	return count
 }
 
 // IsMoreSpecificThan checks if this cap is more specific than another
