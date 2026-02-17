@@ -170,6 +170,40 @@ func (pr *PluginRuntime) Register(capUrn string, handler HandlerFunc) {
 	pr.handlers[capUrn] = handler
 }
 
+// Request bundles the handler's input frames, output emitter, and peer invoker into a
+// single object. Struct-based handlers (CapHandler) receive a *Request instead of the
+// three separate HandlerFunc parameters. Mirrors the Rust capns Request type.
+type Request struct {
+	frames  <-chan Frame
+	emitter StreamEmitter
+	peer    PeerInvoker
+}
+
+// Frames returns the input frame channel. The handler owns the channel and must consume
+// all frames (including the terminal END frame) before returning.
+func (r *Request) Frames() <-chan Frame { return r.frames }
+
+// Output returns the StreamEmitter for producing output CBOR values and log messages.
+func (r *Request) Output() StreamEmitter { return r.emitter }
+
+// Peer returns the PeerInvoker for calling capabilities on the host.
+func (r *Request) Peer() PeerInvoker { return r.peer }
+
+// CapOp is the interface for struct-based plugin cap handlers. Implement Perform to handle
+// a capability invocation. Mirrors the Rust Op<()> pattern: input/output/peer are accessed
+// through *Request rather than as separate parameters.
+type CapOp interface {
+	Perform(req *Request) error
+}
+
+// RegisterOp registers a CapOp for a cap URN.
+// Bridges the struct-based CapOp interface to the function-based HandlerFunc.
+func (pr *PluginRuntime) RegisterOp(capUrn string, op CapOp) {
+	pr.Register(capUrn, func(frames <-chan Frame, emitter StreamEmitter, peer PeerInvoker) error {
+		return op.Perform(&Request{frames: frames, emitter: emitter, peer: peer})
+	})
+}
+
 // FindHandler finds a handler for a cap URN (exact match or closest-specificity pattern match).
 //
 // Matching direction: request.Accepts(registered) — the incoming request (pattern) must
