@@ -170,7 +170,15 @@ func (pr *PluginRuntime) Register(capUrn string, handler HandlerFunc) {
 	pr.handlers[capUrn] = handler
 }
 
-// FindHandler finds a handler for a cap URN (exact match or pattern match)
+// FindHandler finds a handler for a cap URN (exact match or closest-specificity pattern match).
+//
+// Matching direction: request.Accepts(registered) — the incoming request (pattern) must
+// accept the registered cap (instance). Mirrors Rust exactly:
+//
+//	request_urn.accepts(&registered_urn)
+//
+// Selects the closest-specificity match to the request (not max-specificity),
+// to prevent identity handlers from stealing routes from specific handlers.
 func (pr *PluginRuntime) FindHandler(capUrn string) HandlerFunc {
 	pr.mu.RLock()
 	defer pr.mu.RUnlock()
@@ -186,17 +194,30 @@ func (pr *PluginRuntime) FindHandler(capUrn string) HandlerFunc {
 		return nil
 	}
 
+	requestSpecificity := requestUrn.Specificity()
+	var bestHandler HandlerFunc
+	bestDistance := -1
+
 	for pattern, handler := range pr.handlers {
-		patternUrn, err := urn.NewCapUrnFromString(pattern)
+		registeredUrn, err := urn.NewCapUrnFromString(pattern)
 		if err != nil {
 			continue
 		}
-		if patternUrn.Accepts(requestUrn) {
-			return handler
+		// Routing direction: request.Accepts(registered_cap) (mirrors Rust)
+		if requestUrn.Accepts(registeredUrn) {
+			specificity := registeredUrn.Specificity()
+			distance := int(specificity) - int(requestSpecificity)
+			if distance < 0 {
+				distance = -distance
+			}
+			if bestHandler == nil || distance < bestDistance {
+				bestHandler = handler
+				bestDistance = distance
+			}
 		}
 	}
 
-	return nil
+	return bestHandler
 }
 
 // Run runs the plugin runtime (automatic mode detection)
