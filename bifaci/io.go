@@ -170,19 +170,19 @@ func HandshakeAccept(reader *FrameReader, writer *FrameWriter, manifestData []by
 	// 2. Decode host limits from Meta map
 	var hostLimits Limits
 	if helloFrame.Meta != nil {
-		if maxFrame, ok := helloFrame.Meta["max_frame"].(int); ok {
-			hostLimits.MaxFrame = maxFrame
-		}
-		if maxChunk, ok := helloFrame.Meta["max_chunk"].(int); ok {
-			hostLimits.MaxChunk = maxChunk
-		}
+		hostLimits.MaxFrame = extractIntFromMeta(helloFrame.Meta, "max_frame")
+		hostLimits.MaxChunk = extractIntFromMeta(helloFrame.Meta, "max_chunk")
+		hostLimits.MaxReorderBuffer = extractIntFromMeta(helloFrame.Meta, "max_reorder_buffer")
 	}
 	if hostLimits.MaxFrame == 0 || hostLimits.MaxChunk == 0 {
 		hostLimits = DefaultLimits()
 	}
+	if hostLimits.MaxReorderBuffer == 0 {
+		hostLimits.MaxReorderBuffer = DefaultMaxReorderBuffer
+	}
 
 	// 3. Send HELLO back with manifest
-	responseFrame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifestData)
+	responseFrame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer, manifestData)
 	if err := writer.WriteFrame(responseFrame); err != nil {
 		return Limits{}, fmt.Errorf("failed to write HELLO response: %w", err)
 	}
@@ -196,7 +196,7 @@ func HandshakeAccept(reader *FrameReader, writer *FrameWriter, manifestData []by
 // HandshakeInitiate performs handshake from host side
 func HandshakeInitiate(reader *FrameReader, writer *FrameWriter) ([]byte, Limits, error) {
 	// 1. Send HELLO with our limits
-	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
+	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer)
 	if err := writer.WriteFrame(helloFrame); err != nil {
 		return nil, Limits{}, fmt.Errorf("failed to write HELLO: %w", err)
 	}
@@ -222,15 +222,15 @@ func HandshakeInitiate(reader *FrameReader, writer *FrameWriter) ([]byte, Limits
 	// 4. Extract plugin limits from Meta map
 	var pluginLimits Limits
 	if responseFrame.Meta != nil {
-		if maxFrame, ok := responseFrame.Meta["max_frame"].(int); ok {
-			pluginLimits.MaxFrame = maxFrame
-		}
-		if maxChunk, ok := responseFrame.Meta["max_chunk"].(int); ok {
-			pluginLimits.MaxChunk = maxChunk
-		}
+		pluginLimits.MaxFrame = extractIntFromMeta(responseFrame.Meta, "max_frame")
+		pluginLimits.MaxChunk = extractIntFromMeta(responseFrame.Meta, "max_chunk")
+		pluginLimits.MaxReorderBuffer = extractIntFromMeta(responseFrame.Meta, "max_reorder_buffer")
 	}
 	if pluginLimits.MaxFrame == 0 || pluginLimits.MaxChunk == 0 {
 		pluginLimits = DefaultLimits()
+	}
+	if pluginLimits.MaxReorderBuffer == 0 {
+		pluginLimits.MaxReorderBuffer = DefaultMaxReorderBuffer
 	}
 
 	// 5. Negotiate limits
@@ -242,8 +242,9 @@ func HandshakeInitiate(reader *FrameReader, writer *FrameWriter) ([]byte, Limits
 // EncodeCBOR encodes Limits to CBOR
 func EncodeCBOR(limits Limits) ([]byte, error) {
 	m := map[string]int{
-		"max_frame": limits.MaxFrame,
-		"max_chunk": limits.MaxChunk,
+		"max_frame":          limits.MaxFrame,
+		"max_chunk":          limits.MaxChunk,
+		"max_reorder_buffer": limits.MaxReorderBuffer,
 	}
 	return cbor2.Marshal(m)
 }

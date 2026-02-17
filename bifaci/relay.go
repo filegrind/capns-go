@@ -175,7 +175,7 @@ type RelayNotifyParams struct {
 // SendNotify sends a RelayNotify frame to the socket writer.
 // Used when capabilities change (plugin discovered, plugin died).
 func SendNotify(socketWriter *FrameWriter, manifest []byte, limits Limits) error {
-	frame := NewRelayNotify(manifest, limits.MaxFrame, limits.MaxChunk)
+	frame := NewRelayNotify(manifest, limits.MaxFrame, limits.MaxChunk, limits.MaxReorderBuffer)
 	return socketWriter.WriteFrame(frame)
 }
 

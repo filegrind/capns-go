@@ -288,37 +288,40 @@ func NewHeartbeat(id MessageId) *Frame {
 
 // NewHello creates a HELLO frame for handshake (host side - no manifest)
 // Matches Rust Frame::hello
-func NewHello(maxFrame, maxChunk int) *Frame {
+func NewHello(maxFrame, maxChunk, maxReorderBuffer int) *Frame {
 	frame := newFrame(FrameTypeHello, MessageId{uintValue: new(uint64)})
 	frame.Meta = map[string]interface{}{
-		"max_frame": maxFrame,
-		"max_chunk": maxChunk,
-		"version":   ProtocolVersion,
+		"max_frame":          maxFrame,
+		"max_chunk":          maxChunk,
+		"max_reorder_buffer": maxReorderBuffer,
+		"version":            ProtocolVersion,
 	}
 	return frame
 }
 
 // NewHelloWithManifest creates a HELLO frame with manifest (plugin side)
 // Matches Rust Frame::hello_with_manifest
-func NewHelloWithManifest(maxFrame, maxChunk int, manifest []byte) *Frame {
+func NewHelloWithManifest(maxFrame, maxChunk, maxReorderBuffer int, manifest []byte) *Frame {
 	frame := newFrame(FrameTypeHello, MessageId{uintValue: new(uint64)})
 	frame.Meta = map[string]interface{}{
-		"max_frame": maxFrame,
-		"max_chunk": maxChunk,
-		"version":   ProtocolVersion,
-		"manifest":  manifest,
+		"max_frame":          maxFrame,
+		"max_chunk":          maxChunk,
+		"max_reorder_buffer": maxReorderBuffer,
+		"version":            ProtocolVersion,
+		"manifest":           manifest,
 	}
 	return frame
 }
 
 // NewRelayNotify creates a RELAY_NOTIFY frame for capability advertisement (slave → master).
 // Carries aggregate manifest + negotiated limits. (matches Rust Frame::relay_notify)
-func NewRelayNotify(manifest []byte, maxFrame, maxChunk int) *Frame {
+func NewRelayNotify(manifest []byte, maxFrame, maxChunk, maxReorderBuffer int) *Frame {
 	frame := newFrame(FrameTypeRelayNotify, MessageId{uintValue: new(uint64)})
 	frame.Meta = map[string]interface{}{
-		"manifest":  manifest,
-		"max_frame": maxFrame,
-		"max_chunk": maxChunk,
+		"manifest":           manifest,
+		"max_frame":          maxFrame,
+		"max_chunk":          maxChunk,
+		"max_reorder_buffer": maxReorderBuffer,
 	}
 	return frame
 }
@@ -400,7 +403,11 @@ func (f *Frame) RelayNotifyLimits() *Limits {
 	if maxFrame <= 0 || maxChunk <= 0 {
 		return nil
 	}
-	return &Limits{MaxFrame: maxFrame, MaxChunk: maxChunk}
+	maxReorderBuffer := extractIntFromMeta(f.Meta, "max_reorder_buffer")
+	if maxReorderBuffer <= 0 {
+		maxReorderBuffer = DefaultMaxReorderBuffer
+	}
+	return &Limits{MaxFrame: maxFrame, MaxChunk: maxChunk, MaxReorderBuffer: maxReorderBuffer}
 }
 
 // extractIntFromMeta extracts an integer from a meta map, handling CBOR type variance.

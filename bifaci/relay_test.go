@@ -80,7 +80,7 @@ func TestMasterReadsRelayNotify(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		writer := NewFrameWriter(slaveWrite)
-		frame := NewRelayNotify(manifest, limits.MaxFrame, limits.MaxChunk)
+		frame := NewRelayNotify(manifest, limits.MaxFrame, limits.MaxChunk, limits.MaxReorderBuffer)
 		if err := writer.WriteFrame(frame); err != nil {
 			t.Errorf("WriteFrame failed: %v", err)
 		}
@@ -459,7 +459,7 @@ func TestMasterReceivesUpdatedRelayNotify(t *testing.T) {
 		writer := NewFrameWriter(slaveSocketWrite)
 
 		// Initial RelayNotify
-		initial := NewRelayNotify([]byte(`{"caps":["cap:op=a"]}`), limits.MaxFrame, limits.MaxChunk)
+		initial := NewRelayNotify([]byte(`{"caps":["cap:op=a"]}`), limits.MaxFrame, limits.MaxChunk, limits.MaxReorderBuffer)
 		if err := writer.WriteFrame(initial); err != nil {
 			t.Errorf("WriteFrame initial notify failed: %v", err)
 		}
@@ -471,8 +471,8 @@ func TestMasterReceivesUpdatedRelayNotify(t *testing.T) {
 		}
 
 		// Updated RelayNotify with new limits
-		updatedLimits := Limits{MaxFrame: 3_000_000, MaxChunk: 200_000}
-		updated := NewRelayNotify([]byte(`{"caps":["cap:op=a","cap:op=b"]}`), updatedLimits.MaxFrame, updatedLimits.MaxChunk)
+		updatedLimits := Limits{MaxFrame: 3_000_000, MaxChunk: 200_000, MaxReorderBuffer: DefaultMaxReorderBuffer}
+		updated := NewRelayNotify([]byte(`{"caps":["cap:op=a","cap:op=b"]}`), updatedLimits.MaxFrame, updatedLimits.MaxChunk, updatedLimits.MaxReorderBuffer)
 		if err := writer.WriteFrame(updated); err != nil {
 			t.Errorf("WriteFrame updated notify failed: %v", err)
 		}
@@ -562,7 +562,7 @@ func TestSocketCloseDetection(t *testing.T) {
 		defer wg.Done()
 		writer := NewFrameWriter(slaveSocketWrite2)
 		// Send RelayNotify then close
-		notify := NewRelayNotify([]byte("[]"), DefaultLimits().MaxFrame, DefaultLimits().MaxChunk)
+		notify := NewRelayNotify([]byte("[]"), DefaultLimits().MaxFrame, DefaultLimits().MaxChunk, DefaultLimits().MaxReorderBuffer)
 		writer.WriteFrame(notify)
 		slaveSocketWrite2.Close()
 	}()

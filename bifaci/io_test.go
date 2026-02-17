@@ -42,7 +42,7 @@ func TestReqFrameRoundtrip(t *testing.T) {
 
 // TEST206: Test HELLO frame encode/decode roundtrip preserves metadata
 func TestHelloFrameRoundtrip(t *testing.T) {
-	original := NewHello(DefaultMaxFrame, DefaultMaxChunk)
+	original := NewHello(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer)
 
 	encoded, err := EncodeFrame(original)
 	if err != nil {
@@ -147,7 +147,7 @@ func TestEndFrameRoundtrip(t *testing.T) {
 // TEST211: Test HELLO with manifest encode/decode roundtrip preserves manifest bytes
 func TestHelloWithManifestRoundtrip(t *testing.T) {
 	manifest := []byte(`{"name":"test","version":"1.0.0"}`)
-	original := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifest)
+	original := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer, manifest)
 
 	encoded, err := EncodeFrame(original)
 	if err != nil {
@@ -609,7 +609,7 @@ func TestSyncHandshake(t *testing.T) {
 	hostWriter := NewFrameWriter(&hostToPlugin)
 
 	// Step 1: Host sends HELLO
-	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
+	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer)
 	if err := hostWriter.WriteFrame(helloFrame); err != nil {
 		t.Fatalf("Failed to write host HELLO: %v", err)
 	}
@@ -624,7 +624,7 @@ func TestSyncHandshake(t *testing.T) {
 	}
 
 	// Plugin sends HELLO with manifest
-	responseFrame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifest)
+	responseFrame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer, manifest)
 	if err := pluginWriter.WriteFrame(responseFrame); err != nil {
 		t.Fatalf("Failed to write plugin HELLO: %v", err)
 	}
@@ -697,7 +697,7 @@ func TestHandshakeRejectsNonHello(t *testing.T) {
 
 	// Host sends HELLO
 	hostWriter := NewFrameWriter(&hostToPlugin)
-	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
+	helloFrame := NewHello(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer)
 	if err := hostWriter.WriteFrame(helloFrame); err != nil {
 		t.Fatalf("Failed to write HELLO: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestHandshakeRejectsMissingManifest(t *testing.T) {
 
 	// Plugin sends HELLO without manifest
 	pluginWriter := NewFrameWriter(&pluginToHost)
-	noManifestHello := NewHello(1_000_000, 200_000)
+	noManifestHello := NewHello(1_000_000, 200_000, DefaultMaxReorderBuffer)
 	if err := pluginWriter.WriteFrame(noManifestHello); err != nil {
 		t.Fatalf("Failed to write HELLO: %v", err)
 	}
@@ -854,7 +854,7 @@ func TestRelayNotifyRoundtrip(t *testing.T) {
 	maxFrame := 2_000_000
 	maxChunk := 128_000
 
-	original := NewRelayNotify(manifest, maxFrame, maxChunk)
+	original := NewRelayNotify(manifest, maxFrame, maxChunk, DefaultMaxReorderBuffer)
 	encoded, err := EncodeFrame(original)
 	if err != nil {
 		t.Fatalf("Encode failed: %v", err)

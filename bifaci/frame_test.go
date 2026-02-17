@@ -186,7 +186,7 @@ func TestMessageIdDefault(t *testing.T) {
 
 // TEST180: Test Frame::hello without manifest produces correct HELLO frame
 func TestFrameHelloWithoutManifest(t *testing.T) {
-	frame := NewHello(DefaultMaxFrame, DefaultMaxChunk)
+	frame := NewHello(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer)
 	if frame.FrameType != FrameTypeHello {
 		t.Errorf("Expected HELLO frame type, got %v", frame.FrameType)
 	}
@@ -202,7 +202,7 @@ func TestFrameHelloWithoutManifest(t *testing.T) {
 // TEST181: Test Frame::hello_with_manifest produces HELLO with manifest bytes
 func TestFrameHelloWithManifest(t *testing.T) {
 	manifest := []byte(`{"name":"test"}`)
-	frame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, manifest)
+	frame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer, manifest)
 	if frame.FrameType != FrameTypeHello {
 		t.Errorf("Expected HELLO frame type, got %v", frame.FrameType)
 	}
@@ -370,7 +370,7 @@ func TestErrorAccessorsOnNonErrFrame(t *testing.T) {
 		t.Error("REQ must have no error_message")
 	}
 
-	hello := NewHello(1000, 500)
+	hello := NewHello(1000, 500, DefaultMaxReorderBuffer)
 	if hello.ErrorCode() != "" {
 		t.Error("HELLO must have no error_code")
 	}
@@ -533,7 +533,7 @@ func TestKeyConstants(t *testing.T) {
 // TEST201: Test hello_with_manifest preserves binary manifest data (not just JSON text)
 func TestHelloManifestBinaryData(t *testing.T) {
 	binaryManifest := []byte{0x00, 0x01, 0xFF, 0xFE, 0x80}
-	frame := NewHelloWithManifest(1000, 500, binaryManifest)
+	frame := NewHelloWithManifest(1000, 500, DefaultMaxReorderBuffer, binaryManifest)
 
 	// Extract manifest from meta
 	if frame.Meta == nil {
@@ -715,7 +715,7 @@ func TestRelayNotifyFactoryAndAccessors(t *testing.T) {
 	maxFrame := 2_000_000
 	maxChunk := 128_000
 
-	frame := NewRelayNotify(manifest, maxFrame, maxChunk)
+	frame := NewRelayNotify(manifest, maxFrame, maxChunk, DefaultMaxReorderBuffer)
 
 	if frame.FrameType != FrameTypeRelayNotify {
 		t.Errorf("Expected RELAY_NOTIFY, got %v", frame.FrameType)
