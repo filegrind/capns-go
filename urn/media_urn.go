@@ -123,6 +123,15 @@ func (m *MediaUrn) Specificity() int {
 	return m.inner.Specificity()
 }
 
+// TagCount returns the raw number of tags (not weighted by type).
+// This matches Rust's in_media.inner().tags.len() used in CapUrn specificity scoring.
+func (m *MediaUrn) TagCount() int {
+	if m.inner == nil {
+		return 0
+	}
+	return len(m.inner.AllTags())
+}
+
 // MarshalJSON implements json.Marshaler
 func (m *MediaUrn) MarshalJSON() ([]byte, error) {
 	if m.inner == nil {
@@ -180,6 +189,51 @@ func (m *MediaUrn) IsList() bool {
 // IsStructured returns true for map or list forms
 func (m *MediaUrn) IsStructured() bool {
 	return m.IsMap() || m.IsList()
+}
+
+// IsImage returns true if this has the "image" marker tag
+func (m *MediaUrn) IsImage() bool {
+	return m.HasTag("image")
+}
+
+// IsAudio returns true if this has the "audio" marker tag
+func (m *MediaUrn) IsAudio() bool {
+	return m.HasTag("audio")
+}
+
+// IsVideo returns true if this has the "video" marker tag
+func (m *MediaUrn) IsVideo() bool {
+	return m.HasTag("video")
+}
+
+// IsNumeric returns true if this has the "numeric" marker tag
+func (m *MediaUrn) IsNumeric() bool {
+	return m.HasTag("numeric")
+}
+
+// IsBool returns true if this has the "bool" marker tag
+func (m *MediaUrn) IsBool() bool {
+	return m.HasTag("bool")
+}
+
+// IsFilePath returns true if this has the "file-path" marker tag AND NOT IsList()
+func (m *MediaUrn) IsFilePath() bool {
+	return m.HasTag("file-path") && !m.IsList()
+}
+
+// IsFilePathArray returns true if this has the "file-path" marker tag AND IsList()
+func (m *MediaUrn) IsFilePathArray() bool {
+	return m.HasTag("file-path") && m.IsList()
+}
+
+// IsAnyFilePath returns true if this has the "file-path" marker tag (single or array)
+func (m *MediaUrn) IsAnyFilePath() bool {
+	return m.HasTag("file-path")
+}
+
+// IsCollection returns true if this has the "collection" marker tag
+func (m *MediaUrn) IsCollection() bool {
+	return m.HasTag("collection")
 }
 
 // GetExtension returns the ext tag value if present

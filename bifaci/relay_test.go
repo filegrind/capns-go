@@ -12,7 +12,7 @@ func relayPipe() (net.Conn, net.Conn) {
 }
 
 // TEST404: Slave sends RelayNotify on connect (initialNotify parameter)
-func TestSlaveSendsRelayNotifyOnConnect(t *testing.T) {
+func Test404_slave_sends_relay_notify_on_connect(t *testing.T) {
 	manifest := []byte(`{"caps":["cap:op=test"]}`)
 	limits := DefaultLimits()
 
@@ -67,7 +67,7 @@ func TestSlaveSendsRelayNotifyOnConnect(t *testing.T) {
 }
 
 // TEST405: Master reads RelayNotify and extracts manifest + limits
-func TestMasterReadsRelayNotify(t *testing.T) {
+func Test405_master_reads_relay_notify(t *testing.T) {
 	manifest := []byte(`{"caps":["cap:op=convert"]}`)
 	limits := Limits{MaxFrame: 1_000_000, MaxChunk: 64_000}
 
@@ -109,7 +109,7 @@ func TestMasterReadsRelayNotify(t *testing.T) {
 }
 
 // TEST406: Slave stores RelayState from master (ResourceState() returns payload)
-func TestSlaveStoresRelayState(t *testing.T) {
+func Test406_slave_stores_relay_state(t *testing.T) {
 	resources := []byte(`{"memory_mb":4096}`)
 
 	// Socket: master writes -> slave reads
@@ -163,7 +163,7 @@ func TestSlaveStoresRelayState(t *testing.T) {
 }
 
 // TEST407: Protocol frames pass through slave transparently (both directions)
-func TestProtocolFramesPassThrough(t *testing.T) {
+func Test407_protocol_frames_pass_through(t *testing.T) {
 	// Socket pair: master <-> slave
 	slaveSocketRead, masterSocketWrite := relayPipe()
 	masterSocketRead, slaveSocketWrite := relayPipe()
@@ -290,7 +290,7 @@ func TestProtocolFramesPassThrough(t *testing.T) {
 }
 
 // TEST408: RelayNotify/RelayState are NOT forwarded through relay (intercepted)
-func TestRelayFramesNotForwarded(t *testing.T) {
+func Test408_relay_frames_not_forwarded(t *testing.T) {
 	// Master sends RelayState — slave should NOT forward it to local
 	slaveSocketRead, masterSocketWrite := relayPipe()
 	runtimeRead, slaveLocalWrite := relayPipe()
@@ -371,7 +371,7 @@ func TestRelayFramesNotForwarded(t *testing.T) {
 }
 
 // TEST409: Slave can inject RelayNotify mid-stream (cap change)
-func TestSlaveInjectsRelayNotifyMidstream(t *testing.T) {
+func Test409_slave_injects_relay_notify_midstream(t *testing.T) {
 	masterSocketRead, slaveSocketWrite := relayPipe()
 
 	var wg sync.WaitGroup
@@ -446,7 +446,7 @@ func TestSlaveInjectsRelayNotifyMidstream(t *testing.T) {
 }
 
 // TEST410: Master receives updated RelayNotify (cap change via ReadFrame)
-func TestMasterReceivesUpdatedRelayNotify(t *testing.T) {
+func Test410_master_receives_updated_relay_notify(t *testing.T) {
 	masterSocketRead, slaveSocketWrite := relayPipe()
 
 	limits := Limits{MaxFrame: 2_000_000, MaxChunk: 100_000}
@@ -540,7 +540,7 @@ func TestMasterReceivesUpdatedRelayNotify(t *testing.T) {
 }
 
 // TEST411: Socket close detection (both directions)
-func TestSocketCloseDetection(t *testing.T) {
+func Test411_socket_close_detection(t *testing.T) {
 	// Master -> slave direction: master closes, slave detects
 	slaveSocketRead, masterSocketWrite := relayPipe()
 
@@ -586,7 +586,7 @@ func TestSocketCloseDetection(t *testing.T) {
 }
 
 // TEST412: Bidirectional concurrent frame flow through relay
-func TestBidirectionalConcurrentFlow(t *testing.T) {
+func Test412_bidirectional_concurrent_flow(t *testing.T) {
 	// Full relay setup: master <-> socket <-> slave <-> local <-> runtime
 	slaveSocketRead, masterSocketWrite := relayPipe()
 	masterSocketRead, slaveSocketWrite := relayPipe()

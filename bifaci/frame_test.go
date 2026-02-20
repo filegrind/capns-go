@@ -8,7 +8,7 @@ import (
 )
 
 // TEST171: Test all FrameType discriminants roundtrip through uint8 conversion preserving identity
-func TestFrameTypeRoundtrip(t *testing.T) {
+func Test171_frame_type_roundtrip(t *testing.T) {
 	types := []FrameType{
 		FrameTypeReq,
 		// Res REMOVED - old protocol no longer supported
@@ -32,7 +32,7 @@ func TestFrameTypeRoundtrip(t *testing.T) {
 }
 
 // TEST172: Test FrameType::from_u8 returns invalid for values outside the valid discriminant range
-func TestFrameTypeValidRange(t *testing.T) {
+func Test172_frame_type_valid_range(t *testing.T) {
 	validTypes := map[uint8]bool{
 		0:  true,  // HELLO
 		1:  true,  // REQ
@@ -64,7 +64,7 @@ func TestFrameTypeValidRange(t *testing.T) {
 }
 
 // TEST173: Test FrameType discriminant values match the wire protocol specification exactly
-func TestFrameTypeWireProtocolValues(t *testing.T) {
+func Test173_frame_type_wire_protocol_values(t *testing.T) {
 	if uint8(FrameTypeHello) != 0 {
 		t.Errorf("HELLO must be 0, got %d", FrameTypeHello)
 	}
@@ -96,7 +96,7 @@ func TestFrameTypeWireProtocolValues(t *testing.T) {
 }
 
 // TEST174: Test MessageId::new_uuid generates valid UUID that roundtrips through string conversion
-func TestMessageIdNewUuidRoundtrip(t *testing.T) {
+func Test174_message_id_new_uuid_roundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	if !id.IsUuid() {
 		t.Fatal("Expected UUID variant")
@@ -115,7 +115,7 @@ func TestMessageIdNewUuidRoundtrip(t *testing.T) {
 }
 
 // TEST175: Test two MessageId::new_uuid calls produce distinct IDs (no collisions)
-func TestMessageIdUuidDistinct(t *testing.T) {
+func Test175_message_id_uuid_distinct(t *testing.T) {
 	id1 := NewMessageIdRandom()
 	id2 := NewMessageIdRandom()
 
@@ -125,7 +125,7 @@ func TestMessageIdUuidDistinct(t *testing.T) {
 }
 
 // TEST176: Test MessageId::Uint does not produce a UUID string, to_uuid_string returns empty
-func TestMessageIdUintNoUuidString(t *testing.T) {
+func Test176_message_id_uint_no_uuid_string(t *testing.T) {
 	id := NewMessageIdFromUint(42)
 	if id.IsUuid() {
 		t.Fatal("Expected Uint variant, got UUID")
@@ -138,7 +138,7 @@ func TestMessageIdUintNoUuidString(t *testing.T) {
 }
 
 // TEST177: Test MessageId::from_uuid_bytes rejects invalid UUID bytes
-func TestMessageIdFromUuidInvalidBytes(t *testing.T) {
+func Test177_message_id_from_uuid_invalid_bytes(t *testing.T) {
 	// UUID must be exactly 16 bytes
 	_, err := NewMessageIdFromUuid([]byte{1, 2, 3}) // too short
 	if err == nil {
@@ -152,7 +152,7 @@ func TestMessageIdFromUuidInvalidBytes(t *testing.T) {
 }
 
 // TEST178: Test MessageId::as_bytes produces correct byte representations for Uuid and Uint variants
-func TestMessageIdAsBytes(t *testing.T) {
+func Test178_message_id_as_bytes(t *testing.T) {
 	// UUID variant
 	uuidBytes := make([]byte, 16)
 	for i := 0; i < 16; i++ {
@@ -173,7 +173,7 @@ func TestMessageIdAsBytes(t *testing.T) {
 }
 
 // TEST179: Test MessageId::default creates appropriate variant
-func TestMessageIdDefault(t *testing.T) {
+func Test179_message_id_default(t *testing.T) {
 	id := NewMessageIdDefault()
 	// Default is Uint 0
 	if id.IsUuid() {
@@ -185,7 +185,7 @@ func TestMessageIdDefault(t *testing.T) {
 }
 
 // TEST180: Test Frame::hello without manifest produces correct HELLO frame
-func TestFrameHelloWithoutManifest(t *testing.T) {
+func Test180_frame_hello_without_manifest(t *testing.T) {
 	frame := NewHello(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer)
 	if frame.FrameType != FrameTypeHello {
 		t.Errorf("Expected HELLO frame type, got %v", frame.FrameType)
@@ -200,7 +200,7 @@ func TestFrameHelloWithoutManifest(t *testing.T) {
 }
 
 // TEST181: Test Frame::hello_with_manifest produces HELLO with manifest bytes
-func TestFrameHelloWithManifest(t *testing.T) {
+func Test181_frame_hello_with_manifest(t *testing.T) {
 	manifest := []byte(`{"name":"test"}`)
 	frame := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer, manifest)
 	if frame.FrameType != FrameTypeHello {
@@ -216,7 +216,7 @@ func TestFrameHelloWithManifest(t *testing.T) {
 }
 
 // TEST182: Test Frame::req stores cap URN, payload, and content_type correctly
-func TestFrameReq(t *testing.T) {
+func Test182_frame_req(t *testing.T) {
 	id := NewMessageIdRandom()
 	cap := `cap:in="media:void";op=test;out="media:void"`
 	payload := []byte("request data")
@@ -241,7 +241,7 @@ func TestFrameReq(t *testing.T) {
 // TEST183: REMOVED - RES frame no longer supported in protocol v2
 
 // TEST184: Test Frame::chunk stores seq and payload for streaming (updated for stream_id)
-func TestFrameChunk(t *testing.T) {
+func Test184_frame_chunk(t *testing.T) {
 	id := NewMessageIdRandom()
 	streamId := "stream-123"
 	seq := uint64(5)
@@ -266,7 +266,7 @@ func TestFrameChunk(t *testing.T) {
 }
 
 // TEST185: Test Frame::err stores error code and message
-func TestFrameErr(t *testing.T) {
+func Test185_frame_err(t *testing.T) {
 	id := NewMessageIdRandom()
 	code := "HANDLER_ERROR"
 	message := "Something went wrong"
@@ -285,7 +285,7 @@ func TestFrameErr(t *testing.T) {
 }
 
 // TEST186: Test Frame::log stores level and message
-func TestFrameLog(t *testing.T) {
+func Test186_frame_log(t *testing.T) {
 	id := NewMessageIdRandom()
 	level := "info"
 	message := "Log message"
@@ -304,7 +304,7 @@ func TestFrameLog(t *testing.T) {
 }
 
 // TEST187: Test Frame::end with payload sets final payload
-func TestFrameEndWithPayload(t *testing.T) {
+func Test187_frame_end_with_payload(t *testing.T) {
 	id := NewMessageIdRandom()
 	payload := []byte("final data")
 
@@ -322,7 +322,7 @@ func TestFrameEndWithPayload(t *testing.T) {
 }
 
 // TEST188: Test Frame::end without payload
-func TestFrameEndWithoutPayload(t *testing.T) {
+func Test188_frame_end_without_payload(t *testing.T) {
 	id := NewMessageIdRandom()
 	frame := NewEnd(id, []byte{})
 
@@ -338,14 +338,14 @@ func TestFrameEndWithoutPayload(t *testing.T) {
 }
 
 // TEST189: Test chunk with offset (future enhancement - not yet implemented)
-func TestFrameChunkWithOffset(t *testing.T) {
+func Test189_frame_chunk_with_offset(t *testing.T) {
 	// This test documents expected behavior for offset/len fields
 	// Currently not implemented in Go version
 	t.Skip("Offset/len fields not yet implemented in Go version")
 }
 
 // TEST190: Test Frame::heartbeat creates minimal frame with no payload or metadata
-func TestFrameHeartbeat(t *testing.T) {
+func Test190_frame_heartbeat(t *testing.T) {
 	id := NewMessageIdRandom()
 	frame := NewHeartbeat(id)
 
@@ -361,7 +361,7 @@ func TestFrameHeartbeat(t *testing.T) {
 }
 
 // TEST191: Test error_code and error_message return empty for non-Err frame types
-func TestErrorAccessorsOnNonErrFrame(t *testing.T) {
+func Test191_error_accessors_on_non_err_frame(t *testing.T) {
 	req := NewReq(NewMessageIdRandom(), "cap:op=test", []byte{}, "text/plain")
 	if req.ErrorCode() != "" {
 		t.Error("REQ must have no error_code")
@@ -377,7 +377,7 @@ func TestErrorAccessorsOnNonErrFrame(t *testing.T) {
 }
 
 // TEST192: Test log_level and log_message return empty for non-Log frame types
-func TestLogAccessorsOnNonLogFrame(t *testing.T) {
+func Test192_log_accessors_on_non_log_frame(t *testing.T) {
 	req := NewReq(NewMessageIdRandom(), "cap:op=test", []byte{}, "text/plain")
 	if req.LogLevel() != "" {
 		t.Error("REQ must have no log_level")
@@ -388,7 +388,7 @@ func TestLogAccessorsOnNonLogFrame(t *testing.T) {
 }
 
 // TEST193: Test hello_max_frame and hello_max_chunk return appropriate values
-func TestHelloAccessorsOnNonHelloFrame(t *testing.T) {
+func Test193_hello_accessors_on_non_hello_frame(t *testing.T) {
 	err := NewErr(NewMessageIdRandom(), "E", "m")
 	// ERR frames have no Meta with hello limits
 	if err.Meta != nil {
@@ -399,7 +399,7 @@ func TestHelloAccessorsOnNonHelloFrame(t *testing.T) {
 }
 
 // TEST194: Test newFrame sets version and defaults correctly, optional fields are nil
-func TestFrameNewDefaults(t *testing.T) {
+func Test194_frame_new_defaults(t *testing.T) {
 	id := NewMessageIdRandom()
 	frame := newFrame(FrameTypeChunk, id)
 
@@ -439,7 +439,7 @@ func TestFrameNewDefaults(t *testing.T) {
 }
 
 // TEST195: Test default frame type (Go doesn't have Frame::default, skip or use REQ as default)
-func TestFrameDefaultType(t *testing.T) {
+func Test195_frame_default_type(t *testing.T) {
 	// Go doesn't have a Frame::default(), but we can verify REQ is a common default
 	frame := NewReq(NewMessageIdDefault(), "cap:op=test", []byte{}, "text/plain")
 	if frame.FrameType != FrameTypeReq {
@@ -451,7 +451,7 @@ func TestFrameDefaultType(t *testing.T) {
 }
 
 // TEST196: Test IsEof returns false when eof field is nil (unset)
-func TestIsEofWhenNone(t *testing.T) {
+func Test196_is_eof_when_none(t *testing.T) {
 	frame := newFrame(FrameTypeChunk, MessageId{uintValue: new(uint64)})
 	if frame.IsEof() {
 		t.Error("eof=nil must mean not EOF")
@@ -459,7 +459,7 @@ func TestIsEofWhenNone(t *testing.T) {
 }
 
 // TEST197: Test IsEof returns false when eof field is explicitly false
-func TestIsEofWhenFalse(t *testing.T) {
+func Test197_is_eof_when_false(t *testing.T) {
 	frame := newFrame(FrameTypeChunk, MessageId{uintValue: new(uint64)})
 	falseVal := false
 	frame.Eof = &falseVal
@@ -469,7 +469,7 @@ func TestIsEofWhenFalse(t *testing.T) {
 }
 
 // TEST198: Test Limits::default provides the documented default values
-func TestLimitsDefault(t *testing.T) {
+func Test198_limits_default(t *testing.T) {
 	limits := DefaultLimits()
 	if limits.MaxFrame != DefaultMaxFrame {
 		t.Errorf("Expected max_frame %d, got %d", DefaultMaxFrame, limits.MaxFrame)
@@ -487,14 +487,14 @@ func TestLimitsDefault(t *testing.T) {
 }
 
 // TEST199: Test PROTOCOL_VERSION is 2
-func TestProtocolVersionConstant(t *testing.T) {
+func Test199_protocol_version_constant(t *testing.T) {
 	if ProtocolVersion != 2 {
 		t.Errorf("PROTOCOL_VERSION must be 2, got %d", ProtocolVersion)
 	}
 }
 
 // TEST200: Test integer key constants match the protocol specification
-func TestKeyConstants(t *testing.T) {
+func Test200_key_constants(t *testing.T) {
 	if keyVersion != 0 {
 		t.Errorf("keyVersion must be 0, got %d", keyVersion)
 	}
@@ -531,7 +531,7 @@ func TestKeyConstants(t *testing.T) {
 }
 
 // TEST201: Test hello_with_manifest preserves binary manifest data (not just JSON text)
-func TestHelloManifestBinaryData(t *testing.T) {
+func Test201_hello_manifest_binary_data(t *testing.T) {
 	binaryManifest := []byte{0x00, 0x01, 0xFF, 0xFE, 0x80}
 	frame := NewHelloWithManifest(1000, 500, DefaultMaxReorderBuffer, binaryManifest)
 
@@ -553,7 +553,7 @@ func TestHelloManifestBinaryData(t *testing.T) {
 }
 
 // TEST202: Test MessageId Eq semantics: equal UUIDs are equal, different ones are not
-func TestMessageIdEqualityAndHash(t *testing.T) {
+func Test202_message_id_equality_and_hash(t *testing.T) {
 	id1 := MessageId{uuidBytes: []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}
 	id2 := MessageId{uuidBytes: []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}}
 	id3 := MessageId{uuidBytes: []byte{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}}
@@ -581,7 +581,7 @@ func TestMessageIdEqualityAndHash(t *testing.T) {
 }
 
 // TEST203: Test Uuid and Uint variants of MessageId are never equal even for coincidental byte values
-func TestMessageIdCrossVariantInequality(t *testing.T) {
+func Test203_message_id_cross_variant_inequality(t *testing.T) {
 	uuidId := MessageId{uuidBytes: make([]byte, 16)} // all zeros
 	zero := uint64(0)
 	uintId := MessageId{uintValue: &zero}
@@ -592,7 +592,7 @@ func TestMessageIdCrossVariantInequality(t *testing.T) {
 }
 
 // TEST204: Test Frame::req with empty payload stores empty slice not nil
-func TestReqFrameEmptyPayload(t *testing.T) {
+func Test204_req_frame_empty_payload(t *testing.T) {
 	frame := NewReq(NewMessageIdRandom(), "cap:op=test", []byte{}, "text/plain")
 	if frame.Payload == nil {
 		t.Error("Empty payload should be empty slice, not nil")
@@ -603,7 +603,7 @@ func TestReqFrameEmptyPayload(t *testing.T) {
 }
 
 // TEST365: Frame::stream_start stores reqId, streamId, mediaUrn
-func TestStreamStartFrame(t *testing.T) {
+func Test365_stream_start_frame(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-abc-123"
 	mediaUrn := "media:bytes"
@@ -625,7 +625,7 @@ func TestStreamStartFrame(t *testing.T) {
 }
 
 // TEST366: Frame::stream_end stores reqId, streamId
-func TestStreamEndFrame(t *testing.T) {
+func Test366_stream_end_frame(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-xyz-456"
 
@@ -646,7 +646,7 @@ func TestStreamEndFrame(t *testing.T) {
 }
 
 // TEST367: Frame::stream_start with empty streamId still constructs
-func TestStreamStartWithEmptyStreamId(t *testing.T) {
+func Test367_stream_start_with_empty_stream_id(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := ""
 	mediaUrn := "media:json"
@@ -665,7 +665,7 @@ func TestStreamStartWithEmptyStreamId(t *testing.T) {
 }
 
 // TEST368: Frame::stream_start with empty mediaUrn still constructs
-func TestStreamStartWithEmptyMediaUrn(t *testing.T) {
+func Test368_stream_start_with_empty_media_urn(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-test"
 	mediaUrn := ""
@@ -684,7 +684,7 @@ func TestStreamStartWithEmptyMediaUrn(t *testing.T) {
 }
 
 // TEST399: RelayNotify discriminant roundtrips through uint8 conversion (value 10)
-func TestRelayNotifyDiscriminantRoundtrip(t *testing.T) {
+func Test399_relay_notify_discriminant_roundtrip(t *testing.T) {
 	ft := FrameTypeRelayNotify
 	asUint := uint8(ft)
 	if asUint != 10 {
@@ -697,7 +697,7 @@ func TestRelayNotifyDiscriminantRoundtrip(t *testing.T) {
 }
 
 // TEST400: RelayState discriminant roundtrips through uint8 conversion (value 11)
-func TestRelayStateDiscriminantRoundtrip(t *testing.T) {
+func Test400_relay_state_discriminant_roundtrip(t *testing.T) {
 	ft := FrameTypeRelayState
 	asUint := uint8(ft)
 	if asUint != 11 {
@@ -710,7 +710,7 @@ func TestRelayStateDiscriminantRoundtrip(t *testing.T) {
 }
 
 // TEST401: relay_notify factory stores manifest and limits, accessors extract them correctly
-func TestRelayNotifyFactoryAndAccessors(t *testing.T) {
+func Test401_relay_notify_factory_and_accessors(t *testing.T) {
 	manifest := []byte(`{"caps":["cap:op=test"]}`)
 	maxFrame := 2_000_000
 	maxChunk := 128_000
@@ -753,7 +753,7 @@ func TestRelayNotifyFactoryAndAccessors(t *testing.T) {
 }
 
 // TEST402: relay_state factory stores resource payload in Payload field
-func TestRelayStateFactoryAndPayload(t *testing.T) {
+func Test402_relay_state_factory_and_payload(t *testing.T) {
 	resources := []byte(`{"gpu_memory":8192}`)
 
 	frame := NewRelayState(resources)
@@ -767,7 +767,7 @@ func TestRelayStateFactoryAndPayload(t *testing.T) {
 }
 
 // TEST403: FrameType from value 12 is invalid (one past RelayState)
-func TestFrameTypeOnePastRelayState(t *testing.T) {
+func Test403_frame_type_one_past_relay_state(t *testing.T) {
 	ft := FrameType(12)
 	if ft.String() != fmt.Sprintf("UNKNOWN(%d)", 12) {
 		t.Errorf("FrameType(12) must be unknown, got %s", ft.String())

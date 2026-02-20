@@ -30,7 +30,7 @@ func createCapWithSchema(t *testing.T, argSchema interface{}) *Cap {
 
 // TEST051: Test input validation succeeds with valid positional argument
 // TEST163: Test argument schema validation succeeds with valid JSON matching schema
-func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
+func Test163_schema_validator_validate_argument_with_schema_success(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Define a JSON schema for user data
@@ -70,7 +70,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Success(t *testing.T) {
 
 // TEST052: Test input validation fails with MissingRequiredArgument when required arg missing
 // TEST164: Test argument schema validation fails with JSON missing required fields
-func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
+func Test164_schema_validator_validate_argument_with_schema_failure(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Define a JSON schema requiring name field
@@ -114,7 +114,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_Failure(t *testing.T) {
 }
 
 // TEST053: Test input validation fails with InvalidArgumentType when wrong type provided
-func TestSchemaValidator_ValidateArgumentWithSchema_NilSchema(t *testing.T) {
+func Test053_schema_validator_validate_argument_with_schema_nil_schema(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Create argument using new architecture
@@ -133,7 +133,7 @@ func TestSchemaValidator_ValidateArgumentWithSchema_NilSchema(t *testing.T) {
 }
 
 // TEST165: Test output schema validation succeeds with valid JSON matching schema
-func TestSchemaValidator_ValidateOutputWithSchema_Success(t *testing.T) {
+func Test165_schema_validator_validate_output_with_schema_success(t *testing.T) {
 	validator := NewSchemaValidator()
 
 	// Define a JSON schema for result data
@@ -630,36 +630,37 @@ func TestMediaUrnResolutionWithMediaSpecs(t *testing.T) {
 	registry := testRegistry(t)
 
 	// Media URN resolution requires a mediaSpecs array - no built-in fallback
-	// Test resolution with provided mediaSpecs
+	// Use expanded media URN constants that have semantic tags (IsBinary/IsMap require proper tags)
 	mediaSpecs := []media.MediaSpecDef{
-		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
-		{Urn: standard.MediaInteger, MediaType: "text/plain", ProfileURI: media.ProfileInt},
-		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
-		{Urn: standard.MediaBinary, MediaType: "application/octet-stream"},
+		{Urn: media.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
+		{Urn: media.MediaInteger, MediaType: "text/plain", ProfileURI: media.ProfileInt},
+		{Urn: media.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: media.MediaBinary, MediaType: "application/octet-stream"},
 	}
 
-	resolved, err := media.ResolveMediaUrn(standard.MediaString, mediaSpecs, registry)
+	resolved, err := media.ResolveMediaUrn(media.MediaString, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, media.ProfileStr, resolved.ProfileURI)
 
-	resolved, err = media.ResolveMediaUrn(standard.MediaInteger, mediaSpecs, registry)
+	resolved, err = media.ResolveMediaUrn(media.MediaInteger, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, media.ProfileInt, resolved.ProfileURI)
 
-	resolved, err = media.ResolveMediaUrn(standard.MediaObject, mediaSpecs, registry)
+	resolved, err = media.ResolveMediaUrn(media.MediaObject, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.Equal(t, media.ProfileObj, resolved.ProfileURI)
 
-	resolved, err = media.ResolveMediaUrn(standard.MediaBinary, mediaSpecs, registry)
+	resolved, err = media.ResolveMediaUrn(media.MediaBinary, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/octet-stream", resolved.MediaType)
 	assert.True(t, resolved.IsBinary())
 
 	// Resolution succeeds from registry when mediaSpecs is nil (fallback to registry)
-	resolved, err = media.ResolveMediaUrn(standard.MediaString, nil, registry)
+	// Registry knows about media.MediaString = "media:textable;form=scalar"
+	resolved, err = media.ResolveMediaUrn(media.MediaString, nil, registry)
 	require.NoError(t, err, "Resolution should succeed from registry")
 	assert.Equal(t, "text/plain", resolved.MediaType)
 }
@@ -700,7 +701,7 @@ func TestCustomMediaUrnResolution(t *testing.T) {
 // ============================================================================
 
 // TEST054: XV5 - Test inline media spec redefinition of existing registry spec is detected and rejected
-func TestXV5InlineSpecRedefinitionDetected(t *testing.T) {
+func Test054_xv5_inline_spec_redefinition_detected(t *testing.T) {
 	// Try to redefine a media URN that exists in the registry
 	mediaSpecs := map[string]any{
 		standard.MediaString: map[string]any{
@@ -722,7 +723,7 @@ func TestXV5InlineSpecRedefinitionDetected(t *testing.T) {
 }
 
 // TEST055: XV5 - Test new inline media spec (not in registry) is allowed
-func TestXV5NewInlineSpecAllowed(t *testing.T) {
+func Test055_xv5_new_inline_spec_allowed(t *testing.T) {
 	// Define a completely new media spec that doesn't exist in registry
 	mediaSpecs := map[string]any{
 		"media:my-unique-custom-type-xyz123": map[string]any{
@@ -743,7 +744,7 @@ func TestXV5NewInlineSpecAllowed(t *testing.T) {
 }
 
 // TEST056: XV5 - Test empty media_specs (no inline specs) passes XV5 validation
-func TestXV5EmptyMediaSpecsAllowed(t *testing.T) {
+func Test056_xv5_empty_media_specs_allowed(t *testing.T) {
 	// Empty media_specs should pass (with or without registry lookup)
 	result := ValidateNoInlineMediaSpecRedefinition(map[string]any{}, nil)
 	assert.True(t, result.Valid, "Empty map should pass validation")
@@ -763,7 +764,7 @@ func TestXV5EmptyMediaSpecsAllowed(t *testing.T) {
 }
 
 // TEST166: Test validation skipped when resolved media spec has no schema
-func TestSchemaValidator_SkipValidationWithoutSchema(t *testing.T) {
+func Test166_schema_validator_skip_validation_without_schema(t *testing.T) {
 	registry := testRegistry(t)
 	validator := NewSchemaValidator()
 
@@ -772,23 +773,23 @@ func TestSchemaValidator_SkipValidationWithoutSchema(t *testing.T) {
 	require.NoError(t, err)
 	cap := NewCap(urn, "Test Cap", "test-command")
 
-	// Add argument using built-in standard.MediaString (resolves from registry, has no schema)
+	// Add argument using media.MediaString (expanded form, resolves from registry, has no schema)
 	cliFlag := "--input"
 	pos := 0
 	cap.AddArg(CapArg{
-		MediaUrn:       standard.MediaString,
+		MediaUrn:       media.MediaString,
 		Required:       true,
 		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "String input",
 	})
 
-	// Validate with any string value - should succeed because standard.MediaString has no schema
+	// Validate with any string value - should succeed because media.MediaString has no schema
 	err = validator.ValidateArguments(cap, []interface{}{"any string value"}, nil, registry)
 	assert.NoError(t, err, "Validation should succeed when resolved spec has no schema")
 }
 
 // TEST167: Test validation fails hard when media URN cannot be resolved from any source
-func TestSchemaValidator_UnresolvableMediaUrnFailsHard(t *testing.T) {
+func Test167_schema_validator_unresolvable_media_urn_fails_hard(t *testing.T) {
 	registry := testRegistry(t)
 	validator := NewSchemaValidator()
 

@@ -21,7 +21,7 @@ func testRegistry(t *testing.T) *MediaUrnRegistry {
 }
 
 // TEST088: Test resolving string media URN from registry returns correct media type and profile
-func TestResolveFromRegistryStr(t *testing.T) {
+func Test088_resolve_from_registry_str(t *testing.T) {
 	registry := testRegistry(t)
 	resolved, err := ResolveMediaUrn("media:textable;form=scalar", nil, registry)
 	require.NoError(t, err)
@@ -30,7 +30,7 @@ func TestResolveFromRegistryStr(t *testing.T) {
 }
 
 // TEST089: Test resolving object media URN from registry returns JSON media type
-func TestResolveFromRegistryObj(t *testing.T) {
+func Test089_resolve_from_registry_obj(t *testing.T) {
 	registry := testRegistry(t)
 	resolved, err := ResolveMediaUrn("media:form=map;textable", nil, registry)
 	require.NoError(t, err)
@@ -38,7 +38,7 @@ func TestResolveFromRegistryObj(t *testing.T) {
 }
 
 // TEST090: Test resolving binary media URN from registry returns octet-stream and IsBinary true
-func TestResolveFromRegistryBinary(t *testing.T) {
+func Test090_resolve_from_registry_binary(t *testing.T) {
 	registry := testRegistry(t)
 	resolved, err := ResolveMediaUrn("media:bytes", nil, registry)
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestResolveFromRegistryBinary(t *testing.T) {
 }
 
 // TEST091: Test resolving custom media URN from local media_specs takes precedence over registry
-func TestResolveCustomMediaSpec(t *testing.T) {
+func Test091_resolve_custom_media_spec(t *testing.T) {
 	registry := testRegistry(t)
 	customSpecs := []MediaSpecDef{
 		{
@@ -73,7 +73,7 @@ func TestResolveCustomMediaSpec(t *testing.T) {
 }
 
 // TEST092: Test resolving custom object form media spec with schema from local media_specs
-func TestResolveCustomWithSchema(t *testing.T) {
+func Test092_resolve_custom_with_schema(t *testing.T) {
 	registry := testRegistry(t)
 	schema := map[string]any{
 		"type": "object",
@@ -104,7 +104,7 @@ func TestResolveCustomWithSchema(t *testing.T) {
 }
 
 // TEST093: Test resolving unknown media URN fails with UnresolvableMediaUrn error
-func TestResolveUnresolvableFailsHard(t *testing.T) {
+func Test093_resolve_unresolvable_fails_hard(t *testing.T) {
 	registry := testRegistry(t)
 	// URN not in local media_specs and not in registry - FAIL HARD
 	_, err := ResolveMediaUrn("media:completely-unknown-urn-not-in-registry", nil, registry)
@@ -114,7 +114,7 @@ func TestResolveUnresolvableFailsHard(t *testing.T) {
 }
 
 // TEST094: Test local media_specs definition overrides registry definition for same URN
-func TestLocalOverridesRegistry(t *testing.T) {
+func Test094_local_overrides_registry(t *testing.T) {
 	registry := testRegistry(t)
 
 	// Custom definition in media_specs takes precedence over registry
@@ -144,7 +144,7 @@ func TestLocalOverridesRegistry(t *testing.T) {
 // -------------------------------------------------------------------------
 
 // TEST095: Test MediaSpecDef serializes with required fields and skips None fields
-func TestMediaSpecDefSerialize(t *testing.T) {
+func Test095_media_spec_def_serialize(t *testing.T) {
 	def := MediaSpecDef{
 		Urn:         "media:test;json",
 		MediaType:   "application/json",
@@ -170,7 +170,7 @@ func TestMediaSpecDefSerialize(t *testing.T) {
 }
 
 // TEST096: Test deserializing MediaSpecDef from JSON object
-func TestMediaSpecDefDeserialize(t *testing.T) {
+func Test096_media_spec_def_deserialize(t *testing.T) {
 	jsonStr := `{"urn":"media:test;json","media_type":"application/json","title":"Test"}`
 	var def MediaSpecDef
 	err := json.Unmarshal([]byte(jsonStr), &def)
@@ -186,7 +186,7 @@ func TestMediaSpecDefDeserialize(t *testing.T) {
 // -------------------------------------------------------------------------
 
 // TEST097: Test duplicate URN validation catches duplicates
-func TestValidateNoDuplicateUrnsCatchesDuplicates(t *testing.T) {
+func Test097_validate_no_duplicate_urns_catches_duplicates(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		NewMediaSpecDefWithTitle("media:dup;json", "application/json", "", "First"),
 		NewMediaSpecDefWithTitle("media:dup;json", "application/json", "", "Second"), // duplicate
@@ -198,7 +198,7 @@ func TestValidateNoDuplicateUrnsCatchesDuplicates(t *testing.T) {
 }
 
 // TEST098: Test duplicate URN validation passes for unique URNs
-func TestValidateNoDuplicateUrnsPassesForUnique(t *testing.T) {
+func Test098_validate_no_duplicate_urns_passes_for_unique(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		NewMediaSpecDefWithTitle("media:first;json", "application/json", "", "First"),
 		NewMediaSpecDefWithTitle("media:second;json", "application/json", "", "Second"),
@@ -212,7 +212,7 @@ func TestValidateNoDuplicateUrnsPassesForUnique(t *testing.T) {
 // -------------------------------------------------------------------------
 
 // TEST099: Test ResolvedMediaSpec IsBinary returns true for bytes media URN
-func TestResolvedIsBinary(t *testing.T) {
+func Test099_resolved_is_binary(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
 		SpecID:      "media:bytes",
 		MediaType:   "application/octet-stream",
@@ -230,7 +230,7 @@ func TestResolvedIsBinary(t *testing.T) {
 }
 
 // TEST100: Test ResolvedMediaSpec IsMap returns true for form=map media URN
-func TestResolvedIsMap(t *testing.T) {
+func Test100_resolved_is_map(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
 		SpecID:      "media:textable;form=map",
 		MediaType:   "application/json",
@@ -249,7 +249,7 @@ func TestResolvedIsMap(t *testing.T) {
 }
 
 // TEST101: Test ResolvedMediaSpec IsScalar returns true for form=scalar media URN
-func TestResolvedIsScalar(t *testing.T) {
+func Test101_resolved_is_scalar(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
 		SpecID:      "media:textable;form=scalar",
 		MediaType:   "text/plain",
@@ -267,7 +267,7 @@ func TestResolvedIsScalar(t *testing.T) {
 }
 
 // TEST102: Test ResolvedMediaSpec IsList returns true for form=list media URN
-func TestResolvedIsList(t *testing.T) {
+func Test102_resolved_is_list(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
 		SpecID:      "media:textable;form=list",
 		MediaType:   "application/json",
@@ -285,7 +285,7 @@ func TestResolvedIsList(t *testing.T) {
 }
 
 // TEST103: Test ResolvedMediaSpec IsJSON returns true when json tag is present
-func TestResolvedIsJSON(t *testing.T) {
+func Test103_resolved_is_json(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
 		SpecID:      "media:json;textable;form=map",
 		MediaType:   "application/json",
@@ -303,7 +303,7 @@ func TestResolvedIsJSON(t *testing.T) {
 }
 
 // TEST104: Test ResolvedMediaSpec IsText returns true when textable tag is present
-func TestResolvedIsText(t *testing.T) {
+func Test104_resolved_is_text(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
 		SpecID:      "media:textable",
 		MediaType:   "text/plain",
@@ -325,7 +325,7 @@ func TestResolvedIsText(t *testing.T) {
 // -------------------------------------------------------------------------
 
 // TEST105: Test metadata propagates from media spec def to resolved media spec
-func TestMetadataPropagation(t *testing.T) {
+func Test105_metadata_propagation(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:custom-setting;setting",
@@ -352,7 +352,7 @@ func TestMetadataPropagation(t *testing.T) {
 }
 
 // TEST106: Test metadata and validation can coexist in media spec definition
-func TestMetadataWithValidation(t *testing.T) {
+func Test106_metadata_with_validation(t *testing.T) {
 	minVal := 0.0
 	maxVal := 100.0
 	mediaSpecs := []MediaSpecDef{
@@ -394,7 +394,7 @@ func TestMetadataWithValidation(t *testing.T) {
 // -------------------------------------------------------------------------
 
 // TEST107: Test extensions field propagates from media spec def to resolved
-func TestExtensionsPropagation(t *testing.T) {
+func Test107_extensions_propagation(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:custom-pdf;bytes",
@@ -416,7 +416,7 @@ func TestExtensionsPropagation(t *testing.T) {
 }
 
 // TEST108: Test extensions serializes/deserializes correctly in MediaSpecDef
-func TestExtensionsSerialization(t *testing.T) {
+func Test108_extensions_serialization(t *testing.T) {
 	def := MediaSpecDef{
 		Urn:         "media:json-data",
 		MediaType:   "application/json",
@@ -441,7 +441,7 @@ func TestExtensionsSerialization(t *testing.T) {
 }
 
 // TEST109: Test extensions can coexist with metadata and validation
-func TestExtensionsWithMetadataAndValidation(t *testing.T) {
+func Test109_extensions_with_metadata_and_validation(t *testing.T) {
 	minLen := 1
 	maxLen := 1000
 	mediaSpecs := []MediaSpecDef{
@@ -474,7 +474,7 @@ func TestExtensionsWithMetadataAndValidation(t *testing.T) {
 }
 
 // TEST110: Test multiple extensions in a media spec
-func TestMultipleExtensions(t *testing.T) {
+func Test110_multiple_extensions(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
 			Urn:         "media:image;jpeg;bytes",
@@ -501,7 +501,7 @@ func TestMultipleExtensions(t *testing.T) {
 // -------------------------------------------------------------------------
 
 // TEST304: Test MediaAvailabilityOutput constant parses as valid media URN with correct tags
-func TestMediaAvailabilityOutputConstant(t *testing.T) {
+func Test304_media_availability_output_constant(t *testing.T) {
 	assert.True(t, HasMediaUrnTag(MediaAvailabilityOutput, "textable"),
 		"model-availability must be textable")
 	assert.True(t, HasMediaUrnTagValue(MediaAvailabilityOutput, "form", "map"),
@@ -511,7 +511,7 @@ func TestMediaAvailabilityOutputConstant(t *testing.T) {
 }
 
 // TEST305: Test MediaPathOutput constant parses as valid media URN with correct tags
-func TestMediaPathOutputConstant(t *testing.T) {
+func Test305_media_path_output_constant(t *testing.T) {
 	assert.True(t, HasMediaUrnTag(MediaPathOutput, "textable"),
 		"model-path must be textable")
 	assert.True(t, HasMediaUrnTagValue(MediaPathOutput, "form", "map"),
@@ -521,7 +521,7 @@ func TestMediaPathOutputConstant(t *testing.T) {
 }
 
 // TEST306: Test MediaAvailabilityOutput and MediaPathOutput are distinct URNs
-func TestAvailabilityAndPathOutputDistinct(t *testing.T) {
+func Test306_availability_and_path_output_distinct(t *testing.T) {
 	assert.NotEqual(t, MediaAvailabilityOutput, MediaPathOutput,
 		"availability and path output must be distinct media URNs")
 	// They must NOT be the same type (different model-availability vs model-path marker tags)

@@ -20,7 +20,7 @@ func capTestUrn(tags string) string {
 }
 
 // TEST108: Test creating new cap with URN, title, and command verifies correct initialization
-func TestCapCreation(t *testing.T) {
+func Test108_cap_creation(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json;data_processing"))
 	require.NoError(t, err)
 
@@ -39,7 +39,7 @@ func TestCapCreation(t *testing.T) {
 }
 
 // TEST109: Test creating cap with metadata initializes and retrieves metadata correctly
-func TestCapWithMetadata(t *testing.T) {
+func Test109_cap_with_metadata(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(capTestUrn("op=arithmetic;compute;subtype=math"))
 	require.NoError(t, err)
 
@@ -65,7 +65,7 @@ func TestCapWithMetadata(t *testing.T) {
 }
 
 // TEST110: Test cap matching with subset semantics for request fulfillment
-func TestCapMatching(t *testing.T) {
+func Test110_cap_matching(t *testing.T) {
 	// Use type=data_processing key-value instead of flag for proper matching
 	id, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json;type=data_processing"))
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestCapMatching(t *testing.T) {
 }
 
 // TEST111: Test getting and setting cap title updates correctly
-func TestCapTitle(t *testing.T) {
+func Test111_cap_title(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(capTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
@@ -94,7 +94,7 @@ func TestCapTitle(t *testing.T) {
 }
 
 // TEST112: Test cap equality based on URN and title matching
-func TestCapDefinitionEquality(t *testing.T) {
+func Test112_cap_definition_equality(t *testing.T) {
 	id1, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json"))
 	require.NoError(t, err)
 	id2, err := urn.NewCapUrnFromString(capTestUrn("op=transform;format=json"))
@@ -110,7 +110,7 @@ func TestCapDefinitionEquality(t *testing.T) {
 }
 
 // TEST113: Test cap stdin support via args with stdin source and serialization roundtrip
-func TestCapStdin(t *testing.T) {
+func Test113_cap_stdin(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(capTestUrn("op=generate;target=embeddings"))
 	require.NoError(t, err)
 
@@ -147,7 +147,7 @@ func TestCapStdin(t *testing.T) {
 }
 
 // TEST114: Test ArgSource type variants stdin, position, and cli_flag with their accessors
-func TestArgSourceTypes(t *testing.T) {
+func Test114_arg_source_types(t *testing.T) {
 	// Test stdin source
 	stdinUrn := "media:text"
 	stdinSource := ArgSource{Stdin: &stdinUrn}
@@ -177,7 +177,7 @@ func TestArgSourceTypes(t *testing.T) {
 }
 
 // TEST115: Test CapArg serialization and deserialization with multiple sources
-func TestCapArgSerialization(t *testing.T) {
+func Test115_cap_arg_serialization(t *testing.T) {
 	flag := "--name"
 	pos := 0
 	arg := CapArg{
@@ -203,7 +203,7 @@ func TestCapArgSerialization(t *testing.T) {
 }
 
 // TEST116: Test CapArg constructor methods basic and with_description create args correctly
-func TestCapArgConstructors(t *testing.T) {
+func Test116_cap_arg_constructors(t *testing.T) {
 	// Test basic constructor
 	flag := "--name"
 	arg := NewCapArg("media:string", true, []ArgSource{{CliFlag: &flag}})

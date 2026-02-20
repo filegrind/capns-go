@@ -8,7 +8,7 @@ import (
 )
 
 // TEST426: Single master REQ/response routing
-func TestRelaySwitchSingleMasterReqResponse(t *testing.T) {
+func Test426_relay_switch_single_master_req_response(t *testing.T) {
 	// Create socket pairs
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
@@ -80,7 +80,7 @@ func TestRelaySwitchSingleMasterReqResponse(t *testing.T) {
 }
 
 // TEST427: Multi-master cap routing
-func TestRelaySwitchMultiMasterCapRouting(t *testing.T) {
+func Test427_relay_switch_multi_master_cap_routing(t *testing.T) {
 	engineRead1, slaveWrite1 := net.Pipe()
 	slaveRead1, engineWrite1 := net.Pipe()
 	engineRead2, slaveWrite2 := net.Pipe()
@@ -176,7 +176,7 @@ func TestRelaySwitchMultiMasterCapRouting(t *testing.T) {
 }
 
 // TEST428: Unknown cap returns error
-func TestRelaySwitchUnknownCapReturnsError(t *testing.T) {
+func Test428_relay_switch_unknown_cap_returns_error(t *testing.T) {
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
 
@@ -226,7 +226,7 @@ func TestRelaySwitchUnknownCapReturnsError(t *testing.T) {
 }
 
 // TEST429: cap.Cap routing logic (find_master_for_cap)
-func TestRelaySwitchFindMasterForCap(t *testing.T) {
+func Test429_relay_switch_find_master_for_cap(t *testing.T) {
 	engineRead1, slaveWrite1 := net.Pipe()
 	slaveRead1, engineWrite1 := net.Pipe()
 	engineRead2, slaveWrite2 := net.Pipe()
@@ -307,7 +307,7 @@ func TestRelaySwitchFindMasterForCap(t *testing.T) {
 }
 
 // TEST430: Tie-breaking (same cap on multiple masters)
-func TestRelaySwitchTieBreaking(t *testing.T) {
+func Test430_relay_switch_tie_breaking(t *testing.T) {
 	engineRead1, slaveWrite1 := net.Pipe()
 	slaveRead1, engineWrite1 := net.Pipe()
 	engineRead2, slaveWrite2 := net.Pipe()
@@ -386,7 +386,7 @@ func TestRelaySwitchTieBreaking(t *testing.T) {
 }
 
 // TEST431: Continuation frame routing
-func TestRelaySwitchContinuationFrameRouting(t *testing.T) {
+func Test431_relay_switch_continuation_frame_routing(t *testing.T) {
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
 
@@ -468,7 +468,7 @@ func TestRelaySwitchContinuationFrameRouting(t *testing.T) {
 }
 
 // TEST432: Empty masters list returns error
-func TestRelaySwitchEmptyMastersListError(t *testing.T) {
+func Test432_relay_switch_empty_masters_list_error(t *testing.T) {
 	_, err := NewRelaySwitch([]SocketPair{})
 	if err == nil {
 		t.Fatal("Expected error for empty masters list")
@@ -483,7 +483,7 @@ func TestRelaySwitchEmptyMastersListError(t *testing.T) {
 }
 
 // TEST433: Capability aggregation deduplicates
-func TestRelaySwitchCapabilityAggregationDeduplicates(t *testing.T) {
+func Test433_relay_switch_capability_aggregation_deduplicates(t *testing.T) {
 	engineRead1, slaveWrite1 := net.Pipe()
 	slaveRead1, engineWrite1 := net.Pipe()
 	engineRead2, slaveWrite2 := net.Pipe()
@@ -549,7 +549,7 @@ func TestRelaySwitchCapabilityAggregationDeduplicates(t *testing.T) {
 }
 
 // TEST434: Limits negotiation takes minimum
-func TestRelaySwitchLimitsNegotiationMinimum(t *testing.T) {
+func Test434_relay_switch_limits_negotiation_minimum(t *testing.T) {
 	engineRead1, slaveWrite1 := net.Pipe()
 	slaveRead1, engineWrite1 := net.Pipe()
 	engineRead2, slaveWrite2 := net.Pipe()
@@ -606,7 +606,7 @@ func TestRelaySwitchLimitsNegotiationMinimum(t *testing.T) {
 }
 
 // TEST435: URN matching (exact vs accepts())
-func TestRelaySwitchURNMatching(t *testing.T) {
+func Test435_relay_switch_urn_matching(t *testing.T) {
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
 

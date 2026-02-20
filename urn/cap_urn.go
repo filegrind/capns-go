@@ -494,7 +494,8 @@ func (c *CapUrn) AcceptsStr(requestStr string) bool {
 // Specificity returns the specificity score for cap matching.
 // More specific caps have higher scores and are preferred.
 //
-// Direction specs contribute their media URN tag count (more tags = more specific).
+// Direction specs contribute their raw media URN tag count (more tags = more specific).
+// This matches Rust's in_media.inner().tags.len() — NOT the TaggedUrn weighted score.
 // Other tags contribute 1 per non-wildcard value.
 func (c *CapUrn) Specificity() int {
 	count := 0
@@ -504,14 +505,14 @@ func (c *CapUrn) Specificity() int {
 		if err != nil {
 			panic(fmt.Sprintf("CU2: in_spec '%s' is not a valid MediaUrn: %v", c.inSpec, err))
 		}
-		count += inMedia.Specificity()
+		count += inMedia.TagCount()
 	}
 	if c.outSpec != "media:" {
 		outMedia, err := NewMediaUrnFromString(c.outSpec)
 		if err != nil {
 			panic(fmt.Sprintf("CU2: out_spec '%s' is not a valid MediaUrn: %v", c.outSpec, err))
 		}
-		count += outMedia.Specificity()
+		count += outMedia.TagCount()
 	}
 	// Count non-wildcard tags
 	for _, value := range c.tags {

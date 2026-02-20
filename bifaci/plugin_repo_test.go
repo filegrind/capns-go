@@ -4,7 +4,8 @@ import (
 	"testing"
 )
 
-func TestTEST320PluginInfoConstruction(t *testing.T) {
+// TEST320: Construct PluginInfo and verify fields
+func Test320_plugin_info_construction(t *testing.T) {
 	// TEST320: Construct PluginInfo and verify fields
 	plugin := PluginInfo{
 		Id:                "testplugin",
@@ -42,7 +43,8 @@ func TestTEST320PluginInfoConstruction(t *testing.T) {
 	}
 }
 
-func TestTEST321PluginInfoIsSigned(t *testing.T) {
+// TEST321: Verify IsSigned() method
+func Test321_plugin_info_is_signed(t *testing.T) {
 	// TEST321: Verify IsSigned() method
 	plugin := PluginInfo{
 		Id:                "testplugin",
@@ -85,7 +87,8 @@ func TestTEST321PluginInfoIsSigned(t *testing.T) {
 	}
 }
 
-func TestTEST322PluginInfoHasBinary(t *testing.T) {
+// TEST322: Verify HasBinary() method
+func Test322_plugin_info_has_binary(t *testing.T) {
 	// TEST322: Verify HasBinary() method
 	plugin := PluginInfo{
 		Id:                "testplugin",
@@ -128,7 +131,8 @@ func TestTEST322PluginInfoHasBinary(t *testing.T) {
 	}
 }
 
-func TestTEST323PluginRepoServerValidateRegistry(t *testing.T) {
+// TEST323: Validate registry schema version
+func Test323_plugin_repo_server_validate_registry(t *testing.T) {
 	// TEST323: Validate registry schema version
 	registry := PluginRegistryV3{
 		SchemaVersion: "3.0",
@@ -160,7 +164,8 @@ func TestTEST323PluginRepoServerValidateRegistry(t *testing.T) {
 	}
 }
 
-func TestTEST324PluginRepoServerTransformToArray(t *testing.T) {
+// TEST324: Transform v3 registry to flat plugin array
+func Test324_plugin_repo_server_transform_to_array(t *testing.T) {
 	// TEST324: Transform v3 registry to flat plugin array
 	plugins := make(map[string]PluginRegistryEntry)
 	versions := make(map[string]PluginVersionData)
@@ -229,7 +234,8 @@ func TestTEST324PluginRepoServerTransformToArray(t *testing.T) {
 	}
 }
 
-func TestTEST325PluginRepoServerGetPlugins(t *testing.T) {
+// TEST325: Get all plugins via GetPlugins()
+func Test325_plugin_repo_server_get_plugins(t *testing.T) {
 	// TEST325: Get all plugins via GetPlugins()
 	plugins := make(map[string]PluginRegistryEntry)
 	versions := make(map[string]PluginVersionData)
@@ -289,7 +295,8 @@ func TestTEST325PluginRepoServerGetPlugins(t *testing.T) {
 	}
 }
 
-func TestTEST326PluginRepoServerGetPluginById(t *testing.T) {
+// TEST326: Get plugin by ID
+func Test326_plugin_repo_server_get_plugin_by_id(t *testing.T) {
 	// TEST326: Get plugin by ID
 	plugins := make(map[string]PluginRegistryEntry)
 	versions := make(map[string]PluginVersionData)
@@ -356,7 +363,8 @@ func TestTEST326PluginRepoServerGetPluginById(t *testing.T) {
 	}
 }
 
-func TestTEST327PluginRepoServerSearchPlugins(t *testing.T) {
+// TEST327: Search plugins by text query
+func Test327_plugin_repo_server_search_plugins(t *testing.T) {
 	// TEST327: Search plugins by text query
 	plugins := make(map[string]PluginRegistryEntry)
 	versions := make(map[string]PluginVersionData)
@@ -423,7 +431,8 @@ func TestTEST327PluginRepoServerSearchPlugins(t *testing.T) {
 	}
 }
 
-func TestTEST328PluginRepoServerGetByCategory(t *testing.T) {
+// TEST328: Filter plugins by category
+func Test328_plugin_repo_server_get_by_category(t *testing.T) {
 	// TEST328: Filter plugins by category
 	plugins := make(map[string]PluginRegistryEntry)
 	versions := make(map[string]PluginVersionData)
@@ -490,7 +499,8 @@ func TestTEST328PluginRepoServerGetByCategory(t *testing.T) {
 	}
 }
 
-func TestTEST329PluginRepoServerGetByCap(t *testing.T) {
+// TEST329: Find plugins by cap URN
+func Test329_plugin_repo_server_get_by_cap(t *testing.T) {
 	// TEST329: Find plugins by cap URN
 	plugins := make(map[string]PluginRegistryEntry)
 	versions := make(map[string]PluginVersionData)
@@ -564,7 +574,8 @@ func TestTEST329PluginRepoServerGetByCap(t *testing.T) {
 	}
 }
 
-func TestTEST330PluginRepoClientUpdateCache(t *testing.T) {
+// TEST330: PluginRepoClient cache update
+func Test330_plugin_repo_client_update_cache(t *testing.T) {
 	// TEST330: PluginRepoClient cache update
 	repo := NewPluginRepo(3600)
 
@@ -611,7 +622,8 @@ func TestTEST330PluginRepoClientUpdateCache(t *testing.T) {
 	}
 }
 
-func TestTEST331PluginRepoClientGetSuggestions(t *testing.T) {
+// TEST331: Get suggestions for missing cap
+func Test331_plugin_repo_client_get_suggestions(t *testing.T) {
 	// TEST331: Get suggestions for missing cap
 	repo := NewPluginRepo(3600)
 
@@ -665,7 +677,8 @@ func TestTEST331PluginRepoClientGetSuggestions(t *testing.T) {
 	}
 }
 
-func TestTEST332PluginRepoClientGetPlugin(t *testing.T) {
+// TEST332: Get plugin by ID from client
+func Test332_plugin_repo_client_get_plugin(t *testing.T) {
 	// TEST332: Get plugin by ID from client
 	repo := NewPluginRepo(3600)
 
@@ -714,7 +727,8 @@ func TestTEST332PluginRepoClientGetPlugin(t *testing.T) {
 	}
 }
 
-func TestTEST333PluginRepoClientGetAllCaps(t *testing.T) {
+// TEST333: Get all available caps
+func Test333_plugin_repo_client_get_all_caps(t *testing.T) {
 	// TEST333: Get all available caps
 	repo := NewPluginRepo(3600)
 
@@ -812,7 +826,8 @@ func TestTEST333PluginRepoClientGetAllCaps(t *testing.T) {
 	}
 }
 
-func TestTEST334PluginRepoClientNeedsSync(t *testing.T) {
+// TEST334: Check if client needs sync
+func Test334_plugin_repo_client_needs_sync(t *testing.T) {
 	// TEST334: Check if client needs sync
 	repo := NewPluginRepo(3600)
 
@@ -832,7 +847,8 @@ func TestTEST334PluginRepoClientNeedsSync(t *testing.T) {
 	}
 }
 
-func TestTEST335PluginRepoServerClientIntegration(t *testing.T) {
+// TEST335: Server creates response, client consumes it
+func Test335_plugin_repo_server_client_integration(t *testing.T) {
 	// TEST335: Server creates response, client consumes it
 	plugins := make(map[string]PluginRegistryEntry)
 	versions := make(map[string]PluginVersionData)

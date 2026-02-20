@@ -76,7 +76,7 @@ func bytesToFrameChannel(payload []byte) <-chan Frame {
 }
 
 // TEST248: Test register handler by exact cap URN and find it by the same URN
-func TestRegisterAndFindHandler(t *testing.T) {
+func Test248_register_and_find_handler(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -94,7 +94,7 @@ func TestRegisterAndFindHandler(t *testing.T) {
 }
 
 // TEST249: Test register_raw handler works with bytes directly without deserialization
-func TestRawHandler(t *testing.T) {
+func Test249_raw_handler(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -132,7 +132,7 @@ func TestRawHandler(t *testing.T) {
 }
 
 // TEST250: Test register typed handler deserializes JSON and executes correctly
-func TestTypedHandlerDeserialization(t *testing.T) {
+func Test250_typed_handler_deserialization(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -172,7 +172,7 @@ func TestTypedHandlerDeserialization(t *testing.T) {
 }
 
 // TEST251: Test typed handler returns error for invalid JSON input
-func TestTypedHandlerRejectsInvalidJSON(t *testing.T) {
+func Test251_typed_handler_rejects_invalid_json(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -201,7 +201,7 @@ func TestTypedHandlerRejectsInvalidJSON(t *testing.T) {
 }
 
 // TEST252: Test find_handler returns None for unregistered cap URNs
-func TestFindHandlerUnknownCap(t *testing.T) {
+func Test252_find_handler_unknown_cap(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -214,7 +214,7 @@ func TestFindHandlerUnknownCap(t *testing.T) {
 }
 
 // TEST253: Test handler function can be cloned via Arc and sent across threads (Send + Sync)
-func TestHandlerIsSendSync(t *testing.T) {
+func Test253_handler_is_send_sync(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -252,7 +252,7 @@ func TestHandlerIsSendSync(t *testing.T) {
 }
 
 // TEST254: Test NoPeerInvoker always returns PeerRequest error regardless of arguments
-func TestNoPeerInvoker(t *testing.T) {
+func Test254_no_peer_invoker(t *testing.T) {
 	peer := &noPeerInvoker{}
 	_, err := peer.Invoke(`cap:in="media:void";op=test;out="media:void"`, []cap.CapArgumentValue{})
 	if err == nil {
@@ -264,7 +264,7 @@ func TestNoPeerInvoker(t *testing.T) {
 }
 
 // TEST255: Test NoPeerInvoker returns error even with valid arguments
-func TestNoPeerInvokerWithArguments(t *testing.T) {
+func Test255_no_peer_invoker_with_arguments(t *testing.T) {
 	peer := &noPeerInvoker{}
 	args := []cap.CapArgumentValue{
 		cap.NewCapArgumentValueFromStr("media:test", "value"),
@@ -276,7 +276,7 @@ func TestNoPeerInvokerWithArguments(t *testing.T) {
 }
 
 // TEST256: Test NewPluginRuntime stores manifest data and parses when valid
-func TestNewPluginRuntimeWithValidJSON(t *testing.T) {
+func Test256_new_plugin_runtime_with_valid_json(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -291,7 +291,7 @@ func TestNewPluginRuntimeWithValidJSON(t *testing.T) {
 }
 
 // TEST257: Test NewPluginRuntime with invalid JSON still creates runtime (manifest is None)
-func TestNewPluginRuntimeWithInvalidJSON(t *testing.T) {
+func Test257_new_plugin_runtime_with_invalid_json(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte("not json"))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -306,7 +306,7 @@ func TestNewPluginRuntimeWithInvalidJSON(t *testing.T) {
 }
 
 // TEST258: Test NewPluginRuntimeWithManifest creates runtime with valid manifest data
-func TestNewPluginRuntimeWithManifestStruct(t *testing.T) {
+func Test258_new_plugin_runtime_with_manifest_struct(t *testing.T) {
 	var manifest CapManifest
 	if err := json.Unmarshal([]byte(testManifest), &manifest); err != nil {
 		t.Fatalf("Failed to parse test manifest: %v", err)
@@ -326,7 +326,7 @@ func TestNewPluginRuntimeWithManifestStruct(t *testing.T) {
 }
 
 // TEST259: Test extract_effective_payload with non-CBOR content_type returns raw payload unchanged
-func TestExtractEffectivePayloadNonCBOR(t *testing.T) {
+func Test259_extract_effective_payload_non_cbor(t *testing.T) {
 	payload := []byte("raw data")
 	result, err := extractEffectivePayload(payload, "application/json", `cap:in="media:void";op=test;out="media:void"`)
 	if err != nil {
@@ -338,7 +338,7 @@ func TestExtractEffectivePayloadNonCBOR(t *testing.T) {
 }
 
 // TEST260: Test extract_effective_payload with empty content_type returns raw payload unchanged
-func TestExtractEffectivePayloadNoContentType(t *testing.T) {
+func Test260_extract_effective_payload_no_content_type(t *testing.T) {
 	payload := []byte("raw data")
 	result, err := extractEffectivePayload(payload, "", `cap:in="media:void";op=test;out="media:void"`)
 	if err != nil {
@@ -350,7 +350,7 @@ func TestExtractEffectivePayloadNoContentType(t *testing.T) {
 }
 
 // TEST261: Test extract_effective_payload with CBOR content extracts matching argument value
-func TestExtractEffectivePayloadCBORMatch(t *testing.T) {
+func Test261_extract_effective_payload_cbor_match(t *testing.T) {
 	// For now, simplified implementation returns raw payload
 	// Full CBOR argument extraction will be implemented when needed
 	payload := []byte("test payload")
@@ -365,7 +365,7 @@ func TestExtractEffectivePayloadCBORMatch(t *testing.T) {
 }
 
 // TEST262: Test extract_effective_payload with CBOR content fails when no argument matches expected input
-func TestExtractEffectivePayloadCBORNoMatch(t *testing.T) {
+func Test262_extract_effective_payload_cbor_no_match(t *testing.T) {
 	// This test will be meaningful when full CBOR decoding is implemented
 	// For now, simplified version returns raw payload
 	payload := []byte("test")
@@ -377,7 +377,7 @@ func TestExtractEffectivePayloadCBORNoMatch(t *testing.T) {
 }
 
 // TEST263: Test extract_effective_payload with invalid CBOR bytes returns deserialization error
-func TestExtractEffectivePayloadInvalidCBOR(t *testing.T) {
+func Test263_extract_effective_payload_invalid_cbor(t *testing.T) {
 	// Will be meaningful when CBOR decoding is implemented
 	payload := []byte("not cbor")
 	_, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:void";op=test;out="media:void"`)
@@ -388,7 +388,7 @@ func TestExtractEffectivePayloadInvalidCBOR(t *testing.T) {
 }
 
 // TEST264: Test extract_effective_payload with CBOR non-array (e.g. map) returns error
-func TestExtractEffectivePayloadCBORNotArray(t *testing.T) {
+func Test264_extract_effective_payload_cbor_not_array(t *testing.T) {
 	// Will be meaningful when CBOR decoding is implemented
 	payload := []byte("{}")
 	_, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:void";op=test;out="media:void"`)
@@ -399,7 +399,7 @@ func TestExtractEffectivePayloadCBORNotArray(t *testing.T) {
 }
 
 // TEST265: Test extract_effective_payload with invalid cap URN returns CapUrn error
-func TestExtractEffectivePayloadInvalidCapUrn(t *testing.T) {
+func Test265_extract_effective_payload_invalid_cap_urn(t *testing.T) {
 	payload := []byte("test")
 	_, err := extractEffectivePayload(payload, "application/cbor", "not-a-cap-urn")
 	if err == nil {
@@ -408,7 +408,7 @@ func TestExtractEffectivePayloadInvalidCapUrn(t *testing.T) {
 }
 
 // TEST270: Test registering multiple handlers for different caps and finding each independently
-func TestMultipleHandlers(t *testing.T) {
+func Test270_multiple_handlers(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -458,7 +458,7 @@ func TestMultipleHandlers(t *testing.T) {
 }
 
 // TEST271: Test handler replacing an existing registration for the same cap URN
-func TestHandlerReplacement(t *testing.T) {
+func Test271_handler_replacement(t *testing.T) {
 	runtime, err := NewPluginRuntime([]byte(testManifest))
 	if err != nil {
 		t.Fatalf("Failed to create runtime: %v", err)
@@ -485,7 +485,7 @@ func TestHandlerReplacement(t *testing.T) {
 }
 
 // TEST272: Test extract_effective_payload CBOR with multiple arguments selects the correct one
-func TestExtractEffectivePayloadMultipleArgs(t *testing.T) {
+func Test272_extract_effective_payload_multiple_args(t *testing.T) {
 	// Will be meaningful when full CBOR argument parsing is implemented
 	payload := []byte("test payload")
 	result, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:model-spec;textable;form=scalar";op=infer;out="media:void"`)

@@ -9,7 +9,7 @@ import (
 )
 
 // TEST205: Test REQ frame encode/decode roundtrip preserves all fields
-func TestReqFrameRoundtrip(t *testing.T) {
+func Test205_req_frame_roundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	cap := `cap:in="media:void";op=test;out="media:void"`
 	payload := []byte("test payload")
@@ -41,7 +41,7 @@ func TestReqFrameRoundtrip(t *testing.T) {
 }
 
 // TEST206: Test HELLO frame encode/decode roundtrip preserves metadata
-func TestHelloFrameRoundtrip(t *testing.T) {
+func Test206_hello_frame_roundtrip(t *testing.T) {
 	original := NewHello(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer)
 
 	encoded, err := EncodeFrame(original)
@@ -66,7 +66,7 @@ func TestHelloFrameRoundtrip(t *testing.T) {
 }
 
 // TEST207: Test ERR frame encode/decode roundtrip preserves error code and message
-func TestErrFrameRoundtrip(t *testing.T) {
+func Test207_err_frame_roundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	code := "HANDLER_ERROR"
 	message := "Something failed"
@@ -91,7 +91,7 @@ func TestErrFrameRoundtrip(t *testing.T) {
 }
 
 // TEST208: Test LOG frame encode/decode roundtrip preserves level and message
-func TestLogFrameRoundtrip(t *testing.T) {
+func Test208_log_frame_roundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	level := "info"
 	message := "Log entry"
@@ -118,7 +118,7 @@ func TestLogFrameRoundtrip(t *testing.T) {
 // TEST209: REMOVED - RES frame no longer supported in protocol v2
 
 // TEST210: Test END frame encode/decode roundtrip preserves payload
-func TestEndFrameRoundtrip(t *testing.T) {
+func Test210_end_frame_roundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	payload := []byte("final data")
 
@@ -145,7 +145,7 @@ func TestEndFrameRoundtrip(t *testing.T) {
 }
 
 // TEST211: Test HELLO with manifest encode/decode roundtrip preserves manifest bytes
-func TestHelloWithManifestRoundtrip(t *testing.T) {
+func Test211_hello_with_manifest_roundtrip(t *testing.T) {
 	manifest := []byte(`{"name":"test","version":"1.0.0"}`)
 	original := NewHelloWithManifest(DefaultMaxFrame, DefaultMaxChunk, DefaultMaxReorderBuffer, manifest)
 
@@ -168,7 +168,7 @@ func TestHelloWithManifestRoundtrip(t *testing.T) {
 }
 
 // TEST212: Test chunk encode/decode roundtrip with streamId
-func TestChunkWithOffsetRoundtrip(t *testing.T) {
+func Test212_chunk_with_offset_roundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	streamId := "test-stream"
 	seq := uint64(3)
@@ -196,7 +196,7 @@ func TestChunkWithOffsetRoundtrip(t *testing.T) {
 }
 
 // TEST213: Test heartbeat frame encode/decode roundtrip preserves ID with no extra fields
-func TestHeartbeatRoundtrip(t *testing.T) {
+func Test213_heartbeat_roundtrip(t *testing.T) {
 	id := NewMessageIdRandom()
 	original := NewHeartbeat(id)
 
@@ -219,7 +219,7 @@ func TestHeartbeatRoundtrip(t *testing.T) {
 }
 
 // TEST214: Test write_frame/read_frame IO roundtrip through length-prefixed wire format
-func TestFrameIOroundtrip(t *testing.T) {
+func Test214_frame_io_roundtrip(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 	reader := NewFrameReader(&buf)
@@ -244,7 +244,7 @@ func TestFrameIOroundtrip(t *testing.T) {
 }
 
 // TEST215: Test reading multiple sequential frames from a single buffer
-func TestReadMultipleFrames(t *testing.T) {
+func Test215_read_multiple_frames(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 
@@ -278,7 +278,7 @@ func TestReadMultipleFrames(t *testing.T) {
 }
 
 // TEST216: Test write_frame rejects frames exceeding max_frame limit
-func TestWriteFrameRejectsOversized(t *testing.T) {
+func Test216_write_frame_rejects_oversized(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 
@@ -297,7 +297,7 @@ func TestWriteFrameRejectsOversized(t *testing.T) {
 }
 
 // TEST217: Test read_frame rejects incoming frames exceeding the negotiated max_frame limit
-func TestReadFrameRejectsOversized(t *testing.T) {
+func Test217_read_frame_rejects_oversized(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 
@@ -318,7 +318,7 @@ func TestReadFrameRejectsOversized(t *testing.T) {
 }
 
 // TEST218: Test write_chunked splits data into chunks respecting max_chunk (updated for stream multiplexing)
-func TestWriteChunked(t *testing.T) {
+func Test218_write_chunked(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 	writer.SetLimits(Limits{MaxFrame: DefaultMaxFrame, MaxChunk: 100})
@@ -376,7 +376,7 @@ func TestWriteChunked(t *testing.T) {
 }
 
 // TEST219: Test write_chunked with empty data produces STREAM_START + STREAM_END + END
-func TestWriteChunkedEmpty(t *testing.T) {
+func Test219_write_chunked_empty(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 
@@ -419,7 +419,7 @@ func TestWriteChunkedEmpty(t *testing.T) {
 }
 
 // TEST220: Test write_chunked with data exactly equal to max_chunk produces STREAM_START + CHUNK + STREAM_END + END
-func TestWriteChunkedExactChunkSize(t *testing.T) {
+func Test220_write_chunked_exact_chunk_size(t *testing.T) {
 	var buf bytes.Buffer
 	writer := NewFrameWriter(&buf)
 	writer.SetLimits(Limits{MaxFrame: DefaultMaxFrame, MaxChunk: 100})
@@ -456,7 +456,7 @@ func TestWriteChunkedExactChunkSize(t *testing.T) {
 }
 
 // TEST221: Test read_frame returns Ok(None) on clean EOF (empty stream)
-func TestReadFrameEOF(t *testing.T) {
+func Test221_read_frame_eof(t *testing.T) {
 	var buf bytes.Buffer // Empty buffer
 	reader := NewFrameReader(&buf)
 
@@ -467,7 +467,7 @@ func TestReadFrameEOF(t *testing.T) {
 }
 
 // TEST222: Test read_frame handles truncated length prefix
-func TestReadFrameTruncatedLengthPrefix(t *testing.T) {
+func Test222_read_frame_truncated_length_prefix(t *testing.T) {
 	buf := bytes.NewBuffer([]byte{0x00, 0x00}) // Only 2 bytes of 4-byte length prefix
 	reader := NewFrameReader(buf)
 
@@ -478,7 +478,7 @@ func TestReadFrameTruncatedLengthPrefix(t *testing.T) {
 }
 
 // TEST223: Test read_frame returns error on truncated frame body
-func TestReadFrameTruncatedBody(t *testing.T) {
+func Test223_read_frame_truncated_body(t *testing.T) {
 	var buf bytes.Buffer
 	// Write a length prefix indicating 100 bytes
 	lengthPrefix := []byte{0x00, 0x00, 0x00, 0x64} // 100 in big-endian
@@ -494,7 +494,7 @@ func TestReadFrameTruncatedBody(t *testing.T) {
 }
 
 // TEST224: Test MessageId::Uint roundtrips through encode/decode
-func TestMessageIdUintRoundtrip(t *testing.T) {
+func Test224_message_id_uint_roundtrip(t *testing.T) {
 	id := NewMessageIdFromUint(42)
 	frame := NewHeartbeat(id)
 
@@ -514,7 +514,7 @@ func TestMessageIdUintRoundtrip(t *testing.T) {
 }
 
 // TEST225: Test decode_frame rejects non-map CBOR values (e.g., array, integer, string)
-func TestDecodeNonMapValue(t *testing.T) {
+func Test225_decode_non_map_value(t *testing.T) {
 	// Encode a CBOR array instead of map
 	cborArray := []byte{0x81, 0x01} // CBOR array [1]
 
@@ -525,7 +525,7 @@ func TestDecodeNonMapValue(t *testing.T) {
 }
 
 // TEST226: Test decode_frame rejects CBOR map missing required version field
-func TestDecodeMissingVersion(t *testing.T) {
+func Test226_decode_missing_version(t *testing.T) {
 	// Build CBOR map with frame_type and id but missing version
 	// Map with keys 1 (frame_type) and 2 (id) but no key 0 (version)
 	m := make(map[int]interface{})
@@ -540,7 +540,7 @@ func TestDecodeMissingVersion(t *testing.T) {
 }
 
 // TEST227: Test decode_frame rejects CBOR map with invalid frame_type value
-func TestDecodeInvalidFrameTypeValue(t *testing.T) {
+func Test227_decode_invalid_frame_type_value(t *testing.T) {
 	m := make(map[int]interface{})
 	m[keyVersion] = uint8(1)
 	m[keyFrameType] = uint8(99) // invalid frame type
@@ -554,7 +554,7 @@ func TestDecodeInvalidFrameTypeValue(t *testing.T) {
 }
 
 // TEST228: Test decode_frame rejects CBOR map missing required id field
-func TestDecodeMissingId(t *testing.T) {
+func Test228_decode_missing_id(t *testing.T) {
 	m := make(map[int]interface{})
 	m[keyVersion] = uint8(1)
 	m[keyFrameType] = uint8(FrameTypeReq)
@@ -568,7 +568,7 @@ func TestDecodeMissingId(t *testing.T) {
 }
 
 // TEST229: Test FrameReader/FrameWriter SetLimits updates the negotiated limits
-func TestFrameReaderWriterSetLimits(t *testing.T) {
+func Test229_frame_reader_writer_set_limits(t *testing.T) {
 	buf := &bytes.Buffer{}
 	reader := NewFrameReader(buf)
 	writer := NewFrameWriter(buf)
@@ -592,7 +592,7 @@ func TestFrameReaderWriterSetLimits(t *testing.T) {
 }
 
 // TEST230: Test sync handshake exchanges HELLO frames and negotiates minimum limits
-func TestSyncHandshake(t *testing.T) {
+func Test230_sync_handshake(t *testing.T) {
 	// Use in-memory buffer for testing instead of pipes
 	// This simulates the handshake without needing bidirectional sockets
 	manifest := []byte(`{"name":"Test","version":"1.0","caps":[]}`)
@@ -690,7 +690,7 @@ func TestSyncHandshake(t *testing.T) {
 }
 
 // TEST231: Test handshake fails when peer sends non-HELLO frame
-func TestHandshakeRejectsNonHello(t *testing.T) {
+func Test231_handshake_rejects_non_hello(t *testing.T) {
 	// Use in-memory buffers
 	var hostToPlugin bytes.Buffer
 	var pluginToHost bytes.Buffer
@@ -726,7 +726,7 @@ func TestHandshakeRejectsNonHello(t *testing.T) {
 }
 
 // TEST232: Test handshake fails when plugin HELLO is missing required manifest
-func TestHandshakeRejectsMissingManifest(t *testing.T) {
+func Test232_handshake_rejects_missing_manifest(t *testing.T) {
 	// Use in-memory buffers
 	var pluginToHost bytes.Buffer
 
@@ -760,7 +760,7 @@ func TestHandshakeRejectsMissingManifest(t *testing.T) {
 }
 
 // TEST233: Test binary payload with all 256 byte values roundtrips through encode/decode
-func TestBinaryPayloadAllByteValues(t *testing.T) {
+func Test233_binary_payload_all_byte_values(t *testing.T) {
 	data := make([]byte, 256)
 	for i := 0; i < 256; i++ {
 		data[i] = byte(i)
@@ -785,7 +785,7 @@ func TestBinaryPayloadAllByteValues(t *testing.T) {
 }
 
 // TEST234: Test decode_frame handles garbage CBOR bytes gracefully with an error
-func TestDecodeGarbageBytes(t *testing.T) {
+func Test234_decode_garbage_bytes(t *testing.T) {
 	garbage := []byte{0xFF, 0xFE, 0xFD, 0xFC, 0xFB}
 	_, err := DecodeFrame(garbage)
 	if err == nil {
@@ -794,7 +794,7 @@ func TestDecodeGarbageBytes(t *testing.T) {
 }
 
 // TEST389: StreamStart encode/decode roundtrip preserves stream_id and media_urn
-func TestStreamStartRoundtrip(t *testing.T) {
+func Test389_stream_start_roundtrip(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-roundtrip-123"
 	mediaUrn := "media:json;form=scalar"
@@ -822,7 +822,7 @@ func TestStreamStartRoundtrip(t *testing.T) {
 }
 
 // TEST390: StreamEnd encode/decode roundtrip preserves stream_id, no media_urn
-func TestStreamEndRoundtrip(t *testing.T) {
+func Test390_stream_end_roundtrip(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-end-456"
 
@@ -849,7 +849,7 @@ func TestStreamEndRoundtrip(t *testing.T) {
 }
 
 // TEST399a: RelayNotify encode/decode roundtrip preserves manifest and limits
-func TestRelayNotifyRoundtrip(t *testing.T) {
+func Test399a_relay_notify_roundtrip(t *testing.T) {
 	manifest := []byte(`{"caps":["cap:op=relay-test"]}`)
 	maxFrame := 2_000_000
 	maxChunk := 128_000
@@ -890,7 +890,7 @@ func TestRelayNotifyRoundtrip(t *testing.T) {
 }
 
 // TEST400a: RelayState encode/decode roundtrip preserves resource payload
-func TestRelayStateRoundtrip(t *testing.T) {
+func Test400a_relay_state_roundtrip(t *testing.T) {
 	resources := []byte(`{"gpu_memory":8192,"cpu_cores":16}`)
 
 	original := NewRelayState(resources)

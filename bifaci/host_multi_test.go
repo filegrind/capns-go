@@ -31,7 +31,7 @@ func simulatePlugin(t *testing.T, pluginRead, pluginWrite net.Conn, manifest str
 }
 
 // TEST413: RegisterPlugin adds entries to capTable
-func TestRegisterPluginAddsCapTable(t *testing.T) {
+func Test413_register_plugin_adds_cap_table(t *testing.T) {
 	host := NewPluginHost()
 	host.RegisterPlugin("/path/to/converter", []string{"cap:op=convert", "cap:op=analyze"})
 
@@ -49,7 +49,7 @@ func TestRegisterPluginAddsCapTable(t *testing.T) {
 }
 
 // TEST414: Capabilities() returns nil when no plugins are running
-func TestCapabilitiesEmptyInitially(t *testing.T) {
+func Test414_capabilities_empty_initially(t *testing.T) {
 	// Case 1: No plugins at all
 	host := NewPluginHost()
 	assert.Nil(t, host.Capabilities(), "no plugins → nil capabilities")
@@ -60,7 +60,7 @@ func TestCapabilitiesEmptyInitially(t *testing.T) {
 }
 
 // TEST415: REQ for known cap triggers spawn (expect error for non-existent binary)
-func TestReqTriggersSpawn(t *testing.T) {
+func Test415_req_triggers_spawn(t *testing.T) {
 	host := NewPluginHost()
 	host.RegisterPlugin("/nonexistent/plugin/binary", []string{"cap:op=test"})
 
@@ -97,7 +97,7 @@ func TestReqTriggersSpawn(t *testing.T) {
 }
 
 // TEST416: AttachPlugin performs HELLO handshake, extracts manifest, updates capabilities
-func TestAttachPluginHandshake(t *testing.T) {
+func Test416_attach_plugin_handshake(t *testing.T) {
 	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:in=media:;out=media:"}]}`
 
 	hostRead, pluginWrite := net.Pipe()
@@ -135,7 +135,7 @@ func TestAttachPluginHandshake(t *testing.T) {
 }
 
 // TEST417: Route REQ to correct plugin by cap_urn (two plugins)
-func TestRouteReqByCapUrn(t *testing.T) {
+func Test417_route_req_by_cap_urn(t *testing.T) {
 	manifestA := `{"name":"PluginA","version":"1.0","caps":[{"urn":"cap:op=convert"}]}`
 	manifestB := `{"name":"PluginB","version":"1.0","caps":[{"urn":"cap:op=analyze"}]}`
 
@@ -237,7 +237,7 @@ func TestRouteReqByCapUrn(t *testing.T) {
 }
 
 // TEST418: Route STREAM_START/CHUNK/STREAM_END/END by req_id
-func TestRouteContinuationByReqId(t *testing.T) {
+func Test418_route_continuation_by_req_id(t *testing.T) {
 	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=cont"}]}`
 
 	hostReadP, pluginWriteP := net.Pipe()
@@ -326,7 +326,7 @@ func TestRouteContinuationByReqId(t *testing.T) {
 }
 
 // TEST419: Plugin HEARTBEAT handled locally (not forwarded to relay)
-func TestHeartbeatLocalHandling(t *testing.T) {
+func Test419_heartbeat_local_handling(t *testing.T) {
 	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=hb"}]}`
 
 	hostReadP, pluginWriteP := net.Pipe()
@@ -407,7 +407,7 @@ func TestHeartbeatLocalHandling(t *testing.T) {
 }
 
 // TEST420: Plugin non-HELLO/non-HB frames forwarded to relay
-func TestPluginFramesForwardedToRelay(t *testing.T) {
+func Test420_plugin_frames_forwarded_to_relay(t *testing.T) {
 	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=fwd"}]}`
 
 	hostReadP, pluginWriteP := net.Pipe()
@@ -497,7 +497,7 @@ func TestPluginFramesForwardedToRelay(t *testing.T) {
 }
 
 // TEST421: Plugin death updates capability list (removes dead plugin's caps)
-func TestPluginDeathUpdatesCaps(t *testing.T) {
+func Test421_plugin_death_updates_caps(t *testing.T) {
 	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=die"}]}`
 
 	hostReadP, pluginWriteP := net.Pipe()
@@ -552,7 +552,7 @@ func TestPluginDeathUpdatesCaps(t *testing.T) {
 }
 
 // TEST422: Plugin death sends ERR for all pending requests
-func TestPluginDeathSendsErr(t *testing.T) {
+func Test422_plugin_death_sends_err(t *testing.T) {
 	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=die"}]}`
 
 	hostReadP, pluginWriteP := net.Pipe()
@@ -621,7 +621,7 @@ func TestPluginDeathSendsErr(t *testing.T) {
 }
 
 // TEST423: Multiple plugins with distinct caps route independently
-func TestMultiPluginDistinctCaps(t *testing.T) {
+func Test423_multi_plugin_distinct_caps(t *testing.T) {
 	manifestA := `{"name":"PluginA","version":"1.0","caps":[{"urn":"cap:op=alpha"}]}`
 	manifestB := `{"name":"PluginB","version":"1.0","caps":[{"urn":"cap:op=beta"}]}`
 
@@ -742,7 +742,7 @@ func TestMultiPluginDistinctCaps(t *testing.T) {
 }
 
 // TEST424: Concurrent requests to same plugin handled independently
-func TestConcurrentRequestsSamePlugin(t *testing.T) {
+func Test424_concurrent_requests_same_plugin(t *testing.T) {
 	manifest := `{"name":"Test","version":"1.0","caps":[{"urn":"cap:op=conc"}]}`
 
 	hostReadP, pluginWriteP := net.Pipe()
@@ -847,7 +847,7 @@ func TestConcurrentRequestsSamePlugin(t *testing.T) {
 }
 
 // TEST425: FindPluginForCap returns false for unknown cap
-func TestFindPluginForCapUnknown(t *testing.T) {
+func Test425_find_plugin_for_cap_unknown(t *testing.T) {
 	host := NewPluginHost()
 	host.RegisterPlugin("/path/to/plugin", []string{"cap:op=known"})
 

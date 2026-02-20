@@ -31,7 +31,7 @@ func matrixTestUrn(tags string) string {
 }
 
 // TEST117: Test registering cap set and finding by exact and subset matching
-func TestRegisterAndFindCapSet(t *testing.T) {
+func Test117_register_and_find_cap_set(t *testing.T) {
 	registry := NewCapMatrix()
 
 	host := &MockCapSetForRegistry{name: "test-host"}
@@ -64,13 +64,16 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 		t.Errorf("Expected 1 host, got %d", len(sets))
 	}
 
-	// Test that request with extra tags does NOT match (cap missing tag is NOT a wildcard)
+	// Test subset match: request has MORE tags than the cap
 	// Cap registered: op=test;basic
 	// Request: model=gpt-4;op=test;basic
-	// Cap missing model tag → NO MATCH (must use model=* to accept any model)
-	_, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
-	if err == nil {
-		t.Error("Expected error (cap missing model tag is NOT a wildcard)")
+	// Cap missing model tag → implicit wildcard → SHOULD MATCH (Rust semantics)
+	sets, err = registry.FindCapSets(matrixTestUrn("model=gpt-4;op=test;basic"))
+	if err != nil {
+		t.Errorf("Expected match for request with extra tags (cap missing tag = implicit wildcard): %v", err)
+	}
+	if len(sets) != 1 {
+		t.Errorf("Expected 1 match for request with extra tags, got %d", len(sets))
 	}
 
 	// Test no match (different direction specs)
@@ -81,7 +84,7 @@ func TestRegisterAndFindCapSet(t *testing.T) {
 }
 
 // TEST118: Test selecting best cap set based on specificity ranking
-func TestBestCapSetSelection(t *testing.T) {
+func Test118_best_cap_set_selection(t *testing.T) {
 	registry := NewCapMatrix()
 
 	// Register general host with explicit wildcards for flexibility
@@ -138,7 +141,7 @@ func TestBestCapSetSelection(t *testing.T) {
 }
 
 // TEST119: Test invalid URN returns InvalidUrn error
-func TestInvalidUrnHandling(t *testing.T) {
+func Test119_invalid_urn_handling(t *testing.T) {
 	registry := NewCapMatrix()
 
 	_, err := registry.FindCapSets("invalid-urn")
@@ -155,7 +158,7 @@ func TestInvalidUrnHandling(t *testing.T) {
 }
 
 // TEST120: Test accepts_request checks if registry can handle a capability request
-func TestAcceptsRequest(t *testing.T) {
+func Test120_accepts_request(t *testing.T) {
 	registry := NewCapMatrix()
 
 	// Empty registry
@@ -182,9 +185,9 @@ func TestAcceptsRequest(t *testing.T) {
 	}
 	// Cap registered: op=test
 	// Request: extra=param;op=test
-	// Cap missing extra → NOT a wildcard → SHOULD NOT MATCH
-	if registry.AcceptsRequest(matrixTestUrn("extra=param;op=test")) {
-		t.Error("Registry should NOT handle capability (cap missing extra tag is NOT a wildcard)")
+	// Cap missing extra tag → implicit wildcard → SHOULD MATCH (Rust semantics)
+	if !registry.AcceptsRequest(matrixTestUrn("extra=param;op=test")) {
+		t.Error("Registry should handle capability (cap missing extra tag = implicit wildcard)")
 	}
 	if registry.AcceptsRequest(matrixTestUrn("op=different")) {
 		t.Error("Registry should not handle unregistered capability")
@@ -215,7 +218,7 @@ func makeCap(urn string, title string) *Cap {
 }
 
 // TEST121: Test CapBlock selects more specific cap over less specific regardless of registry order
-func TestCapBlockMoreSpecificWins(t *testing.T) {
+func Test121_cap_block_more_specific_wins(t *testing.T) {
 	// This is the key test: provider has less specific cap, plugin has more specific
 	// The more specific one should win regardless of registry order
 
@@ -265,7 +268,7 @@ func TestCapBlockMoreSpecificWins(t *testing.T) {
 }
 
 // TEST122: Test CapBlock breaks specificity ties by first registered registry
-func TestCapBlockTieGoesToFirst(t *testing.T) {
+func Test122_cap_block_tie_goes_to_first(t *testing.T) {
 	// When specificity is equal, first registry wins
 
 	registry1 := NewCapMatrix()
@@ -299,7 +302,7 @@ func TestCapBlockTieGoesToFirst(t *testing.T) {
 }
 
 // TEST123: Test CapBlock polls all registries to find most specific match
-func TestCapBlockPollsAll(t *testing.T) {
+func Test123_cap_block_polls_all(t *testing.T) {
 	// Test that all registries are polled
 
 	registry1 := NewCapMatrix()
@@ -338,7 +341,7 @@ func TestCapBlockPollsAll(t *testing.T) {
 }
 
 // TEST124: Test CapBlock returns error when no registries match the request
-func TestCapBlockNoMatch(t *testing.T) {
+func Test124_cap_block_no_match(t *testing.T) {
 	registry := NewCapMatrix()
 
 	composite := NewCapBlock()
@@ -358,7 +361,7 @@ func TestCapBlockNoMatch(t *testing.T) {
 }
 
 // TEST125: Test CapBlock prefers specific plugin over generic provider fallback
-func TestCapBlockFallbackScenario(t *testing.T) {
+func Test125_cap_block_fallback_scenario(t *testing.T) {
 	// Test the exact scenario from the user's issue:
 	// Provider: generic fallback with ext=* (can handle any file type)
 	// Plugin:   PDF-specific handler
@@ -426,7 +429,7 @@ func TestCapBlockFallbackScenario(t *testing.T) {
 }
 
 // TEST126: Test composite can method returns CapCaller for capability execution
-func TestCapBlockCanMethod(t *testing.T) {
+func Test126_cap_block_can_method(t *testing.T) {
 	// Test the can() method that returns a CapCaller
 
 	providerRegistry := NewCapMatrix()
@@ -516,7 +519,7 @@ func makeGraphCap(inSpec, outSpec, title string) *Cap {
 }
 
 // TEST127: Test CapGraph adds nodes and edges from capability definitions
-func TestCapGraphBasicConstruction(t *testing.T) {
+func Test127_cap_graph_basic_construction(t *testing.T) {
 	registry := NewCapMatrix()
 
 	host := &MockCapSetForRegistry{name: "converter"}
@@ -556,7 +559,7 @@ func TestCapGraphBasicConstruction(t *testing.T) {
 }
 
 // TEST128: Test CapGraph tracks outgoing and incoming edges for spec conversions
-func TestCapGraphOutgoingIncoming(t *testing.T) {
+func Test128_cap_graph_outgoing_incoming(t *testing.T) {
 	registry := NewCapMatrix()
 
 	host := &MockCapSetForRegistry{name: "converter"}
@@ -592,7 +595,7 @@ func TestCapGraphOutgoingIncoming(t *testing.T) {
 }
 
 // TEST129: Test CapGraph detects direct and indirect conversion paths between specs
-func TestCapGraphCanConvert(t *testing.T) {
+func Test129_cap_graph_can_convert(t *testing.T) {
 	registry := NewCapMatrix()
 
 	host := &MockCapSetForRegistry{name: "converter"}
@@ -636,7 +639,7 @@ func TestCapGraphCanConvert(t *testing.T) {
 }
 
 // TEST130: Test CapGraph finds shortest path for spec conversion chain
-func TestCapGraphFindPath(t *testing.T) {
+func Test130_cap_graph_find_path(t *testing.T) {
 	registry := NewCapMatrix()
 
 	host := &MockCapSetForRegistry{name: "converter"}
@@ -693,7 +696,7 @@ func TestCapGraphFindPath(t *testing.T) {
 }
 
 // TEST131: Test CapGraph finds all conversion paths sorted by length
-func TestCapGraphFindAllPaths(t *testing.T) {
+func Test131_cap_graph_find_all_paths(t *testing.T) {
 	registry := NewCapMatrix()
 
 	host := &MockCapSetForRegistry{name: "converter"}
@@ -729,7 +732,7 @@ func TestCapGraphFindAllPaths(t *testing.T) {
 }
 
 // TEST132: Test CapGraph returns direct edges sorted by specificity
-func TestCapGraphGetDirectEdges(t *testing.T) {
+func Test132_cap_graph_get_direct_edges(t *testing.T) {
 	registry1 := NewCapMatrix()
 	registry2 := NewCapMatrix()
 
@@ -777,7 +780,7 @@ func TestCapGraphGetDirectEdges(t *testing.T) {
 }
 
 // TEST134: Test CapGraph stats provides counts of nodes and edges
-func TestCapGraphStats(t *testing.T) {
+func Test134_cap_graph_stats(t *testing.T) {
 	registry := NewCapMatrix()
 
 	host := &MockCapSetForRegistry{name: "converter"}
@@ -818,7 +821,7 @@ func TestCapGraphStats(t *testing.T) {
 }
 
 // TEST133: Test CapBlock graph integration with multiple registries and conversion paths
-func TestCapGraphWithCapBlock(t *testing.T) {
+func Test133_cap_graph_with_cap_block(t *testing.T) {
 	// Integration test: build graph from CapBlock
 	providerRegistry := NewCapMatrix()
 	pluginRegistry := NewCapMatrix()

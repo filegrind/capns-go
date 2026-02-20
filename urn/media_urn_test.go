@@ -10,7 +10,7 @@ import (
 )
 
 // TEST057: Test parsing simple media URN verifies correct structure with no version, subtype, or profile
-func TestMediaUrnParseSimple(t *testing.T) {
+func Test057_parse_simple(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
 	assert.True(t, urn.HasTag("string"))
@@ -18,7 +18,7 @@ func TestMediaUrnParseSimple(t *testing.T) {
 }
 
 // TEST058: Test parsing media URN with subtype extracts subtype tag correctly
-func TestMediaUrnWithSubtype(t *testing.T) {
+func Test058_parse_with_subtype(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:string;form=scalar")
 	require.NoError(t, err)
 	assert.True(t, urn.HasTag("string"))
@@ -29,119 +29,147 @@ func TestMediaUrnWithSubtype(t *testing.T) {
 }
 
 // TEST059: Test parsing media URN with profile extracts profile URL correctly
-func TestMediaUrnWithProfile(t *testing.T) {
-	// Profile support depends on implementation
+func Test059_parse_with_profile(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:string;textable")
 	require.NoError(t, err)
 	assert.True(t, urn.HasTag("textable"))
 }
 
 // TEST060: Test wrong prefix fails with InvalidPrefix error
-func TestMediaUrnWrongPrefix(t *testing.T) {
+func Test060_wrong_prefix_fails(t *testing.T) {
 	_, err := NewMediaUrnFromString("notmedia:string")
 	assert.Error(t, err)
 }
 
 // TEST061: Test is_binary returns true only when bytes marker tag is present
-func TestMediaUrnIsBinary(t *testing.T) {
+func Test061_is_binary(t *testing.T) {
 	binary, err := NewMediaUrnFromString("media:bytes")
 	require.NoError(t, err)
 	assert.True(t, binary.IsBinary())
+
+	pngUrn, err := NewMediaUrnFromString(standard.MediaPng)
+	require.NoError(t, err)
+	assert.True(t, pngUrn.IsBinary())
 
 	text, err := NewMediaUrnFromString("media:string;textable")
 	require.NoError(t, err)
 	assert.False(t, text.IsBinary())
 }
 
-// TEST062: Test is_map returns true when form=map tag is present
-func TestMediaUrnIsMap(t *testing.T) {
-	mapUrn, err := NewMediaUrnFromString("media:form=map")
+// TEST062: Test is_map returns true when form=map tag is present indicating key-value structure
+func Test062_is_map(t *testing.T) {
+	mapUrn, err := NewMediaUrnFromString(standard.MediaObjectExpanded)
 	require.NoError(t, err)
-	// Check via structured or form tag
-	form, ok := mapUrn.GetTag("form")
-	assert.True(t, ok)
-	assert.Equal(t, "map", form)
-}
+	assert.True(t, mapUrn.IsMap())
 
-// TEST063: Test is_scalar returns true when form=scalar tag is present
-func TestMediaUrnIsScalar(t *testing.T) {
-	scalar, err := NewMediaUrnFromString("media:string;form=scalar")
+	customMap, err := NewMediaUrnFromString("media:custom;form=map")
 	require.NoError(t, err)
-	form, ok := scalar.GetTag("form")
-	assert.True(t, ok)
-	assert.Equal(t, "scalar", form)
-}
-
-// TEST064: Test is_list returns true when form=list tag is present
-func TestMediaUrnIsList(t *testing.T) {
-	list, err := NewMediaUrnFromString("media:form=list")
-	require.NoError(t, err)
-	form, ok := list.GetTag("form")
-	assert.True(t, ok)
-	assert.Equal(t, "list", form)
-}
-
-// TEST065: Test is_structured returns true for map or list forms
-func TestMediaUrnIsStructured(t *testing.T) {
-	mapUrn, err := NewMediaUrnFromString("media:form=map")
-	require.NoError(t, err)
-	form, _ := mapUrn.GetTag("form")
-	assert.True(t, form == "map" || form == "list")
-
-	listUrn, err := NewMediaUrnFromString("media:form=list")
-	require.NoError(t, err)
-	form, _ = listUrn.GetTag("form")
-	assert.True(t, form == "map" || form == "list")
+	assert.True(t, customMap.IsMap())
 
 	scalar, err := NewMediaUrnFromString("media:string;form=scalar")
 	require.NoError(t, err)
-	form, _ = scalar.GetTag("form")
-	assert.False(t, form == "map" || form == "list")
+	assert.False(t, scalar.IsMap())
 }
 
-// TEST066: Test is_json returns true only when json marker tag is present
-func TestMediaUrnIsJson(t *testing.T) {
-	jsonUrn, err := NewMediaUrnFromString("media:json")
+// TEST063: Test is_scalar returns true when form=scalar tag is present indicating single value
+func Test063_is_scalar(t *testing.T) {
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
 	require.NoError(t, err)
-	assert.True(t, jsonUrn.HasTag("json"))
+	assert.True(t, stringUrn.IsScalar())
 
-	nonJson, err := NewMediaUrnFromString("media:string")
+	intUrn, err := NewMediaUrnFromString(standard.MediaIntegerExpanded)
 	require.NoError(t, err)
-	assert.False(t, nonJson.HasTag("json"))
+	assert.True(t, intUrn.IsScalar())
+
+	mapUrn, err := NewMediaUrnFromString("media:form=map")
+	require.NoError(t, err)
+	assert.False(t, mapUrn.IsScalar())
 }
 
-// TEST067: Test is_text returns true only when textable marker tag is present
-func TestMediaUrnIsText(t *testing.T) {
-	text, err := NewMediaUrnFromString("media:string;textable")
+// TEST064: Test is_list returns true when form=list tag is present indicating ordered collection
+func Test064_is_list(t *testing.T) {
+	strArray, err := NewMediaUrnFromString(standard.MediaStringArray)
 	require.NoError(t, err)
-	assert.True(t, text.HasTag("textable"))
+	assert.True(t, strArray.IsList())
+
+	intArray, err := NewMediaUrnFromString(standard.MediaIntegerArray)
+	require.NoError(t, err)
+	assert.True(t, intArray.IsList())
+
+	scalar, err := NewMediaUrnFromString("media:string;form=scalar")
+	require.NoError(t, err)
+	assert.False(t, scalar.IsList())
+}
+
+// TEST065: Test is_structured returns true for map or list forms indicating structured data types
+func Test065_is_structured(t *testing.T) {
+	objUrn, err := NewMediaUrnFromString(standard.MediaObjectExpanded)
+	require.NoError(t, err)
+	assert.True(t, objUrn.IsStructured())
+
+	strArray, err := NewMediaUrnFromString(standard.MediaStringArray)
+	require.NoError(t, err)
+	assert.True(t, strArray.IsStructured())
+
+	scalar, err := NewMediaUrnFromString("media:string;form=scalar")
+	require.NoError(t, err)
+	assert.False(t, scalar.IsStructured())
 
 	binary, err := NewMediaUrnFromString("media:bytes")
 	require.NoError(t, err)
-	assert.False(t, binary.HasTag("textable"))
+	assert.False(t, binary.IsStructured())
 }
 
-// TEST068: Test is_void returns true when void tag is present
-func TestMediaUrnIsVoid(t *testing.T) {
-	void, err := NewMediaUrnFromString("media:void")
+// TEST066: Test is_json returns true only when json marker tag is present for JSON representation
+func Test066_is_json(t *testing.T) {
+	jsonUrn, err := NewMediaUrnFromString(standard.MediaJson)
 	require.NoError(t, err)
-	assert.True(t, void.HasTag("void"))
+	assert.True(t, jsonUrn.IsJson())
+
+	customJson, err := NewMediaUrnFromString("media:custom;json")
+	require.NoError(t, err)
+	assert.True(t, customJson.IsJson())
+
+	nonJson, err := NewMediaUrnFromString("media:string")
+	require.NoError(t, err)
+	assert.False(t, nonJson.IsJson())
+}
+
+// TEST067: Test is_text returns true only when textable marker tag is present
+func Test067_is_text(t *testing.T) {
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.True(t, stringUrn.IsTextable())
+
+	intUrn, err := NewMediaUrnFromString(standard.MediaIntegerExpanded)
+	require.NoError(t, err)
+	assert.True(t, intUrn.IsTextable())
+
+	binary, err := NewMediaUrnFromString("media:bytes")
+	require.NoError(t, err)
+	assert.False(t, binary.IsTextable())
+}
+
+// TEST068: Test is_void returns true when void flag or type=void tag is present
+func Test068_is_void(t *testing.T) {
+	voidUrn, err := NewMediaUrnFromString("media:void")
+	require.NoError(t, err)
+	assert.True(t, voidUrn.IsVoid())
 
 	nonVoid, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
-	assert.False(t, nonVoid.HasTag("void"))
+	assert.False(t, nonVoid.IsVoid())
 }
 
 // TEST069: Test simple constructor creates media URN with type tag
-func TestMediaUrnConstructor(t *testing.T) {
-	// NewMediaUrn or similar constructor
+func Test069_constructor(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
 	assert.True(t, urn.HasTag("string"))
 }
 
 // TEST070: Test with_subtype constructor creates media URN with subtype
-func TestMediaUrnWithSubtypeConstructor(t *testing.T) {
+func Test070_with_subtype_constructor(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:application;subtype=json")
 	require.NoError(t, err)
 	assert.True(t, urn.HasTag("application"))
@@ -150,8 +178,8 @@ func TestMediaUrnWithSubtypeConstructor(t *testing.T) {
 	assert.Equal(t, "json", subtype)
 }
 
-// TEST071: Test to_string roundtrip ensures serialization preserves structure
-func TestMediaUrnRoundtrip(t *testing.T) {
+// TEST071: Test to_string roundtrip ensures serialization and deserialization preserve URN structure
+func Test071_to_string_roundtrip(t *testing.T) {
 	original := "media:string;textable;form=scalar"
 	urn1, err := NewMediaUrnFromString(original)
 	require.NoError(t, err)
@@ -163,8 +191,8 @@ func TestMediaUrnRoundtrip(t *testing.T) {
 	assert.True(t, urn1.Equals(urn2))
 }
 
-// TEST072: Test all media URN constants parse successfully
-func TestMediaUrnConstants(t *testing.T) {
+// TEST072: Test all media URN constants parse successfully as valid media URNs
+func Test072_constants_parse(t *testing.T) {
 	constants := []string{
 		standard.MediaVoid,
 		standard.MediaString,
@@ -173,6 +201,31 @@ func TestMediaUrnConstants(t *testing.T) {
 		standard.MediaInteger,
 		standard.MediaNumber,
 		standard.MediaBoolean,
+		standard.MediaStringExpanded,
+		standard.MediaIntegerExpanded,
+		standard.MediaNumberExpanded,
+		standard.MediaBooleanExpanded,
+		standard.MediaObjectExpanded,
+		standard.MediaBinaryExpanded,
+		standard.MediaStringArray,
+		standard.MediaIntegerArray,
+		standard.MediaNumberArray,
+		standard.MediaBooleanArray,
+		standard.MediaObjectArray,
+		standard.MediaPng,
+		standard.MediaAudio,
+		standard.MediaVideo,
+		standard.MediaAudioSpeech,
+		standard.MediaImageThumbnail,
+		standard.MediaCollection,
+		standard.MediaCollectionList,
+		standard.MediaPdf,
+		standard.MediaEpub,
+		standard.MediaJson,
+		standard.MediaFilePath,
+		standard.MediaFilePathArray,
+		standard.MediaDecision,
+		standard.MediaDecisionArray,
 	}
 
 	for _, constant := range constants {
@@ -181,9 +234,8 @@ func TestMediaUrnConstants(t *testing.T) {
 	}
 }
 
-// TEST073: Test extension helper functions create media URNs with ext tag
-func TestMediaUrnExtension(t *testing.T) {
-	// Extension helpers if they exist
+// TEST073: Test extension helper functions create media URNs with ext tag and correct format
+func Test073_extension_helpers(t *testing.T) {
 	pdfUrn, err := NewMediaUrnFromString("media:bytes;ext=pdf")
 	require.NoError(t, err)
 	ext, ok := pdfUrn.GetTag("ext")
@@ -191,8 +243,8 @@ func TestMediaUrnExtension(t *testing.T) {
 	assert.Equal(t, "pdf", ext)
 }
 
-// TEST074: Test media URN matching using tagged URN semantics
-func TestMediaUrnMatching(t *testing.T) {
+// TEST074: Test media URN conforms_to using tagged URN semantics with specific and generic requirements
+func Test074_media_urn_matching(t *testing.T) {
 	specific, err := NewMediaUrnFromString("media:string;textable;form=scalar")
 	require.NoError(t, err)
 
@@ -212,8 +264,8 @@ func TestMediaUrnMatching(t *testing.T) {
 	assert.False(t, generic.ConformsTo(specific))
 }
 
-// TEST075: Test matching with implicit wildcards
-func TestMediaUrnImplicitWildcards(t *testing.T) {
+// TEST075: Test accepts with implicit wildcards where handlers with fewer tags can handle more requests
+func Test075_matching(t *testing.T) {
 	handler, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
 
@@ -224,8 +276,8 @@ func TestMediaUrnImplicitWildcards(t *testing.T) {
 	assert.True(t, handler.Accepts(request))
 }
 
-// TEST076: Test specificity increases with more tags
-func TestMediaUrnSpecificity(t *testing.T) {
+// TEST076: Test specificity increases with more tags for ranking conformance
+func Test076_specificity(t *testing.T) {
 	simple, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
 
@@ -236,8 +288,8 @@ func TestMediaUrnSpecificity(t *testing.T) {
 	assert.True(t, detailed.Specificity() > simple.Specificity())
 }
 
-// TEST077: Test serde roundtrip serializes to JSON string correctly
-func TestMediaUrnSerdeRoundtrip(t *testing.T) {
+// TEST077: Test serde roundtrip serializes to JSON string and deserializes back correctly
+func Test077_serde_roundtrip(t *testing.T) {
 	original, err := NewMediaUrnFromString("media:string;textable")
 	require.NoError(t, err)
 
@@ -253,23 +305,297 @@ func TestMediaUrnSerdeRoundtrip(t *testing.T) {
 	assert.True(t, original.Equals(&restored))
 }
 
-// TEST078: Debug test for matching behavior between different media URN types
-func TestMediaUrnMatchingBehavior(t *testing.T) {
-	void, err := NewMediaUrnFromString("media:void")
+// TEST304: Test MEDIA_AVAILABILITY_OUTPUT constant parses as valid media URN with correct tags
+func Test304_media_availability_output_constant(t *testing.T) {
+	urn, err := NewMediaUrnFromString("media:model-availability;textable;form=map")
 	require.NoError(t, err)
+	assert.True(t, urn.IsTextable())
+	assert.True(t, urn.IsMap())
+	assert.False(t, urn.IsBinary())
+}
 
-	string, err := NewMediaUrnFromString("media:string")
+// TEST305: Test MEDIA_PATH_OUTPUT constant parses as valid media URN with correct tags
+func Test305_media_path_output_constant(t *testing.T) {
+	urn, err := NewMediaUrnFromString("media:model-path;textable;form=map")
 	require.NoError(t, err)
+	assert.True(t, urn.IsTextable())
+	assert.True(t, urn.IsMap())
+	assert.False(t, urn.IsBinary())
+}
 
-	bytes, err := NewMediaUrnFromString("media:bytes")
+// TEST306: Test MEDIA_AVAILABILITY_OUTPUT and MEDIA_PATH_OUTPUT are distinct URNs
+func Test306_availability_and_path_output_distinct(t *testing.T) {
+	availUrn, err := NewMediaUrnFromString("media:model-availability;textable;form=map")
 	require.NoError(t, err)
+	pathUrn, err := NewMediaUrnFromString("media:model-path;textable;form=map")
+	require.NoError(t, err)
+	assert.False(t, availUrn.Equals(pathUrn))
+	// They must NOT conform to each other (different marker tags)
+	assert.False(t, availUrn.ConformsTo(pathUrn))
+}
 
-	// Different base types should not match
-	assert.False(t, void.Accepts(string))
-	assert.False(t, string.Accepts(bytes))
-	assert.False(t, bytes.Accepts(void))
+// TEST546: is_image returns true only when image marker tag is present
+func Test546_is_image(t *testing.T) {
+	pngUrn, err := NewMediaUrnFromString(standard.MediaPng)
+	require.NoError(t, err)
+	assert.True(t, pngUrn.IsImage())
 
-	// Same type should match
-	void2, _ := NewMediaUrnFromString("media:void")
-	assert.True(t, void.Accepts(void2))
+	thumbUrn, err := NewMediaUrnFromString(standard.MediaImageThumbnail)
+	require.NoError(t, err)
+	assert.True(t, thumbUrn.IsImage())
+
+	customImage, err := NewMediaUrnFromString("media:image;jpg;bytes")
+	require.NoError(t, err)
+	assert.True(t, customImage.IsImage())
+
+	// Non-image types
+	pdfUrn, err := NewMediaUrnFromString(standard.MediaPdf)
+	require.NoError(t, err)
+	assert.False(t, pdfUrn.IsImage())
+
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsImage())
+
+	audioUrn, err := NewMediaUrnFromString(standard.MediaAudio)
+	require.NoError(t, err)
+	assert.False(t, audioUrn.IsImage())
+
+	videoUrn, err := NewMediaUrnFromString(standard.MediaVideo)
+	require.NoError(t, err)
+	assert.False(t, videoUrn.IsImage())
+}
+
+// TEST547: is_audio returns true only when audio marker tag is present
+func Test547_is_audio(t *testing.T) {
+	audioUrn, err := NewMediaUrnFromString(standard.MediaAudio)
+	require.NoError(t, err)
+	assert.True(t, audioUrn.IsAudio())
+
+	speechUrn, err := NewMediaUrnFromString(standard.MediaAudioSpeech)
+	require.NoError(t, err)
+	assert.True(t, speechUrn.IsAudio())
+
+	customAudio, err := NewMediaUrnFromString("media:audio;mp3;bytes")
+	require.NoError(t, err)
+	assert.True(t, customAudio.IsAudio())
+
+	// Non-audio types
+	videoUrn, err := NewMediaUrnFromString(standard.MediaVideo)
+	require.NoError(t, err)
+	assert.False(t, videoUrn.IsAudio())
+
+	pngUrn, err := NewMediaUrnFromString(standard.MediaPng)
+	require.NoError(t, err)
+	assert.False(t, pngUrn.IsAudio())
+
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsAudio())
+}
+
+// TEST548: is_video returns true only when video marker tag is present
+func Test548_is_video(t *testing.T) {
+	videoUrn, err := NewMediaUrnFromString(standard.MediaVideo)
+	require.NoError(t, err)
+	assert.True(t, videoUrn.IsVideo())
+
+	customVideo, err := NewMediaUrnFromString("media:video;mp4;bytes")
+	require.NoError(t, err)
+	assert.True(t, customVideo.IsVideo())
+
+	// Non-video types
+	audioUrn, err := NewMediaUrnFromString(standard.MediaAudio)
+	require.NoError(t, err)
+	assert.False(t, audioUrn.IsVideo())
+
+	pngUrn, err := NewMediaUrnFromString(standard.MediaPng)
+	require.NoError(t, err)
+	assert.False(t, pngUrn.IsVideo())
+
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsVideo())
+}
+
+// TEST549: is_numeric returns true only when numeric marker tag is present
+func Test549_is_numeric(t *testing.T) {
+	intUrn, err := NewMediaUrnFromString(standard.MediaIntegerExpanded)
+	require.NoError(t, err)
+	assert.True(t, intUrn.IsNumeric())
+
+	numUrn, err := NewMediaUrnFromString(standard.MediaNumberExpanded)
+	require.NoError(t, err)
+	assert.True(t, numUrn.IsNumeric())
+
+	intArrayUrn, err := NewMediaUrnFromString(standard.MediaIntegerArray)
+	require.NoError(t, err)
+	assert.True(t, intArrayUrn.IsNumeric())
+
+	numArrayUrn, err := NewMediaUrnFromString(standard.MediaNumberArray)
+	require.NoError(t, err)
+	assert.True(t, numArrayUrn.IsNumeric())
+
+	// Non-numeric types
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsNumeric())
+
+	boolUrn, err := NewMediaUrnFromString(standard.MediaBooleanExpanded)
+	require.NoError(t, err)
+	assert.False(t, boolUrn.IsNumeric())
+
+	binaryUrn, err := NewMediaUrnFromString(standard.MediaBinaryExpanded)
+	require.NoError(t, err)
+	assert.False(t, binaryUrn.IsNumeric())
+}
+
+// TEST550: is_bool returns true only when bool marker tag is present
+func Test550_is_bool(t *testing.T) {
+	boolUrn, err := NewMediaUrnFromString(standard.MediaBooleanExpanded)
+	require.NoError(t, err)
+	assert.True(t, boolUrn.IsBool())
+
+	boolArrayUrn, err := NewMediaUrnFromString(standard.MediaBooleanArray)
+	require.NoError(t, err)
+	assert.True(t, boolArrayUrn.IsBool())
+
+	decisionUrn, err := NewMediaUrnFromString(standard.MediaDecision)
+	require.NoError(t, err)
+	assert.True(t, decisionUrn.IsBool())
+
+	decisionArrayUrn, err := NewMediaUrnFromString(standard.MediaDecisionArray)
+	require.NoError(t, err)
+	assert.True(t, decisionArrayUrn.IsBool())
+
+	// Non-bool types
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsBool())
+
+	intUrn, err := NewMediaUrnFromString(standard.MediaIntegerExpanded)
+	require.NoError(t, err)
+	assert.False(t, intUrn.IsBool())
+
+	binaryUrn, err := NewMediaUrnFromString(standard.MediaBinaryExpanded)
+	require.NoError(t, err)
+	assert.False(t, binaryUrn.IsBool())
+}
+
+// TEST551: is_file_path returns true for scalar file-path, false for array
+func Test551_is_file_path(t *testing.T) {
+	fpUrn, err := NewMediaUrnFromString(standard.MediaFilePath)
+	require.NoError(t, err)
+	assert.True(t, fpUrn.IsFilePath())
+
+	// Array file-path is NOT is_file_path (it's is_file_path_array)
+	fpArrayUrn, err := NewMediaUrnFromString(standard.MediaFilePathArray)
+	require.NoError(t, err)
+	assert.False(t, fpArrayUrn.IsFilePath())
+
+	// Non-file-path types
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsFilePath())
+
+	binaryUrn, err := NewMediaUrnFromString(standard.MediaBinaryExpanded)
+	require.NoError(t, err)
+	assert.False(t, binaryUrn.IsFilePath())
+}
+
+// TEST552: is_file_path_array returns true for list file-path, false for scalar
+func Test552_is_file_path_array(t *testing.T) {
+	fpArrayUrn, err := NewMediaUrnFromString(standard.MediaFilePathArray)
+	require.NoError(t, err)
+	assert.True(t, fpArrayUrn.IsFilePathArray())
+
+	// Scalar file-path is NOT is_file_path_array
+	fpUrn, err := NewMediaUrnFromString(standard.MediaFilePath)
+	require.NoError(t, err)
+	assert.False(t, fpUrn.IsFilePathArray())
+
+	// Non-file-path types
+	strArrayUrn, err := NewMediaUrnFromString(standard.MediaStringArray)
+	require.NoError(t, err)
+	assert.False(t, strArrayUrn.IsFilePathArray())
+}
+
+// TEST553: is_any_file_path returns true for both scalar and array file-path
+func Test553_is_any_file_path(t *testing.T) {
+	fpUrn, err := NewMediaUrnFromString(standard.MediaFilePath)
+	require.NoError(t, err)
+	assert.True(t, fpUrn.IsAnyFilePath())
+
+	fpArrayUrn, err := NewMediaUrnFromString(standard.MediaFilePathArray)
+	require.NoError(t, err)
+	assert.True(t, fpArrayUrn.IsAnyFilePath())
+
+	// Non-file-path types
+	stringUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsAnyFilePath())
+
+	strArrayUrn, err := NewMediaUrnFromString(standard.MediaStringArray)
+	require.NoError(t, err)
+	assert.False(t, strArrayUrn.IsAnyFilePath())
+}
+
+// TEST554: is_collection returns true when collection marker tag is present
+func Test554_is_collection(t *testing.T) {
+	collUrn, err := NewMediaUrnFromString(standard.MediaCollection)
+	require.NoError(t, err)
+	assert.True(t, collUrn.IsCollection())
+
+	collListUrn, err := NewMediaUrnFromString(standard.MediaCollectionList)
+	require.NoError(t, err)
+	assert.True(t, collListUrn.IsCollection())
+
+	// Non-collection types
+	objUrn, err := NewMediaUrnFromString(standard.MediaObjectExpanded)
+	require.NoError(t, err)
+	assert.False(t, objUrn.IsCollection())
+
+	strArrayUrn, err := NewMediaUrnFromString(standard.MediaStringArray)
+	require.NoError(t, err)
+	assert.False(t, strArrayUrn.IsCollection())
+}
+
+// TEST558: predicates are consistent with constants -- every constant triggers exactly the expected predicates
+func Test558_predicate_constant_consistency(t *testing.T) {
+	// MEDIA_INTEGER must be numeric, text, scalar, NOT binary/bool/image/audio/video
+	intUrn, err := NewMediaUrnFromString(standard.MediaIntegerExpanded)
+	require.NoError(t, err)
+	assert.True(t, intUrn.IsNumeric())
+	assert.True(t, intUrn.IsTextable())
+	assert.True(t, intUrn.IsScalar())
+	assert.False(t, intUrn.IsBinary())
+	assert.False(t, intUrn.IsBool())
+	assert.False(t, intUrn.IsImage())
+	assert.False(t, intUrn.IsList())
+
+	// MEDIA_BOOLEAN must be bool, text, scalar, NOT numeric
+	boolUrn, err := NewMediaUrnFromString(standard.MediaBooleanExpanded)
+	require.NoError(t, err)
+	assert.True(t, boolUrn.IsBool())
+	assert.True(t, boolUrn.IsTextable())
+	assert.True(t, boolUrn.IsScalar())
+	assert.False(t, boolUrn.IsNumeric())
+
+	// MEDIA_JSON must be json, text, map, structured, NOT binary
+	jsonUrn, err := NewMediaUrnFromString(standard.MediaJson)
+	require.NoError(t, err)
+	assert.True(t, jsonUrn.IsJson())
+	assert.True(t, jsonUrn.IsTextable())
+	assert.True(t, jsonUrn.IsMap())
+	assert.True(t, jsonUrn.IsStructured())
+	assert.False(t, jsonUrn.IsBinary())
+	assert.False(t, jsonUrn.IsList())
+
+	// MEDIA_VOID is void, NOT anything else
+	voidUrn, err := NewMediaUrnFromString(standard.MediaVoid)
+	require.NoError(t, err)
+	assert.True(t, voidUrn.IsVoid())
+	assert.False(t, voidUrn.IsTextable())
+	assert.False(t, voidUrn.IsBinary())
+	assert.False(t, voidUrn.IsNumeric())
 }

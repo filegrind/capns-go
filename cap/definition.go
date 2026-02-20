@@ -370,18 +370,22 @@ func (c *Cap) ResolveMediaUrn(mediaUrn string, registry *media.MediaUrnRegistry)
 	return media.ResolveMediaUrn(mediaUrn, c.GetMediaSpecs(), registry)
 }
 
-// MatchesRequest checks if this cap matches a request string
+// MatchesRequest checks if this cap matches a request string.
+// Uses routing direction: request is the pattern, cap is the instance.
+// request.Accepts(cap) — request only specifies constraints; cap must satisfy them.
 func (c *Cap) MatchesRequest(request string) bool {
 	requestId, err := urn.NewCapUrnFromString(request)
 	if err != nil {
 		return false
 	}
-	return c.Urn.Accepts(requestId)
+	return requestId.Accepts(c.Urn)
 }
 
-// AcceptsRequest checks if this cap accepts a request
+// AcceptsRequest checks if this cap matches a request.
+// Uses routing direction: request is the pattern, cap is the instance.
+// request.Accepts(cap) — request specifies constraints; cap must satisfy them.
 func (c *Cap) AcceptsRequest(request *urn.CapUrn) bool {
-	return c.Urn.Accepts(request)
+	return request.Accepts(c.Urn)
 }
 
 // IsMoreSpecificThan checks if this cap is more specific than another

@@ -7,7 +7,7 @@ import (
 )
 
 // TEST235: Test ResponseChunk stores payload, seq, offset, len, and eof fields correctly
-func TestResponseChunkFields(t *testing.T) {
+func Test235_response_chunk_fields(t *testing.T) {
 	payload := []byte{1, 2, 3, 4, 5}
 	seq := uint64(42)
 	offset := uint64(100)
@@ -31,7 +31,7 @@ func TestResponseChunkFields(t *testing.T) {
 }
 
 // TEST236: Test ResponseChunk with all fields populated preserves offset, len, and eof
-func TestResponseChunkAllFieldsPopulated(t *testing.T) {
+func Test236_response_chunk_all_fields_populated(t *testing.T) {
 	payload := []byte("test data")
 	seq := uint64(10)
 	offset := uint64(200)
@@ -53,7 +53,7 @@ func TestResponseChunkAllFieldsPopulated(t *testing.T) {
 }
 
 // TEST237: Test PluginResponse::Single final_payload returns the single payload slice
-func TestPluginResponseSingleFinalPayload(t *testing.T) {
+func Test237_plugin_response_single_final_payload(t *testing.T) {
 	payload := []byte("single response")
 	response := &PluginResponse{
 		Type:   PluginResponseTypeSingle,
@@ -65,7 +65,7 @@ func TestPluginResponseSingleFinalPayload(t *testing.T) {
 }
 
 // TEST238: Test PluginResponse::Single with empty payload returns empty slice and empty vec
-func TestPluginResponseSingleEmptyPayload(t *testing.T) {
+func Test238_plugin_response_single_empty_payload(t *testing.T) {
 	response := &PluginResponse{
 		Type:   PluginResponseTypeSingle,
 		Single: []byte{},
@@ -76,7 +76,7 @@ func TestPluginResponseSingleEmptyPayload(t *testing.T) {
 }
 
 // TEST239: Test PluginResponse::Streaming concatenated joins all chunk payloads in order
-func TestPluginResponseStreamingConcatenated(t *testing.T) {
+func Test239_plugin_response_streaming_concatenated(t *testing.T) {
 	chunks := []*ResponseChunk{
 		{Payload: []byte("Hello "), Seq: 0, IsEof: false},
 		{Payload: []byte("World"), Seq: 1, IsEof: false},
@@ -93,7 +93,7 @@ func TestPluginResponseStreamingConcatenated(t *testing.T) {
 }
 
 // TEST240: Test PluginResponse::Streaming final_payload returns the last chunk's payload
-func TestPluginResponseStreamingFinalPayload(t *testing.T) {
+func Test240_plugin_response_streaming_final_payload(t *testing.T) {
 	chunks := []*ResponseChunk{
 		{Payload: []byte("first"), Seq: 0, IsEof: false},
 		{Payload: []byte("second"), Seq: 1, IsEof: false},
@@ -110,7 +110,7 @@ func TestPluginResponseStreamingFinalPayload(t *testing.T) {
 }
 
 // TEST241: Test PluginResponse::Streaming with empty chunks vec returns empty concatenation
-func TestPluginResponseStreamingEmptyChunks(t *testing.T) {
+func Test241_plugin_response_streaming_empty_chunks(t *testing.T) {
 	response := &PluginResponse{
 		Type:      PluginResponseTypeStreaming,
 		Streaming: []*ResponseChunk{},
@@ -124,7 +124,7 @@ func TestPluginResponseStreamingEmptyChunks(t *testing.T) {
 }
 
 // TEST242: Test PluginResponse::Streaming concatenated capacity is pre-allocated correctly for large payloads
-func TestPluginResponseStreamingPreallocation(t *testing.T) {
+func Test242_plugin_response_streaming_preallocation(t *testing.T) {
 	// Create chunks with known sizes
 	chunk1 := &ResponseChunk{Payload: make([]byte, 1000), Seq: 0, IsEof: false}
 	chunk2 := &ResponseChunk{Payload: make([]byte, 2000), Seq: 1, IsEof: false}
@@ -143,7 +143,7 @@ func TestPluginResponseStreamingPreallocation(t *testing.T) {
 }
 
 // TEST243: Test AsyncHostError variants display correct error messages
-func TestHostErrorVariants(t *testing.T) {
+func Test243_host_error_variants(t *testing.T) {
 	// Test Cbor error
 	cborErr := &HostError{Type: HostErrorTypeCbor, Message: "invalid CBOR"}
 	assert.Contains(t, cborErr.Error(), "CBOR error")
@@ -192,7 +192,7 @@ func TestHostErrorVariants(t *testing.T) {
 }
 
 // TEST244: Test HostError conversion creates correct error type
-func TestHostErrorConversion(t *testing.T) {
+func Test244_host_error_conversion(t *testing.T) {
 	// Test creating Cbor error
 	err := &HostError{
 		Type:    HostErrorTypeCbor,
@@ -203,7 +203,7 @@ func TestHostErrorConversion(t *testing.T) {
 }
 
 // TEST245: Test HostError Io variant
-func TestHostErrorIoVariant(t *testing.T) {
+func Test245_host_error_io_variant(t *testing.T) {
 	err := &HostError{
 		Type:    HostErrorTypeIo,
 		Message: "read timeout",
@@ -214,7 +214,7 @@ func TestHostErrorIoVariant(t *testing.T) {
 }
 
 // TEST246: Test ResponseChunk can be copied with same data
-func TestResponseChunkCopy(t *testing.T) {
+func Test246_response_chunk_copy(t *testing.T) {
 	original := &ResponseChunk{
 		Payload: []byte("test"),
 		Seq:     5,
@@ -238,7 +238,7 @@ func TestResponseChunkCopy(t *testing.T) {
 }
 
 // TEST247: Test ResponseChunk Clone produces independent copy with same data
-func TestResponseChunkClone(t *testing.T) {
+func Test247_response_chunk_clone(t *testing.T) {
 	offset := uint64(100)
 	length := uint64(500)
 	original := &ResponseChunk{

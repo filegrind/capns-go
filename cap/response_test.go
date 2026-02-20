@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/filegrind/capns-go/media"
-	"github.com/filegrind/capns-go/standard"
 	"github.com/filegrind/capns-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +19,7 @@ func respTestUrn(tags string) string {
 }
 
 // TEST168: Test ResponseWrapper from JSON deserializes to correct structured type
-func TestResponseWrapperFromJSON(t *testing.T) {
+func Test168_response_wrapper_from_json(t *testing.T) {
 	testData := map[string]interface{}{
 		"name":  "test",
 		"value": 42,
@@ -56,7 +55,7 @@ func TestResponseWrapperFromText(t *testing.T) {
 }
 
 // TEST170: Test ResponseWrapper from binary stores and retrieves raw bytes correctly
-func TestResponseWrapperFromBinary(t *testing.T) {
+func Test170_response_wrapper_from_binary(t *testing.T) {
 	testData := []byte{0x89, 0x50, 0x4E, 0x47} // PNG header
 	response := NewResponseWrapperFromBinary(testData)
 
@@ -73,7 +72,7 @@ func TestResponseWrapperFromBinary(t *testing.T) {
 }
 
 // TEST169: Test ResponseWrapper converts to primitive types integer, float, boolean, string
-func TestResponseWrapperAsInt(t *testing.T) {
+func Test169_response_wrapper_as_int(t *testing.T) {
 	// Test from text
 	response := NewResponseWrapperFromText([]byte("42"))
 	result, err := response.AsInt()
@@ -172,19 +171,20 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	stringCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable;form=scalar"`)
 	require.NoError(t, err)
 	stringCap := NewCap(stringCapUrn, "String Test", "test")
-	stringCap.SetOutput(NewCapOutput(standard.MediaString, "String output"))
+	// Use expanded URN form matching the cap's out spec for proper resolution
+	stringCap.SetOutput(NewCapOutput("media:textable;form=scalar", "String output"))
 	stringCap.SetMediaSpecs(mediaSpecs)
 
 	binaryCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:bytes"`)
 	require.NoError(t, err)
 	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
-	binaryCap.SetOutput(NewCapOutput(standard.MediaBinary, "Binary output"))
+	binaryCap.SetOutput(NewCapOutput("media:bytes", "Binary output"))
 	binaryCap.SetMediaSpecs(mediaSpecs)
 
 	jsonCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
 	require.NoError(t, err)
 	jsonCap := NewCap(jsonCapUrn, "JSON Test", "test")
-	jsonCap.SetOutput(NewCapOutput(standard.MediaObject, "JSON output"))
+	jsonCap.SetOutput(NewCapOutput("media:form=map;textable", "JSON output"))
 	jsonCap.SetMediaSpecs(mediaSpecs)
 
 	// Test text response with string output type

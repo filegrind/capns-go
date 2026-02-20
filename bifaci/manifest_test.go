@@ -20,7 +20,7 @@ func manifestTestUrn(tags string) string {
 }
 
 // TEST148: Test creating cap manifest with name, version, description, and caps
-func TestCapManifestCreation(t *testing.T) {
+func Test148_cap_manifest_creation(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
@@ -41,7 +41,7 @@ func TestCapManifestCreation(t *testing.T) {
 }
 
 // TEST149: Test cap manifest with author field sets author correctly
-func TestCapManifestWithAuthor(t *testing.T) {
+func Test149_cap_manifest_with_author(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
@@ -58,7 +58,7 @@ func TestCapManifestWithAuthor(t *testing.T) {
 	assert.Equal(t, "Test Author", *manifest.Author)
 }
 
-func TestCapManifestWithPageUrl(t *testing.T) {
+func TestCapManifestWithPageURL(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
@@ -82,7 +82,7 @@ func TestCapManifestWithPageUrl(t *testing.T) {
 }
 
 // TEST150: Test cap manifest JSON serialization and deserialization roundtrip
-func TestCapManifestJSONSerialization(t *testing.T) {
+func Test150_cap_manifest_json_serialization(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 
@@ -126,7 +126,7 @@ func TestCapManifestJSONSerialization(t *testing.T) {
 }
 
 // TEST151: Test cap manifest deserialization fails when required fields are missing
-func TestCapManifestRequiredFields(t *testing.T) {
+func Test151_cap_manifest_required_fields(t *testing.T) {
 	// Test that deserialization succeeds even with missing optional fields
 	// (Go JSON unmarshaling uses zero values for missing fields)
 	partialJSON := `{"name": "TestComponent", "version": "1.0.0", "description": "Test", "caps": []}`
@@ -147,7 +147,7 @@ func TestCapManifestRequiredFields(t *testing.T) {
 }
 
 // TEST152: Test cap manifest with multiple caps stores and retrieves all capabilities
-func TestCapManifestWithMultipleCaps(t *testing.T) {
+func Test152_cap_manifest_with_multiple_caps(t *testing.T) {
 	id1, err := urn.NewCapUrnFromString(manifestTestUrn("op=extract;target=metadata"))
 	require.NoError(t, err)
 	cap1 := cap.NewCap(id1, "Metadata Extractor", "extract-metadata")
@@ -174,7 +174,7 @@ func TestCapManifestWithMultipleCaps(t *testing.T) {
 }
 
 // TEST153: Test cap manifest with empty caps list serializes and deserializes correctly
-func TestCapManifestEmptyCaps(t *testing.T) {
+func Test153_cap_manifest_empty_caps(t *testing.T) {
 	manifest := NewCapManifest(
 		"EmptyComponent",
 		"1.0.0",
@@ -195,7 +195,7 @@ func TestCapManifestEmptyCaps(t *testing.T) {
 }
 
 // TEST154: Test cap manifest optional author field skipped in serialization when None
-func TestCapManifestOptionalFields(t *testing.T) {
+func Test154_cap_manifest_optional_fields(t *testing.T) {
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=validate;file"))
 	require.NoError(t, err)
 	capDef := cap.NewCap(id, "File Validator", "validate")
@@ -244,7 +244,7 @@ func (tc *testComponent) Caps() []cap.Cap {
 }
 
 // TEST155: Test ComponentMetadata trait provides manifest and caps accessor methods
-func TestComponentMetadataInterface(t *testing.T) {
+func Test155_component_metadata_interface(t *testing.T) {
 	// Use type=component key=value instead of component flag
 	id, err := urn.NewCapUrnFromString(manifestTestUrn("op=test;type=component"))
 	require.NoError(t, err)
