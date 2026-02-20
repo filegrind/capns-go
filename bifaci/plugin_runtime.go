@@ -331,8 +331,12 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 		switch frame.FrameType {
 		case FrameTypeReq:
+			// Extract routing_id (XID) FIRST — all error paths must include it
+			routingId := frame.RoutingId
+
 			if frame.Cap == nil || *frame.Cap == "" {
 				errFrame := NewErr(frame.Id, "INVALID_REQUEST", "Request missing cap URN")
+				errFrame.RoutingId = routingId
 				if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
 				}
@@ -345,6 +349,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 			// Protocol v2: REQ must have empty payload - arguments come as streams
 			if len(rawPayload) > 0 {
 				errFrame := NewErr(frame.Id, "PROTOCOL_ERROR", "REQ frame must have empty payload - use STREAM_START for arguments")
+				errFrame.RoutingId = routingId
 				if err := writer.WriteFrame(errFrame); err != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write PROTOCOL_ERROR: %v\n", err)
 				}
@@ -355,6 +360,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 			handler := pr.FindHandler(capUrn)
 			if handler == nil {
 				errFrame := NewErr(frame.Id, "NO_HANDLER", fmt.Sprintf("No handler registered for cap: %s", capUrn))
+				errFrame.RoutingId = routingId
 				if writeErr := writer.WriteFrame(errFrame); writeErr != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", writeErr)
 				}
