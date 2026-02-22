@@ -189,7 +189,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 func TestIntegrationBinaryCapHandling(t *testing.T) {
 	registry := createTestRegistry(t)
 	// Setup binary cap - use raw type with binary tag
-	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:";target=thumbnail`)
 	require.NoError(t, err)
 
 	capDef := cap.NewCap(urn, "Thumbnail Generator", "generate-thumbnail")
@@ -208,7 +208,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := cap.NewCapCaller(`cap:in="media:void";op=generate;out="media:bytes";target=thumbnail`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=generate;out="media:";target=thumbnail`, mockHost, capDef)
 
 	// Test binary response
 	ctx := context.Background()
@@ -1647,7 +1647,7 @@ func TestArgumentsMultiple(t *testing.T) {
 	// Create multiple arguments
 	args := []cap.CapArgumentValue{
 		cap.NewCapArgumentValueFromStr("media:model-spec;textable", "gpt-4"),
-		cap.NewCapArgumentValue("media:pdf;bytes", []byte{0x89, 0x50, 0x4E, 0x47}),
+		cap.NewCapArgumentValue("media:pdf", []byte{0x89, 0x50, 0x4E, 0x47}),
 	}
 
 	// Encode arguments to CBOR

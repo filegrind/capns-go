@@ -524,7 +524,7 @@ func (pr *PluginRuntime) runCBORMode() error {
 
 					// Generate unique stream ID for response
 					streamID := fmt.Sprintf("resp-%s", requestID.ToString()[:8])
-					mediaUrn := "media:bytes" // Default output media URN
+					mediaUrn := "media:" // Default output media URN
 
 					// Create emitter with stream multiplexing (preserve routing_id for response routing)
 					emitter := newThreadSafeEmitter(writer, requestID, pendingReq.routingId, streamID, mediaUrn, negotiatedLimits.MaxChunk)

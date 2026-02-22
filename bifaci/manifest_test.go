@@ -88,7 +88,7 @@ func Test150_cap_manifest_json_serialization(t *testing.T) {
 
 	capDef := cap.NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
-	stdinUrn := "media:pdf;bytes"
+	stdinUrn := "media:pdf"
 	capDef.AddArg(cap.CapArg{
 		MediaUrn: standard.MediaBinary,
 		Required: true,
@@ -110,7 +110,7 @@ func Test150_cap_manifest_json_serialization(t *testing.T) {
 	assert.Contains(t, jsonStr, `"name":"TestComponent"`)
 	assert.Contains(t, jsonStr, `"version":"0.1.0"`)
 	assert.Contains(t, jsonStr, `"author":"Test Author"`)
-	assert.Contains(t, jsonStr, `"stdin":"media:pdf;bytes"`)
+	assert.Contains(t, jsonStr, `"stdin":"media:pdf"`)
 
 	// Test deserialization
 	var deserialized CapManifest
@@ -271,7 +271,7 @@ func TestCapManifestValidation(t *testing.T) {
 
 	capDef := cap.NewCap(id, "Metadata Extractor", "extract-metadata")
 	// Add an argument with stdin source using new architecture
-	stdinUrn := "media:pdf;bytes"
+	stdinUrn := "media:pdf"
 	capDef.AddArg(cap.CapArg{
 		MediaUrn: standard.MediaBinary,
 		Required: true,

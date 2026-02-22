@@ -522,7 +522,7 @@ func Test329_plugin_repo_server_get_by_cap(t *testing.T) {
 		},
 	}
 
-	capUrn := `cap:in="media:pdf;bytes";op=disbind;out="media:disbound-page;textable;form=list"`
+	capUrn := `cap:in="media:pdf";op=disbind;out="media:disbound-page;textable;form=list"`
 	plugins["pdfplugin"] = PluginRegistryEntry{
 		Name:          "PDF Plugin",
 		Description:   "Process PDFs",
@@ -627,7 +627,7 @@ func Test331_plugin_repo_client_get_suggestions(t *testing.T) {
 	// TEST331: Get suggestions for missing cap
 	repo := NewPluginRepo(3600)
 
-	capUrn := `cap:in="media:pdf;bytes";op=disbind;out="media:disbound-page;textable;form=list"`
+	capUrn := `cap:in="media:pdf";op=disbind;out="media:disbound-page;textable;form=list"`
 	registry := &PluginRegistryResponse{
 		Plugins: []PluginInfo{
 			{
@@ -732,7 +732,7 @@ func Test333_plugin_repo_client_get_all_caps(t *testing.T) {
 	// TEST333: Get all available caps
 	repo := NewPluginRepo(3600)
 
-	cap1 := `cap:in="media:pdf;bytes";op=disbind;out="media:disbound-page;textable;form=list"`
+	cap1 := `cap:in="media:pdf";op=disbind;out="media:disbound-page;textable;form=list"`
 	cap2 := `cap:in="media:txt;textable";op=disbind;out="media:disbound-page;textable;form=list"`
 
 	registry := &PluginRegistryResponse{
@@ -870,7 +870,7 @@ func Test335_plugin_repo_server_client_integration(t *testing.T) {
 		},
 	}
 
-	capUrn := `cap:in="media:test;bytes";op=test;out="media:result;bytes"`
+	capUrn := `cap:in="media:test";op=test;out="media:result"`
 	plugins["testplugin"] = PluginRegistryEntry{
 		Name:          "Test Plugin",
 		Description:   "A test plugin",

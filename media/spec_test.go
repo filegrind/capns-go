@@ -40,7 +40,7 @@ func Test089_resolve_from_registry_obj(t *testing.T) {
 // TEST090: Test resolving binary media URN from registry returns octet-stream and IsBinary true
 func Test090_resolve_from_registry_binary(t *testing.T) {
 	registry := testRegistry(t)
-	resolved, err := ResolveMediaUrn("media:bytes", nil, registry)
+	resolved, err := ResolveMediaUrn("media:", nil, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/octet-stream", resolved.MediaType)
 	assert.True(t, resolved.IsBinary())
@@ -211,10 +211,10 @@ func Test098_validate_no_duplicate_urns_passes_for_unique(t *testing.T) {
 // ResolvedMediaSpec tests
 // -------------------------------------------------------------------------
 
-// TEST099: Test ResolvedMediaSpec IsBinary returns true for bytes media URN
+// TEST099: Test ResolvedMediaSpec IsBinary returns true when textable tag is absent
 func Test099_resolved_is_binary(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
-		SpecID:      "media:bytes",
+		SpecID:      "media:",
 		MediaType:   "application/octet-stream",
 		ProfileURI:  "",
 		Schema:      nil,
@@ -397,7 +397,7 @@ func Test106_metadata_with_validation(t *testing.T) {
 func Test107_extensions_propagation(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
-			Urn:         "media:custom-pdf;bytes",
+			Urn:         "media:custom-pdf",
 			MediaType:   "application/pdf",
 			Title:       "PDF Document",
 			ProfileURI:  "https://capns.org/schema/pdf",
@@ -410,7 +410,7 @@ func Test107_extensions_propagation(t *testing.T) {
 	}
 
 	registry := testRegistry(t)
-	resolved, err := ResolveMediaUrn("media:custom-pdf;bytes", mediaSpecs, registry)
+	resolved, err := ResolveMediaUrn("media:custom-pdf", mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"pdf"}, resolved.Extensions)
 }
@@ -477,7 +477,7 @@ func Test109_extensions_with_metadata_and_validation(t *testing.T) {
 func Test110_multiple_extensions(t *testing.T) {
 	mediaSpecs := []MediaSpecDef{
 		{
-			Urn:         "media:image;jpeg;bytes",
+			Urn:         "media:image;jpeg",
 			MediaType:   "image/jpeg",
 			Title:       "JPEG Image",
 			ProfileURI:  "https://capns.org/schema/jpeg",
@@ -490,7 +490,7 @@ func Test110_multiple_extensions(t *testing.T) {
 	}
 
 	registry := testRegistry(t)
-	resolved, err := ResolveMediaUrn("media:image;jpeg;bytes", mediaSpecs, registry)
+	resolved, err := ResolveMediaUrn("media:image;jpeg", mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"jpg", "jpeg"}, resolved.Extensions)
 	assert.Len(t, resolved.Extensions, 2)
@@ -506,8 +506,8 @@ func Test304_media_availability_output_constant(t *testing.T) {
 		"model-availability must be textable")
 	assert.True(t, HasMediaUrnTagValue(MediaAvailabilityOutput, "form", "map"),
 		"model-availability must be form=map")
-	assert.False(t, HasMediaUrnTag(MediaAvailabilityOutput, "bytes"),
-		"model-availability must not be binary")
+	assert.True(t, HasMediaUrnTag(MediaAvailabilityOutput, "textable"),
+		"model-availability must be textable (not binary)")
 }
 
 // TEST305: Test MediaPathOutput constant parses as valid media URN with correct tags
@@ -516,8 +516,8 @@ func Test305_media_path_output_constant(t *testing.T) {
 		"model-path must be textable")
 	assert.True(t, HasMediaUrnTagValue(MediaPathOutput, "form", "map"),
 		"model-path must be form=map")
-	assert.False(t, HasMediaUrnTag(MediaPathOutput, "bytes"),
-		"model-path must not be binary")
+	assert.True(t, HasMediaUrnTag(MediaPathOutput, "textable"),
+		"model-path must be textable (not binary)")
 }
 
 // TEST306: Test MediaAvailabilityOutput and MediaPathOutput are distinct URNs

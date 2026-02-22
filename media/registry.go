@@ -168,7 +168,7 @@ func getBundledStandardMediaSpecs() []StoredMediaSpec {
 	// These match the JSON files in capns/standard/media/
 	return []StoredMediaSpec{
 		{
-			Urn:         "media:bytes",
+			Urn:         "media:",
 			MediaType:   "application/octet-stream",
 			Title:       "Bytes",
 			ProfileURI:  "https://capns.org/schema/bytes",
@@ -224,7 +224,7 @@ func getBundledStandardMediaSpecs() []StoredMediaSpec {
 			Description: "No input/output.",
 		},
 		{
-			Urn:         "media:pdf;bytes",
+			Urn:         "media:pdf",
 			MediaType:   "application/pdf",
 			Title:       "PDF",
 			ProfileURI:  "https://capns.org/schema/pdf",
@@ -232,7 +232,7 @@ func getBundledStandardMediaSpecs() []StoredMediaSpec {
 			Extensions:  []string{"pdf"},
 		},
 		{
-			Urn:         "media:epub;bytes",
+			Urn:         "media:epub",
 			MediaType:   "application/epub+zip",
 			Title:       "EPUB",
 			ProfileURI:  "https://capns.org/schema/epub",
@@ -288,7 +288,7 @@ func getBundledStandardMediaSpecs() []StoredMediaSpec {
 			Extensions:  []string{"yaml", "yml"},
 		},
 		{
-			Urn:         "media:image;png;bytes",
+			Urn:         "media:image;png",
 			MediaType:   "image/png",
 			Title:       "PNG Image",
 			ProfileURI:  "https://capns.org/schema/image",
@@ -296,7 +296,7 @@ func getBundledStandardMediaSpecs() []StoredMediaSpec {
 			Extensions:  []string{"png"},
 		},
 		{
-			Urn:         "media:image;jpeg;bytes",
+			Urn:         "media:image;jpeg",
 			MediaType:   "image/jpeg",
 			Title:       "JPEG Image",
 			ProfileURI:  "https://capns.org/schema/image",
@@ -304,7 +304,7 @@ func getBundledStandardMediaSpecs() []StoredMediaSpec {
 			Extensions:  []string{"jpg", "jpeg"},
 		},
 		{
-			Urn:         "media:audio;wav;bytes",
+			Urn:         "media:audio;wav",
 			MediaType:   "audio/wav",
 			Title:       "WAV Audio",
 			ProfileURI:  "https://capns.org/schema/audio",
@@ -312,7 +312,7 @@ func getBundledStandardMediaSpecs() []StoredMediaSpec {
 			Extensions:  []string{"wav"},
 		},
 		{
-			Urn:         "media:video;bytes",
+			Urn:         "media:video",
 			MediaType:   "video/mp4",
 			Title:       "Video",
 			ProfileURI:  "https://capns.org/schema/video",

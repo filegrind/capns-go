@@ -904,7 +904,7 @@ func Test050_matching_semantics_direction_mismatch(t *testing.T) {
 	cap, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="` + standard.MediaObject + `"`)
 	require.NoError(t, err)
 
-	request, err := NewCapUrnFromString(`cap:in="media:bytes";op=generate;out="` + standard.MediaObject + `"`)
+	request, err := NewCapUrnFromString(`cap:in="media:";op=generate;out="` + standard.MediaObject + `"`)
 	require.NoError(t, err)
 
 	assert.False(t, cap.Accepts(request), "Test 10: Direction mismatch should not match")
@@ -913,68 +913,68 @@ func Test050_matching_semantics_direction_mismatch(t *testing.T) {
 // TEST051: Semantic direction matching - generic provider matches specific request
 func Test051_direction_semantic_matching(t *testing.T) {
 	genericCap, err := NewCapUrnFromString(
-		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	pdfRequest, err := NewCapUrnFromString(
-		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:pdf";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	assert.True(t, genericCap.Accepts(pdfRequest),
-		"Generic bytes provider must match specific pdf;bytes request")
+		"Generic provider must match specific pdf request")
 
 	epubRequest, err := NewCapUrnFromString(
-		`cap:in="media:epub;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:epub";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	assert.True(t, genericCap.Accepts(epubRequest),
-		"Generic bytes provider must match epub;bytes request")
+		"Generic provider must match epub request")
 
 	pdfCap, err := NewCapUrnFromString(
-		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:pdf";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	genericRequest, err := NewCapUrnFromString(
-		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	assert.False(t, pdfCap.Accepts(genericRequest),
-		"Specific pdf;bytes cap must NOT match generic bytes request")
+		"Specific pdf cap must NOT match generic request")
 
 	assert.False(t, pdfCap.Accepts(epubRequest),
 		"PDF-specific cap must NOT match epub request (epub lacks pdf marker)")
 
 	specificOutCap, err := NewCapUrnFromString(
-		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	genericOutRequest, err := NewCapUrnFromString(
-		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;bytes"`,
+		`cap:in="media:";op=generate_thumbnail;out="media:image"`,
 	)
 	require.NoError(t, err)
 	assert.True(t, specificOutCap.Accepts(genericOutRequest),
-		"Cap producing image;png;bytes;thumbnail must satisfy request for image;bytes")
+		"Cap producing image;png;thumbnail must satisfy request for image")
 
 	genericOutCap, err := NewCapUrnFromString(
-		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;bytes"`,
+		`cap:in="media:";op=generate_thumbnail;out="media:image"`,
 	)
 	require.NoError(t, err)
 	specificOutRequest, err := NewCapUrnFromString(
-		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	assert.False(t, genericOutCap.Accepts(specificOutRequest),
-		"Cap producing generic image;bytes must NOT satisfy request requiring image;png;bytes;thumbnail")
+		"Cap producing generic image must NOT satisfy request requiring image;png;thumbnail")
 }
 
 // TEST052: Semantic direction specificity - more media URN tags = higher specificity
 func Test052_direction_semantic_specificity(t *testing.T) {
 	genericCap, err := NewCapUrnFromString(
-		`cap:in="media:bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	specificCap, err := NewCapUrnFromString(
-		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:pdf";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 
@@ -982,10 +982,10 @@ func Test052_direction_semantic_specificity(t *testing.T) {
 	assert.Equal(t, 7, specificCap.Specificity())
 
 	assert.True(t, specificCap.Specificity() > genericCap.Specificity(),
-		"pdf;bytes cap must be more specific than bytes cap")
+		"pdf cap must be more specific than wildcard cap")
 
 	pdfRequest, err := NewCapUrnFromString(
-		`cap:in="media:pdf;bytes";op=generate_thumbnail;out="media:image;png;bytes;thumbnail"`,
+		`cap:in="media:pdf";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
 	require.NoError(t, err)
 	caps := []*CapUrn{genericCap, specificCap}
@@ -993,7 +993,7 @@ func Test052_direction_semantic_specificity(t *testing.T) {
 	best := matcher.FindBestMatch(caps, pdfRequest)
 	require.NotNil(t, best)
 	assert.Equal(t, 7, best.Specificity(),
-		"CapMatcher must prefer the more specific pdf;bytes provider")
+		"CapMatcher must prefer the more specific pdf provider")
 }
 
 // TEST559: without_tag removes tag, ignores in/out, case-insensitive for keys
@@ -1032,8 +1032,8 @@ func Test560_with_in_out_spec(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	changedIn := cap.WithInSpec("media:bytes")
-	assert.Equal(t, "media:bytes", changedIn.InSpec())
+	changedIn := cap.WithInSpec("media:")
+	assert.Equal(t, "media:", changedIn.InSpec())
 	assert.Equal(t, "media:void", changedIn.OutSpec())
 	opVal, exists := changedIn.GetTag("op")
 	assert.True(t, exists)
@@ -1045,9 +1045,9 @@ func Test560_with_in_out_spec(t *testing.T) {
 
 	// Chain both
 	changedBoth := cap.
-		WithInSpec("media:pdf;bytes").
+		WithInSpec("media:pdf").
 		WithOutSpec("media:txt;textable")
-	assert.Equal(t, "media:pdf;bytes", changedBoth.InSpec())
+	assert.Equal(t, "media:pdf", changedBoth.InSpec())
 	assert.Equal(t, "media:txt;textable", changedBoth.OutSpec())
 }
 
@@ -1127,10 +1127,10 @@ func Test566_with_tag_ignores_in_out(t *testing.T) {
 	)
 	require.NoError(t, err)
 	// Attempting to set in/out via WithTag is silently ignored
-	same := cap.WithTag("in", "media:bytes")
+	same := cap.WithTag("in", "media:")
 	assert.Equal(t, "media:void", same.InSpec(), "WithTag must not change InSpec")
 
-	same2 := cap.WithTag("out", "media:bytes")
+	same2 := cap.WithTag("out", "media:")
 	assert.Equal(t, "media:void", same2.OutSpec(), "WithTag must not change OutSpec")
 }
 
@@ -1171,7 +1171,7 @@ func Test648_wildcard_accepts_specific(t *testing.T) {
 	assert.Equal(t, "media:", wildcard.InSpec())
 	assert.Equal(t, "media:", wildcard.OutSpec())
 
-	specific, err := NewCapUrnFromString("cap:in=media:bytes;out=media:text")
+	specific, err := NewCapUrnFromString("cap:in=media:pdf;out=media:text")
 	require.NoError(t, err)
 
 	assert.True(t, wildcard.Accepts(specific), "Wildcard should accept specific")
@@ -1183,7 +1183,7 @@ func Test649_specificity_scoring(t *testing.T) {
 	wildcard, err := NewCapUrnFromTags(map[string]string{})
 	require.NoError(t, err)
 
-	specific, err := NewCapUrnFromString("cap:in=media:bytes;out=media:text")
+	specific, err := NewCapUrnFromString("cap:in=media:pdf;out=media:text")
 	require.NoError(t, err)
 
 	assert.Equal(t, 0, wildcard.Specificity(), "Wildcard cap should have zero specificity")
@@ -1211,7 +1211,7 @@ func Test652_cap_identity_constant_works(t *testing.T) {
 	identity, err := NewCapUrnFromTags(map[string]string{})
 	require.NoError(t, err)
 
-	specific, err := NewCapUrnFromString("cap:in=media:bytes;out=media:text;op=test")
+	specific, err := NewCapUrnFromString("cap:in=media:pdf;out=media:text;op=test")
 	require.NoError(t, err)
 
 	// Identity accepts everything (no constraints)

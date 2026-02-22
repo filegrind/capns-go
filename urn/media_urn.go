@@ -58,9 +58,10 @@ func (m *MediaUrn) GetTag(tag string) (string, bool) {
 	return m.inner.GetTag(tag)
 }
 
-// IsBinary returns true if this represents binary data (has "bytes" tag)
+// IsBinary returns true if this represents binary (non-text) data.
+// Returns true if the "textable" marker tag is NOT present.
 func (m *MediaUrn) IsBinary() bool {
-	return m.HasTag("bytes")
+	return !m.HasTag("textable")
 }
 
 // IsTextable returns true if this has the "textable" tag
@@ -255,7 +256,7 @@ func MediaUrnString() *MediaUrn {
 	return m
 }
 
-// MediaUrnBytes creates a bytes media URN
+// MediaUrnBytes creates a binary media URN
 func MediaUrnBytes() *MediaUrn {
 	m, _ := NewMediaUrnFromString(standard.MediaBinary)
 	return m

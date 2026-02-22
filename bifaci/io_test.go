@@ -325,7 +325,7 @@ func Test218_write_chunked(t *testing.T) {
 
 	id := NewMessageIdRandom()
 	streamId := "test-stream"
-	mediaUrn := "media:bytes"
+	mediaUrn := "media:"
 	data := make([]byte, 250) // Will be split into 3 chunks: 100 + 100 + 50
 
 	err := writer.WriteResponseWithChunking(id, streamId, mediaUrn, data)
@@ -426,7 +426,7 @@ func Test220_write_chunked_exact_chunk_size(t *testing.T) {
 
 	id := NewMessageIdRandom()
 	streamId := "exact-stream"
-	mediaUrn := "media:bytes"
+	mediaUrn := "media:"
 	data := make([]byte, 100) // Exactly max_chunk
 
 	err := writer.WriteResponseWithChunking(id, streamId, mediaUrn, data)

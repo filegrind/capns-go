@@ -62,7 +62,7 @@ const MediaBooleanExpanded = "media:bool;textable;form=scalar"
 const MediaObjectExpanded = "media:form=map;textable"
 
 // MediaBinaryExpanded is the expanded form of MediaBinary with semantic tags
-const MediaBinaryExpanded = "media:bytes"
+const MediaBinaryExpanded = "media:"
 
 // Array types
 
@@ -84,35 +84,35 @@ const MediaObjectArray = "media:form=list;textable"
 // Image/Audio/Video types
 
 // MediaPng represents a PNG image media type
-const MediaPng = "media:image;png;bytes"
+const MediaPng = "media:image;png"
 
 // MediaAudio represents an audio media type
-const MediaAudio = "media:wav;audio;bytes"
+const MediaAudio = "media:wav;audio"
 
 // MediaVideo represents a video media type
-const MediaVideo = "media:video;bytes"
+const MediaVideo = "media:video"
 
 // MediaAudioSpeech represents audio speech media type
-const MediaAudioSpeech = "media:audio;wav;bytes;speech"
+const MediaAudioSpeech = "media:audio;wav;speech"
 
 // MediaImageThumbnail represents an image thumbnail media type
-const MediaImageThumbnail = "media:image;png;bytes;thumbnail"
+const MediaImageThumbnail = "media:image;png;thumbnail"
 
 // Collection types
 
 // MediaCollection represents a collection media type (map form)
-const MediaCollection = "media:collection;form=map"
+const MediaCollection = "media:collection;textable;form=map"
 
 // MediaCollectionList represents a collection media type (list form)
-const MediaCollectionList = "media:collection;form=list"
+const MediaCollectionList = "media:collection;textable;form=list"
 
 // Document types
 
 // MediaPdf represents a PDF document media type
-const MediaPdf = "media:pdf;bytes"
+const MediaPdf = "media:pdf"
 
 // MediaEpub represents an EPUB document media type
-const MediaEpub = "media:epub;bytes"
+const MediaEpub = "media:epub"
 
 // Text format types
 

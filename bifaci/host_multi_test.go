@@ -300,7 +300,7 @@ func Test418_route_continuation_by_req_id(t *testing.T) {
 
 		reqId := NewMessageIdRandom()
 		writer.WriteFrame(NewReq(reqId, "cap:op=cont", []byte{}, "text/plain"))
-		writer.WriteFrame(NewStreamStart(reqId, "arg-0", "media:bytes"))
+		writer.WriteFrame(NewStreamStart(reqId, "arg-0", "media:"))
 		payload := []byte("payload-data")
 		checksum := ComputeChecksum(payload)
 		writer.WriteFrame(NewChunk(reqId, "arg-0", 0, payload, 0, checksum))
@@ -431,7 +431,7 @@ func Test420_plugin_frames_forwarded_to_relay(t *testing.T) {
 
 			// Send diverse frame types
 			w.WriteFrame(NewLog(reqId, "info", "processing"))
-			w.WriteFrame(NewStreamStart(reqId, "output", "media:bytes"))
+			w.WriteFrame(NewStreamStart(reqId, "output", "media:"))
 			payload := []byte("data")
 			checksum := ComputeChecksum(payload)
 			w.WriteFrame(NewChunk(reqId, "output", 0, payload, 0, checksum))

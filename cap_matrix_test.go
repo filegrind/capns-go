@@ -253,8 +253,8 @@ func Test121_cap_block_more_specific_wins(t *testing.T) {
 		t.Fatalf("Failed to find best cap set: %v", err)
 	}
 
-	// Plugin: in=bytes(1) + out=bytes(1) + ext=pdf(3) + op=generate_thumbnail(3) = 8
-	// Provider: in=bytes(1) + out=bytes(1) + op=generate_thumbnail(3) = 5
+	// Plugin: in=binary(1) + out=binary(1) + ext=pdf(3) + op=generate_thumbnail(3) = 8
+	// Provider: in=binary(1) + out=binary(1) + op=generate_thumbnail(3) = 5
 	// Plugin should win even though providers were added first
 	if best.RegistryName != "plugins" {
 		t.Errorf("Expected plugins registry to win, got %s", best.RegistryName)
@@ -399,8 +399,8 @@ func Test125_cap_block_fallback_scenario(t *testing.T) {
 		t.Fatalf("Failed to find best cap set: %v", err)
 	}
 
-	// Plugin: in=bytes(1) + out=bytes(1) + ext=pdf(3) + op=generate_thumbnail(3) = 8
-	// Provider: in=bytes(1) + out=bytes(1) + ext=*(2) + op=generate_thumbnail(3) = 7
+	// Plugin: in=binary(1) + out=binary(1) + ext=pdf(3) + op=generate_thumbnail(3) = 8
+	// Provider: in=binary(1) + out=binary(1) + ext=*(2) + op=generate_thumbnail(3) = 7
 	if best.RegistryName != "plugins" {
 		t.Errorf("Expected plugins to win, got %s", best.RegistryName)
 	}

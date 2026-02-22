@@ -54,7 +54,7 @@ func bytesToFrameChannel(payload []byte) <-chan Frame {
 		defer close(ch)
 		requestID := NewMessageIdDefault()
 		streamID := "test-arg"
-		mediaUrn := "media:bytes"
+		mediaUrn := "media:"
 
 		// STREAM_START
 		ch <- *NewStreamStart(requestID, streamID, mediaUrn)
@@ -505,7 +505,7 @@ func TestExtractEffectivePayloadBinaryValue(t *testing.T) {
 	for i := 0; i < 256; i++ {
 		binaryData[i] = byte(i)
 	}
-	result, err := extractEffectivePayload(binaryData, "application/cbor", `cap:in="media:pdf;bytes";op=process;out="media:void"`)
+	result, err := extractEffectivePayload(binaryData, "application/cbor", `cap:in="media:pdf";op=process;out="media:void"`)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -583,7 +583,7 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		`cap:in="media:pdf";op=process;out="media:void"`,
 		"Process PDF",
 		"process",
 		[]cap.CapArg{
@@ -591,7 +591,7 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 					positionSource(0),
 				},
 			},
@@ -607,7 +607,7 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 	// Track what handler receives
 	var receivedPayload []byte
 	runtime.Register(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		`cap:in="media:pdf";op=process;out="media:void"`,
 		func(frames <-chan Frame, emitter StreamEmitter, peer PeerInvoker) error {
 			payload, err := CollectFirstArg(frames)
 			if err != nil {
@@ -699,7 +699,7 @@ func Test338FilePathViaCliFlag(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		`cap:in="media:pdf";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{
@@ -707,7 +707,7 @@ func Test338FilePathViaCliFlag(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 					cliFlagSource("--file"),
 				},
 			},
@@ -748,7 +748,7 @@ func Test339FilePathArrayGlobExpansion(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Batch",
 		"batch",
 		[]cap.CapArg{
@@ -756,7 +756,7 @@ func Test339FilePathArrayGlobExpansion(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -802,7 +802,7 @@ func Test339FilePathArrayGlobExpansion(t *testing.T) {
 // TEST340: File not found error provides clear message
 func Test340FileNotFoundClearError(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=test;out="media:void"`,
+		`cap:in="media:pdf";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -810,7 +810,7 @@ func Test340FileNotFoundClearError(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 					positionSource(0),
 				},
 			},
@@ -847,7 +847,7 @@ func Test341StdinPrecedenceOverFilePath(t *testing.T) {
 
 	// Stdin source comes BEFORE position source
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -855,7 +855,7 @@ func Test341StdinPrecedenceOverFilePath(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"), // First
+					stdinSource("media:"), // First
 					positionSource(0),          // Second
 				},
 			},
@@ -889,7 +889,7 @@ func Test342FilePathPositionZeroReadsFirstArg(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -897,7 +897,7 @@ func Test342FilePathPositionZeroReadsFirstArg(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -960,7 +960,7 @@ func Test343NonFilePathArgsUnaffected(t *testing.T) {
 // TEST344: file-path-array with invalid JSON fails clearly
 func Test344FilePathArrayInvalidJSONFails(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Test",
 		"batch",
 		[]cap.CapArg{
@@ -968,7 +968,7 @@ func Test344FilePathArrayInvalidJSONFails(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1006,7 +1006,7 @@ func Test345FilePathArrayOneFileMissingFailsHard(t *testing.T) {
 	file2Path := filepath.Join(tempDir, "test345_missing.txt")
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Test",
 		"batch",
 		[]cap.CapArg{
@@ -1014,7 +1014,7 @@ func Test345FilePathArrayOneFileMissingFailsHard(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1056,7 +1056,7 @@ func Test346LargeFileReadsSuccessfully(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -1064,7 +1064,7 @@ func Test346LargeFileReadsSuccessfully(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1096,7 +1096,7 @@ func Test347EmptyFileReadsAsEmptyBytes(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -1104,7 +1104,7 @@ func Test347EmptyFileReadsAsEmptyBytes(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1137,7 +1137,7 @@ func Test348FilePathConversionRespectsSourceOrder(t *testing.T) {
 
 	// Position source BEFORE stdin source
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -1146,7 +1146,7 @@ func Test348FilePathConversionRespectsSourceOrder(t *testing.T) {
 				Required: true,
 				Sources: []cap.ArgSource{
 					positionSource(0),          // First
-					stdinSource("media:bytes"), // Second
+					stdinSource("media:"), // Second
 				},
 			},
 		},
@@ -1179,7 +1179,7 @@ func Test349FilePathMultipleSourcesFallback(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -1189,7 +1189,7 @@ func Test349FilePathMultipleSourcesFallback(t *testing.T) {
 				Sources: []cap.ArgSource{
 					cliFlagSource("--file"),    // First (not provided)
 					positionSource(0),          // Second (provided)
-					stdinSource("media:bytes"), // Third (not used)
+					stdinSource("media:"), // Third (not used)
 				},
 			},
 		},
@@ -1222,7 +1222,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:result;textable"`,
+		`cap:in="media:pdf";op=process;out="media:result;textable"`,
 		"Process PDF",
 		"process",
 		[]cap.CapArg{
@@ -1230,7 +1230,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 					positionSource(0),
 				},
 			},
@@ -1246,7 +1246,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 	// Track what handler receives
 	var receivedPayload []byte
 	runtime.Register(
-		`cap:in="media:pdf;bytes";op=process;out="media:result;textable"`,
+		`cap:in="media:pdf";op=process;out="media:result;textable"`,
 		func(frames <-chan Frame, emitter StreamEmitter, peer PeerInvoker) error {
 			payload, err := CollectFirstArg(frames)
 			if err != nil {
@@ -1292,7 +1292,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 // TEST351: file-path-array with empty array succeeds
 func Test351FilePathArrayEmptyArray(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Test",
 		"batch",
 		[]cap.CapArg{
@@ -1300,7 +1300,7 @@ func Test351FilePathArrayEmptyArray(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: false, // Not required
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1348,7 +1348,7 @@ func Test352FilePermissionDeniedClearError(t *testing.T) {
 	defer os.Chmod(tempFile, 0644) // Restore for cleanup
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -1356,7 +1356,7 @@ func Test352FilePermissionDeniedClearError(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1443,7 +1443,7 @@ func Test354GlobPatternNoMatchesEmptyArray(t *testing.T) {
 	tempDir := t.TempDir()
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Test",
 		"batch",
 		[]cap.CapArg{
@@ -1451,7 +1451,7 @@ func Test354GlobPatternNoMatchesEmptyArray(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1503,7 +1503,7 @@ func Test355GlobPatternSkipsDirectories(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Test",
 		"batch",
 		[]cap.CapArg{
@@ -1511,7 +1511,7 @@ func Test355GlobPatternSkipsDirectories(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1567,7 +1567,7 @@ func Test356MultipleGlobPatternsCombined(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Test",
 		"batch",
 		[]cap.CapArg{
@@ -1575,7 +1575,7 @@ func Test356MultipleGlobPatternsCombined(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1641,7 +1641,7 @@ func Test357SymlinksFollowed(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -1649,7 +1649,7 @@ func Test357SymlinksFollowed(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1682,7 +1682,7 @@ func Test358BinaryFileNonUTF8(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=test;out="media:void"`,
+		`cap:in="media:";op=test;out="media:void"`,
 		"Test",
 		"test",
 		[]cap.CapArg{
@@ -1690,7 +1690,7 @@ func Test358BinaryFileNonUTF8(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1722,7 +1722,7 @@ func Test358BinaryFileNonUTF8(t *testing.T) {
 // TEST359: Invalid glob pattern fails with clear error
 func Test359InvalidGlobPatternFails(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=batch;out="media:void"`,
+		`cap:in="media:";op=batch;out="media:void"`,
 		"Test",
 		"batch",
 		[]cap.CapArg{
@@ -1730,7 +1730,7 @@ func Test359InvalidGlobPatternFails(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=list",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:bytes"),
+					stdinSource("media:"),
 					positionSource(0),
 				},
 			},
@@ -1766,7 +1766,7 @@ func Test360ExtractEffectivePayloadWithFileData(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		`cap:in="media:pdf";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{
@@ -1774,7 +1774,7 @@ func Test360ExtractEffectivePayloadWithFileData(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 					positionSource(0),
 				},
 			},
@@ -1817,7 +1817,7 @@ func Test361CLIModeFilePath(t *testing.T) {
 	defer os.Remove(tempFile)
 
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		`cap:in="media:pdf";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{
@@ -1825,7 +1825,7 @@ func Test361CLIModeFilePath(t *testing.T) {
 				MediaUrn: "media:file-path;textable;form=scalar",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 					positionSource(0),
 				},
 			},
@@ -1873,15 +1873,15 @@ func Test362CLIModePipedBinary(t *testing.T) {
 
 	// Create cap that accepts stdin
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		`cap:in="media:pdf";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:pdf;bytes",
+				MediaUrn: "media:pdf",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 				},
 			},
 		},
@@ -1942,7 +1942,7 @@ func Test362CLIModePipedBinary(t *testing.T) {
 		}
 	}
 
-	if mediaUrn != "media:pdf;bytes" {
+	if mediaUrn != "media:pdf" {
 		t.Errorf("Media URN should match cap in_spec, got: %s", mediaUrn)
 	}
 	if string(value) != string(pdfContent) {
@@ -1995,15 +1995,15 @@ func Test363CBORModeChunkedContent(t *testing.T) {
 	}
 
 	capDef := createTestCap(
-		`cap:in="media:pdf;bytes";op=process;out="media:void"`,
+		`cap:in="media:pdf";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:pdf;bytes",
+				MediaUrn: "media:pdf",
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:pdf;bytes"),
+					stdinSource("media:pdf"),
 				},
 			},
 		},
@@ -2019,7 +2019,7 @@ func Test363CBORModeChunkedContent(t *testing.T) {
 	// Build CBOR payload
 	args := []cap.CapArgumentValue{
 		{
-			MediaUrn: "media:pdf;bytes",
+			MediaUrn: "media:pdf",
 			Value:    pdfContent,
 		},
 	}
@@ -2051,7 +2051,7 @@ func Test363CBORModeChunkedContent(t *testing.T) {
 	streamID := "test-stream"
 
 	// Send STREAM_START
-	frameChan <- *NewStreamStart(requestID, streamID, "media:bytes")
+	frameChan <- *NewStreamStart(requestID, streamID, "media:")
 
 	// Send CHUNK frames
 	offset := 0
@@ -2151,7 +2151,7 @@ func Test364CBORModeFilePath(t *testing.T) {
 // TEST395: Small payload (< max_chunk) produces correct CBOR arguments
 func Test395BuildPayloadSmall(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=process;out="media:void"`,
+		`cap:in="media:";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{},
@@ -2200,7 +2200,7 @@ func Test395BuildPayloadSmall(t *testing.T) {
 // TEST396: Large payload (> max_chunk) accumulates across chunks correctly
 func Test396BuildPayloadLarge(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=process;out="media:void"`,
+		`cap:in="media:";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{},
@@ -2244,7 +2244,7 @@ func Test396BuildPayloadLarge(t *testing.T) {
 // TEST397: Empty reader produces valid empty CBOR arguments
 func Test397BuildPayloadEmpty(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=process;out="media:void"`,
+		`cap:in="media:";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{},
@@ -2287,7 +2287,7 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 // TEST398: IO error from reader propagates as error
 func Test398BuildPayloadIOError(t *testing.T) {
 	capDef := createTestCap(
-		`cap:in="media:bytes";op=process;out="media:void"`,
+		`cap:in="media:";op=process;out="media:void"`,
 		"Process",
 		"process",
 		[]cap.CapArg{},

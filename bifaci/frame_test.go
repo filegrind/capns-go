@@ -607,7 +607,7 @@ func Test204_req_frame_empty_payload(t *testing.T) {
 func Test365_stream_start_frame(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-abc-123"
-	mediaUrn := "media:bytes"
+	mediaUrn := "media:"
 
 	frame := NewStreamStart(reqId, streamId, mediaUrn)
 

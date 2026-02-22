@@ -162,7 +162,7 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	// Use the constant values directly since the cap URNs reference these specific media URN strings
 	mediaSpecs := []media.MediaSpecDef{
 		{Urn: "media:textable;form=scalar", MediaType: "text/plain", ProfileURI: media.ProfileStr},
-		{Urn: "media:bytes", MediaType: "application/octet-stream"},
+		{Urn: "media:", MediaType: "application/octet-stream"},
 		{Urn: "media:form=map;textable", MediaType: "application/json", ProfileURI: media.ProfileObj},
 		{Urn: "media:void", MediaType: "application/x-void", ProfileURI: media.ProfileVoid},
 	}
@@ -175,10 +175,10 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	stringCap.SetOutput(NewCapOutput("media:textable;form=scalar", "String output"))
 	stringCap.SetMediaSpecs(mediaSpecs)
 
-	binaryCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:bytes"`)
+	binaryCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:"`)
 	require.NoError(t, err)
 	binaryCap := NewCap(binaryCapUrn, "Binary Test", "test")
-	binaryCap.SetOutput(NewCapOutput("media:bytes", "Binary output"))
+	binaryCap.SetOutput(NewCapOutput("media:", "Binary output"))
 	binaryCap.SetMediaSpecs(mediaSpecs)
 
 	jsonCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)

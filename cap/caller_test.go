@@ -63,18 +63,18 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	// Common mediaSpecs for resolution
 	// Use media.MediaObject (="media:form=map;textable") which has form=map tag for IsMap()
 	mediaSpecs := []media.MediaSpecDef{
-		{Urn: "media:bytes", MediaType: "application/octet-stream"},
+		{Urn: "media:", MediaType: "application/octet-stream"},
 		{Urn: "media:textable;form=scalar", MediaType: "text/plain", ProfileURI: media.ProfileStr},
 		{Urn: media.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
 	}
 
 	// Test binary cap using the 'out' tag with media URN - use proper binary tag
-	binaryCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes"`)
+	binaryCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:"`)
 	require.NoError(t, err)
 
 	capDef := NewCap(binaryCapUrn, "Test Capability", "test-command")
 	capDef.SetMediaSpecs(mediaSpecs)
-	caller := NewCapCaller(`cap:in="media:void";op=generate;out="media:bytes"`, mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:void";op=generate;out="media:"`, mockHost, capDef)
 
 	resolved, err := caller.resolveOutputSpec(registry)
 	require.NoError(t, err)
@@ -202,10 +202,10 @@ func TestCapCallerWithArguments(t *testing.T) {
 func TestCapCallerBinaryResponse(t *testing.T) {
 	registry := testRegistry(t)
 	// Setup binary cap - use raw type with binary tag
-	capUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:bytes"`)
+	capUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:"`)
 	require.NoError(t, err)
 
-	// mediaSpecs for resolution - standard.MediaBinary = "media:bytes"
+	// mediaSpecs for resolution - standard.MediaBinaryExpanded = "media:"
 	mediaSpecs := []media.MediaSpecDef{
 		{Urn: standard.MediaBinary, MediaType: "application/octet-stream"},
 	}
@@ -221,7 +221,7 @@ func TestCapCallerBinaryResponse(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller(`cap:in="media:void";op=generate;out="media:bytes"`, mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:void";op=generate;out="media:"`, mockHost, capDef)
 
 	// Test call
 	ctx := context.Background()
@@ -249,7 +249,7 @@ func Test157_stdin_source_file_reference_creation(t *testing.T) {
 	trackedFileID := "tracked-file-123"
 	originalPath := "/path/to/original.pdf"
 	securityBookmark := []byte{0x62, 0x6f, 0x6f, 0x6b} // "book"
-	mediaUrn := "media:pdf;bytes"
+	mediaUrn := "media:pdf"
 
 	source := NewStdinSourceFromFileReference(
 		trackedFileID,
@@ -375,7 +375,7 @@ func Test276_cap_argument_value_as_str_valid(t *testing.T) {
 
 // TEST277: Test CapArgumentValue::value_as_str fails for non-UTF-8 binary data
 func Test277_cap_argument_value_as_str_invalid_utf8(t *testing.T) {
-	arg := NewCapArgumentValue("media:pdf;bytes", []byte{0xFF, 0xFE, 0x80})
+	arg := NewCapArgumentValue("media:pdf", []byte{0xFF, 0xFE, 0x80})
 	_, err := arg.ValueAsStr()
 	require.Error(t, err, "non-UTF-8 data must fail")
 }
@@ -439,7 +439,7 @@ func Test283_cap_argument_value_large_binary(t *testing.T) {
 	for i := range data {
 		data[i] = byte(i % 256)
 	}
-	arg := NewCapArgumentValue("media:pdf;bytes", data)
+	arg := NewCapArgumentValue("media:pdf", data)
 	assert.Equal(t, 10000, len(arg.Value))
 	assert.Equal(t, data, arg.Value)
 }

@@ -14,7 +14,7 @@ func Test057_parse_simple(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
 	assert.True(t, urn.HasTag("string"))
-	assert.False(t, urn.HasTag("bytes"))
+	assert.False(t, urn.HasTag("textable"))
 }
 
 // TEST058: Test parsing media URN with subtype extracts subtype tag correctly
@@ -41,19 +41,41 @@ func Test060_wrong_prefix_fails(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TEST061: Test is_binary returns true only when bytes marker tag is present
+// TEST061: Test is_binary returns true when textable tag is absent (binary = not textable)
 func Test061_is_binary(t *testing.T) {
-	binary, err := NewMediaUrnFromString("media:bytes")
+	// Binary types (no textable tag)
+	binary, err := NewMediaUrnFromString("media:")
 	require.NoError(t, err)
-	assert.True(t, binary.IsBinary())
+	assert.True(t, binary.IsBinary(), "media: (wildcard) should be binary")
+
+	pdfUrn, err := NewMediaUrnFromString("media:pdf")
+	require.NoError(t, err)
+	assert.True(t, pdfUrn.IsBinary(), "media:pdf should be binary")
 
 	pngUrn, err := NewMediaUrnFromString(standard.MediaPng)
 	require.NoError(t, err)
-	assert.True(t, pngUrn.IsBinary())
+	assert.True(t, pngUrn.IsBinary(), "media:image;png should be binary")
 
-	text, err := NewMediaUrnFromString("media:string;textable")
+	voidUrn, err := NewMediaUrnFromString("media:void")
 	require.NoError(t, err)
-	assert.False(t, text.IsBinary())
+	assert.True(t, voidUrn.IsBinary(), "media:void should be binary (no textable tag)")
+
+	// Non-binary types (have textable tag)
+	text, err := NewMediaUrnFromString("media:textable")
+	require.NoError(t, err)
+	assert.False(t, text.IsBinary(), "media:textable should NOT be binary")
+
+	textMap, err := NewMediaUrnFromString("media:textable;form=map")
+	require.NoError(t, err)
+	assert.False(t, textMap.IsBinary(), "media:textable;form=map should NOT be binary")
+
+	strUrn, err := NewMediaUrnFromString(standard.MediaStringExpanded)
+	require.NoError(t, err)
+	assert.False(t, strUrn.IsBinary(), "MEDIA_STRING should NOT be binary")
+
+	jsonUrn, err := NewMediaUrnFromString(standard.MediaJson)
+	require.NoError(t, err)
+	assert.False(t, jsonUrn.IsBinary(), "MEDIA_JSON should NOT be binary")
 }
 
 // TEST062: Test is_map returns true when form=map tag is present indicating key-value structure
@@ -115,7 +137,7 @@ func Test065_is_structured(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, scalar.IsStructured())
 
-	binary, err := NewMediaUrnFromString("media:bytes")
+	binary, err := NewMediaUrnFromString("media:")
 	require.NoError(t, err)
 	assert.False(t, binary.IsStructured())
 }
@@ -145,7 +167,7 @@ func Test067_is_text(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, intUrn.IsTextable())
 
-	binary, err := NewMediaUrnFromString("media:bytes")
+	binary, err := NewMediaUrnFromString("media:")
 	require.NoError(t, err)
 	assert.False(t, binary.IsTextable())
 }
@@ -236,7 +258,7 @@ func Test072_constants_parse(t *testing.T) {
 
 // TEST073: Test extension helper functions create media URNs with ext tag and correct format
 func Test073_extension_helpers(t *testing.T) {
-	pdfUrn, err := NewMediaUrnFromString("media:bytes;ext=pdf")
+	pdfUrn, err := NewMediaUrnFromString("media:ext=pdf")
 	require.NoError(t, err)
 	ext, ok := pdfUrn.GetTag("ext")
 	assert.True(t, ok)
@@ -344,7 +366,7 @@ func Test546_is_image(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, thumbUrn.IsImage())
 
-	customImage, err := NewMediaUrnFromString("media:image;jpg;bytes")
+	customImage, err := NewMediaUrnFromString("media:image;jpg")
 	require.NoError(t, err)
 	assert.True(t, customImage.IsImage())
 
@@ -376,7 +398,7 @@ func Test547_is_audio(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, speechUrn.IsAudio())
 
-	customAudio, err := NewMediaUrnFromString("media:audio;mp3;bytes")
+	customAudio, err := NewMediaUrnFromString("media:audio;mp3")
 	require.NoError(t, err)
 	assert.True(t, customAudio.IsAudio())
 
@@ -400,7 +422,7 @@ func Test548_is_video(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, videoUrn.IsVideo())
 
-	customVideo, err := NewMediaUrnFromString("media:video;mp4;bytes")
+	customVideo, err := NewMediaUrnFromString("media:video;mp4")
 	require.NoError(t, err)
 	assert.True(t, customVideo.IsVideo())
 
@@ -591,11 +613,11 @@ func Test558_predicate_constant_consistency(t *testing.T) {
 	assert.False(t, jsonUrn.IsBinary())
 	assert.False(t, jsonUrn.IsList())
 
-	// MEDIA_VOID is void, NOT anything else
+	// MEDIA_VOID is void, binary (no textable tag), NOT textable/numeric
 	voidUrn, err := NewMediaUrnFromString(standard.MediaVoid)
 	require.NoError(t, err)
 	assert.True(t, voidUrn.IsVoid())
 	assert.False(t, voidUrn.IsTextable())
-	assert.False(t, voidUrn.IsBinary())
+	assert.True(t, voidUrn.IsBinary(), "void is binary because it has no textable tag")
 	assert.False(t, voidUrn.IsNumeric())
 }

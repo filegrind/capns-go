@@ -5,7 +5,7 @@
 //
 // Examples:
 // - `media:textable;form=scalar`
-// - `media:pdf;bytes`
+// - `media:pdf`
 //
 // MediaSpecDef is always a structured object - NO string form parsing.
 package media
@@ -28,22 +28,22 @@ const (
 	MediaNumber       = "media:textable;numeric;form=scalar"
 	MediaBoolean      = "media:bool;textable;form=scalar"
 	MediaObject       = "media:form=map;textable"
-	MediaBinary       = "media:bytes"
+	MediaBinary       = "media:"
 	MediaStringArray  = "media:textable;form=list"
 	MediaIntegerArray = "media:integer;textable;numeric;form=list"
 	MediaNumberArray  = "media:textable;numeric;form=list"
 	MediaBooleanArray = "media:bool;textable;form=list"
 	MediaObjectArray  = "media:form=list;textable"
 	// Semantic content types
-	MediaImage = "media:image;png;bytes"
-	MediaAudio = "media:wav;audio;bytes;"
-	MediaVideo = "media:video;bytes"
+	MediaImage = "media:image;png"
+	MediaAudio = "media:wav;audio"
+	MediaVideo = "media:video"
 	// Semantic AI input types
-	MediaAudioSpeech    = "media:audio;wav;bytes;speech"
-	MediaImageThumbnail = "media:image;png;bytes;thumbnail"
+	MediaAudioSpeech    = "media:audio;wav;speech"
+	MediaImageThumbnail = "media:image;png;thumbnail"
 	// Document types (PRIMARY naming - type IS the format)
-	MediaPdf  = "media:pdf;bytes"
-	MediaEpub = "media:epub;bytes"
+	MediaPdf  = "media:pdf"
+	MediaEpub = "media:epub"
 	// Text format types (PRIMARY naming - type IS the format)
 	MediaMd         = "media:md;textable"
 	MediaTxt        = "media:txt;textable"
@@ -187,9 +187,9 @@ type ResolvedMediaSpec struct {
 	Extensions []string
 }
 
-// IsBinary returns true if the "bytes" marker tag is present in the source media URN.
+// IsBinary returns true if the "textable" marker tag is NOT present in the source media URN.
 func (r *ResolvedMediaSpec) IsBinary() bool {
-	return HasMediaUrnTag(r.SpecID, "bytes")
+	return !HasMediaUrnTag(r.SpecID, "textable")
 }
 
 // IsMap returns true if form=map tag is present (key-value structure).
@@ -250,7 +250,7 @@ func (r *ResolvedMediaSpec) IsBool() bool {
 	return HasMediaUrnTag(r.SpecID, "bool")
 }
 
-// HasMediaUrnTag checks if a media URN has a marker tag (e.g., bytes, json, textable).
+// HasMediaUrnTag checks if a media URN has a marker tag (e.g., json, textable).
 // Uses tagged-urn parsing for proper tag detection.
 // Requires a valid, non-empty media URN - panics otherwise.
 func HasMediaUrnTag(mediaUrn, tagName string) bool {
@@ -422,7 +422,7 @@ func resolveMediaSpecDef(def *MediaSpecDef) (*ResolvedMediaSpec, error) {
 
 // GetTypeFromMediaUrn returns the base type (string, integer, number, boolean, object, binary, etc.) from a media URN
 // This is useful for validation to determine what Go type to expect
-// Determines type based on media URN tags: bytes->binary, form=map->object, form=list->array, etc.
+// Determines type based on media URN tags: no textable->binary, form=map->object, form=list->array, etc.
 func GetTypeFromMediaUrn(mediaUrn string) string {
 	// Parse the media URN to check tags
 	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
@@ -430,8 +430,8 @@ func GetTypeFromMediaUrn(mediaUrn string) string {
 		return "unknown"
 	}
 
-	// Check for binary (has "bytes" tag)
-	if _, ok := parsed.GetTag("bytes"); ok {
+	// Check for binary (no "textable" tag)
+	if _, ok := parsed.GetTag("textable"); !ok {
 		return "binary"
 	}
 
