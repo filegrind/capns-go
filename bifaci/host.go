@@ -612,9 +612,8 @@ func (h *PluginHost) rebuildCapabilities() {
 		return
 	}
 
-	capsJSON, err := json.Marshal(map[string]interface{}{
-		"caps": allCaps,
-	})
+	// Serialize as JSON array of URN strings (NOT a map)
+	capsJSON, err := json.Marshal(allCaps)
 	if err != nil {
 		h.capabilities = nil
 		return
