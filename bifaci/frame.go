@@ -444,6 +444,27 @@ func ComputeChecksum(data []byte) uint64 {
 	return hash
 }
 
+// VerifyChunkChecksum verifies a CHUNK frame's checksum matches its payload.
+// Returns nil if valid, error if checksum missing or mismatched.
+func VerifyChunkChecksum(frame *Frame) error {
+	if frame.Checksum == nil {
+		return fmt.Errorf("CHUNK frame missing required checksum field")
+	}
+	if frame.Payload == nil {
+		// Empty payload - checksum should be for empty data
+		expected := ComputeChecksum([]byte{})
+		if *frame.Checksum != expected {
+			return fmt.Errorf("CHUNK checksum mismatch: expected %d, got %d (empty payload)", expected, *frame.Checksum)
+		}
+		return nil
+	}
+	expected := ComputeChecksum(frame.Payload)
+	if *frame.Checksum != expected {
+		return fmt.Errorf("CHUNK checksum mismatch: expected %d, got %d (payload %d bytes)", expected, *frame.Checksum, len(frame.Payload))
+	}
+	return nil
+}
+
 // IsEof checks if this is the final frame in a stream (matches Rust Frame::is_eof)
 func (f *Frame) IsEof() bool {
 	return f.Eof != nil && *f.Eof

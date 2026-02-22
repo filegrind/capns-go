@@ -59,7 +59,7 @@ func Test426_relay_switch_single_master_req_response(t *testing.T) {
 		[]byte{1, 2, 3},
 		"text/plain",
 	)
-	if err := sw.SendToMaster(req); err != nil {
+	if err := sw.SendToMaster(req, nil); err != nil {
 		t.Fatalf("Failed to send request: %v", err)
 	}
 
@@ -155,7 +155,7 @@ func Test427_relay_switch_multi_master_cap_routing(t *testing.T) {
 		[]byte{},
 		"text/plain",
 	)
-	sw.SendToMaster(req1)
+	sw.SendToMaster(req1, nil)
 	resp1, _ := sw.ReadFromMasters()
 	if len(resp1.Payload) != 1 || resp1.Payload[0] != 1 {
 		t.Errorf("Expected payload [1], got %v", resp1.Payload)
@@ -168,7 +168,7 @@ func Test427_relay_switch_multi_master_cap_routing(t *testing.T) {
 		[]byte{},
 		"text/plain",
 	)
-	sw.SendToMaster(req2)
+	sw.SendToMaster(req2, nil)
 	resp2, _ := sw.ReadFromMasters()
 	if len(resp2.Payload) != 1 || resp2.Payload[0] != 2 {
 		t.Errorf("Expected payload [2], got %v", resp2.Payload)
@@ -216,7 +216,7 @@ func Test428_relay_switch_unknown_cap_returns_error(t *testing.T) {
 		"text/plain",
 	)
 
-	err = sw.SendToMaster(req)
+	err = sw.SendToMaster(req, nil)
 	if err == nil {
 		t.Fatal("Expected error, got nil")
 	}
@@ -282,17 +282,17 @@ func Test429_relay_switch_find_master_for_cap(t *testing.T) {
 	defer sw.mu.Unlock()
 
 	// Verify routing
-	idx1, err := sw.findMasterForCap(`cap:in=media:;out=media:`)
+	idx1, err := sw.findMasterForCap(`cap:in=media:;out=media:`, nil)
 	if err != nil || idx1 != 0 {
 		t.Errorf("Expected master 0 for echo, got %d (err=%v)", idx1, err)
 	}
 
-	idx2, err := sw.findMasterForCap(`cap:in="media:void";op=double;out="media:void"`)
+	idx2, err := sw.findMasterForCap(`cap:in="media:void";op=double;out="media:void"`, nil)
 	if err != nil || idx2 != 1 {
 		t.Errorf("Expected master 1 for double, got %d (err=%v)", idx2, err)
 	}
 
-	_, err = sw.findMasterForCap(`cap:in="media:void";op=unknown;out="media:void"`)
+	_, err = sw.findMasterForCap(`cap:in="media:void";op=unknown;out="media:void"`, nil)
 	if err == nil {
 		t.Error("Expected error for unknown cap")
 	}
@@ -370,7 +370,7 @@ func Test430_relay_switch_tie_breaking(t *testing.T) {
 
 	// First request
 	req1 := NewReq(NewMessageIdFromUint(1), sameCap, []byte{}, "text/plain")
-	sw.SendToMaster(req1)
+	sw.SendToMaster(req1, nil)
 	resp1, _ := sw.ReadFromMasters()
 	if len(resp1.Payload) != 1 || resp1.Payload[0] != 1 {
 		t.Errorf("First request should route to master 0, got payload %v", resp1.Payload)
@@ -378,7 +378,7 @@ func Test430_relay_switch_tie_breaking(t *testing.T) {
 
 	// Second request - should also go to master 0
 	req2 := NewReq(NewMessageIdFromUint(2), sameCap, []byte{}, "text/plain")
-	sw.SendToMaster(req2)
+	sw.SendToMaster(req2, nil)
 	resp2, _ := sw.ReadFromMasters()
 	if len(resp2.Payload) != 1 || resp2.Payload[0] != 1 {
 		t.Errorf("Second request should also route to master 0, got payload %v", resp2.Payload)
@@ -445,17 +445,17 @@ func Test431_relay_switch_continuation_frame_routing(t *testing.T) {
 
 	// Send REQ
 	req := NewReq(reqID, `cap:in="media:void";op=test;out="media:void"`, []byte{}, "text/plain")
-	sw.SendToMaster(req)
+	sw.SendToMaster(req, nil)
 
 	// Send CHUNK
 	payload := []byte{1, 2, 3}
 	checksum := ComputeChecksum(payload)
 	chunk := NewChunk(reqID, "stream1", 0, payload, 0, checksum)
-	sw.SendToMaster(chunk)
+	sw.SendToMaster(chunk, nil)
 
 	// Send END
 	end := NewEnd(reqID, nil)
-	sw.SendToMaster(end)
+	sw.SendToMaster(end, nil)
 
 	// Read response
 	response, _ := sw.ReadFromMasters()
@@ -643,7 +643,7 @@ func Test435_relay_switch_urn_matching(t *testing.T) {
 
 	// Exact match should work
 	req1 := NewReq(NewMessageIdFromUint(1), registeredCap, []byte{}, "text/plain")
-	if err := sw.SendToMaster(req1); err != nil {
+	if err := sw.SendToMaster(req1, nil); err != nil {
 		t.Errorf("Exact match should work: %v", err)
 	}
 	resp1, _ := sw.ReadFromMasters()
@@ -658,7 +658,7 @@ func Test435_relay_switch_urn_matching(t *testing.T) {
 		[]byte{},
 		"text/plain",
 	)
-	err := sw.SendToMaster(req2)
+	err := sw.SendToMaster(req2, nil)
 	if err == nil {
 		t.Error("More specific request should not match less specific registered cap")
 	}

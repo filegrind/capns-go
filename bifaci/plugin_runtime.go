@@ -136,6 +136,10 @@ func (pr *PluginRuntime) autoRegisterIdentity() {
 			for frame := range input {
 				switch frame.FrameType {
 				case FrameTypeChunk:
+					// Verify checksum (protocol v2 integrity check)
+					if err := VerifyChunkChecksum(&frame); err != nil {
+						return fmt.Errorf("corrupted data: %w", err)
+					}
 					if frame.Payload != nil {
 						// Decode each chunk as CBOR
 						var value interface{}
@@ -416,6 +420,15 @@ func (pr *PluginRuntime) runCBORMode() error {
 			// Protocol v2: CHUNK must have stream_id
 			if frame.StreamId == nil {
 				errFrame := NewErr(frame.Id, "PROTOCOL_ERROR", "CHUNK frame missing stream_id")
+				if err := writer.WriteFrame(errFrame); err != nil {
+					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
+				}
+				continue
+			}
+
+			// Verify checksum (protocol v2 integrity check)
+			if err := VerifyChunkChecksum(frame); err != nil {
+				errFrame := NewErr(frame.Id, "CORRUPTED_DATA", err.Error())
 				if err := writer.WriteFrame(errFrame); err != nil {
 					fmt.Fprintf(os.Stderr, "[PluginRuntime] Failed to write error: %v\n", err)
 				}
@@ -1903,6 +1916,10 @@ func CollectStreams(frames <-chan Frame) ([]struct {
 			}
 
 		case FrameTypeChunk:
+			// Verify checksum (protocol v2 integrity check)
+			if err := VerifyChunkChecksum(&frame); err != nil {
+				return nil, fmt.Errorf("corrupted data: %w", err)
+			}
 			if frame.StreamId != nil {
 				if stream, ok := streams[*frame.StreamId]; ok {
 					stream.Chunks = append(stream.Chunks, frame.Payload)

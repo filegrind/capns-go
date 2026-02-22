@@ -2,6 +2,7 @@ package bifaci
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -771,5 +772,43 @@ func Test403_frame_type_one_past_relay_state(t *testing.T) {
 	ft := FrameType(12)
 	if ft.String() != fmt.Sprintf("UNKNOWN(%d)", 12) {
 		t.Errorf("FrameType(12) must be unknown, got %s", ft.String())
+	}
+}
+
+// TEST667: VerifyChunkChecksum detects corrupted payload
+func Test667_verify_chunk_checksum_detects_corruption(t *testing.T) {
+	id := NewMessageIdRandom()
+	streamId := "stream-test"
+	payload := []byte("original payload data")
+	checksum := ComputeChecksum(payload)
+
+	// Create valid chunk frame
+	frame := NewChunk(id, streamId, 0, payload, 0, checksum)
+
+	// Valid frame should pass verification
+	if err := VerifyChunkChecksum(frame); err != nil {
+		t.Errorf("Valid frame should pass verification: %v", err)
+	}
+
+	// Corrupt the payload (simulate transmission error)
+	frame.Payload = []byte("corrupted payload!!")
+
+	// Corrupted frame should fail verification
+	err := VerifyChunkChecksum(frame)
+	if err == nil {
+		t.Error("Corrupted frame should fail verification")
+	}
+	if err != nil && !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Errorf("Error should mention checksum mismatch, got: %v", err)
+	}
+
+	// Missing checksum should fail
+	frame.Checksum = nil
+	err = VerifyChunkChecksum(frame)
+	if err == nil {
+		t.Error("Frame without checksum should fail verification")
+	}
+	if err != nil && !strings.Contains(err.Error(), "missing") {
+		t.Errorf("Error should mention missing checksum, got: %v", err)
 	}
 }
