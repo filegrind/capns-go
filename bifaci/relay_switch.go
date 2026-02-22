@@ -210,7 +210,11 @@ func (sw *RelaySwitch) Limits() Limits {
 }
 
 // SendToMaster sends a frame to the appropriate master
-func (sw *RelaySwitch) SendToMaster(frame *Frame) error {
+//
+// preferredCap: when non-nil, uses comparable routing and prefers
+// the master whose registered cap is equivalent to this URN.
+// When nil, uses standard accepts + closest-specificity routing.
+func (sw *RelaySwitch) SendToMaster(frame *Frame, preferredCap *string) error {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 
@@ -223,7 +227,7 @@ func (sw *RelaySwitch) SendToMaster(frame *Frame) error {
 			}
 		}
 
-		destIdx, err := sw.findMasterForCap(*frame.Cap)
+		destIdx, err := sw.findMasterForCap(*frame.Cap, preferredCap)
 		if err != nil {
 			return err
 		}
@@ -304,24 +308,103 @@ func (sw *RelaySwitch) ReadFromMasters() (*Frame, error) {
 }
 
 // findMasterForCap finds which master handles a given cap URN
-func (sw *RelaySwitch) findMasterForCap(capURN string) (int, error) {
-	// Try exact match first
-	for _, entry := range sw.capTable {
-		if entry.CapURN == capURN {
-			return entry.MasterIdx, nil
+//
+// preferredCap: when non-nil, uses comparable matching (broader) and prefers
+// masters whose registered cap is equivalent to this URN.
+// When nil, uses standard accepts + closest-specificity routing.
+func (sw *RelaySwitch) findMasterForCap(capURN string, preferredCap *string) (int, error) {
+	requestURN, err := urn.NewCapUrnFromString(capURN)
+	if err != nil {
+		return 0, &RelaySwitchError{
+			Type:    RelaySwitchErrorTypeNoHandler,
+			Message: capURN,
 		}
 	}
 
-	// Try URN-level matching
-	requestURN, err := urn.NewCapUrnFromString(capURN)
-	if err == nil {
-		for _, entry := range sw.capTable {
-			registeredURN, err := urn.NewCapUrnFromString(entry.CapURN)
-			if err == nil {
-				if requestURN.Accepts(registeredURN) {
-					return entry.MasterIdx, nil
-				}
+	requestSpecificity := requestURN.Specificity()
+
+	// Parse preferred cap URN if provided
+	var preferredURN *urn.CapUrn
+	if preferredCap != nil {
+		pURN, err := urn.NewCapUrnFromString(*preferredCap)
+		if err == nil {
+			preferredURN = pURN
+		}
+	}
+
+	// Collect ALL matching masters with their specificity scores
+	// When preferredCap is set, use comparable (broader); otherwise accepts (standard)
+	type match struct {
+		masterIdx   int
+		specificity int
+		isPreferred bool
+	}
+	var matches []match
+
+	for _, entry := range sw.capTable {
+		registeredURN, err := urn.NewCapUrnFromString(entry.CapURN)
+		if err != nil {
+			continue
+		}
+
+		// Determine if this is a match
+		isMatch := false
+		if preferredURN != nil {
+			// Comparable: either side accepts the other (broader match set)
+			isMatch = requestURN.Accepts(registeredURN) || registeredURN.Accepts(requestURN)
+		} else {
+			// Standard: request is pattern, registered cap is instance
+			isMatch = requestURN.Accepts(registeredURN)
+		}
+
+		if isMatch {
+			specificity := registeredURN.Specificity()
+			// Check if this registered cap is equivalent to the preferred cap
+			isPreferred := false
+			if preferredURN != nil {
+				isPreferred = preferredURN.Accepts(registeredURN) && registeredURN.Accepts(preferredURN)
 			}
+			matches = append(matches, match{
+				masterIdx:   entry.MasterIdx,
+				specificity: specificity,
+				isPreferred: isPreferred,
+			})
+		}
+	}
+
+	if len(matches) == 0 {
+		return 0, &RelaySwitchError{
+			Type:    RelaySwitchErrorTypeNoHandler,
+			Message: capURN,
+		}
+	}
+
+	// If any match is preferred, pick the first preferred match
+	for _, m := range matches {
+		if m.isPreferred {
+			return m.masterIdx, nil
+		}
+	}
+
+	// Fall back to closest-specificity (ties broken by first match)
+	minDistance := -1
+	for _, m := range matches {
+		distance := m.specificity - requestSpecificity
+		if distance < 0 {
+			distance = -distance
+		}
+		if minDistance == -1 || distance < minDistance {
+			minDistance = distance
+		}
+	}
+
+	for _, m := range matches {
+		distance := m.specificity - requestSpecificity
+		if distance < 0 {
+			distance = -distance
+		}
+		if distance == minDistance {
+			return m.masterIdx, nil
 		}
 	}
 
@@ -343,7 +426,8 @@ func (sw *RelaySwitch) handleMasterFrame(sourceIdx int, frame *Frame) (*Frame, e
 			}
 		}
 
-		destIdx, err := sw.findMasterForCap(*frame.Cap)
+		// Peer request (no preference)
+		destIdx, err := sw.findMasterForCap(*frame.Cap, nil)
 		if err != nil {
 			return nil, err
 		}
