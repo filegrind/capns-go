@@ -81,10 +81,28 @@ func NewPluginRuntime(manifestJSON []byte) (*PluginRuntime, error) {
 }
 
 // NewPluginRuntimeWithManifest creates a new plugin runtime with a pre-built CapManifest
-// Auto-injects CAP_IDENTITY into manifest and auto-registers identity handler
+// IMPORTANT: Manifest MUST declare CAP_IDENTITY - fails hard if missing
 func NewPluginRuntimeWithManifest(manifest *CapManifest) (*PluginRuntime, error) {
-	// Ensure identity is in the manifest
-	manifest = manifest.EnsureIdentity()
+	// Validate manifest - FAIL HARD if CAP_IDENTITY not declared
+	identityUrn, err := urn.NewCapUrnFromString("cap:")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CAP_IDENTITY URN: %w", err)
+	}
+
+	hasIdentity := false
+	for _, cap := range manifest.Caps {
+		if identityUrn.ConformsTo(cap.Urn) || cap.Urn.ConformsTo(identityUrn) {
+			hasIdentity = true
+			break
+		}
+	}
+
+	if !hasIdentity {
+		return nil, fmt.Errorf(
+			"manifest validation failed - plugin MUST declare CAP_IDENTITY (cap:). " +
+			"All plugins must explicitly declare capabilities, no implicit fallbacks allowed",
+		)
+	}
 
 	manifestData, err := json.Marshal(manifest)
 	if err != nil {
@@ -1852,4 +1870,146 @@ func containsAny(s string, chars string) bool {
 		}
 	}
 	return false
+}
+
+// ============================================================================
+// Stream Helper Functions
+// ============================================================================
+
+// CollectStreams collects each stream individually into a slice of (mediaUrn, bytes) pairs.
+// Each stream's bytes are accumulated separately — NOT concatenated.
+// Use FindStream() helpers to retrieve args by URN pattern matching.
+func CollectStreams(frames <-chan Frame) ([]struct {
+	MediaUrn string
+	Data     []byte
+}, error) {
+	streams := make(map[string]struct {
+		MediaUrn string
+		Chunks   [][]byte
+	})
+	var result []struct {
+		MediaUrn string
+		Data     []byte
+	}
+
+	for frame := range frames {
+		switch frame.FrameType {
+		case FrameTypeStreamStart:
+			if frame.StreamId != nil && frame.MediaUrn != nil {
+				streams[*frame.StreamId] = struct {
+					MediaUrn string
+					Chunks   [][]byte
+				}{MediaUrn: *frame.MediaUrn, Chunks: [][]byte{}}
+			}
+
+		case FrameTypeChunk:
+			if frame.StreamId != nil {
+				if stream, ok := streams[*frame.StreamId]; ok {
+					stream.Chunks = append(stream.Chunks, frame.Payload)
+					streams[*frame.StreamId] = stream
+				}
+			}
+
+		case FrameTypeStreamEnd:
+			if frame.StreamId != nil {
+				if stream, ok := streams[*frame.StreamId]; ok {
+					var combined []byte
+					for _, chunk := range stream.Chunks {
+						combined = append(combined, chunk...)
+					}
+					result = append(result, struct {
+						MediaUrn string
+						Data     []byte
+					}{MediaUrn: stream.MediaUrn, Data: combined})
+					delete(streams, *frame.StreamId)
+				}
+			}
+
+		case FrameTypeEnd:
+			return result, nil
+
+		case FrameTypeErr:
+			code := frame.ErrorCode()
+			msg := frame.ErrorMessage()
+			if code == "" {
+				code = "UNKNOWN"
+			}
+			if msg == "" {
+				msg = "Unknown error"
+			}
+			return nil, fmt.Errorf("error: [%s] %s", code, msg)
+		}
+	}
+
+	return result, nil
+}
+
+// FindStream finds a stream's bytes by exact URN equivalence.
+// Uses MediaUrn.IsEquivalent() — matches only if both URNs have the
+// exact same tag set (order-independent).
+func FindStream(streams []struct {
+	MediaUrn string
+	Data     []byte
+}, mediaUrn string) ([]byte, error) {
+	targetUrn, err := urn.NewMediaUrnFromString(mediaUrn)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, stream := range streams {
+		streamUrn, err := urn.NewMediaUrnFromString(stream.MediaUrn)
+		if err != nil {
+			continue
+		}
+		// Check equivalence: both URNs accept each other
+		fwd := targetUrn.Accepts(streamUrn)
+		rev := streamUrn.Accepts(targetUrn)
+		if fwd && rev {
+			return stream.Data, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// FindStreamStr is like FindStream but returns a UTF-8 string.
+func FindStreamStr(streams []struct {
+	MediaUrn string
+	Data     []byte
+}, mediaUrn string) (string, error) {
+	data, err := FindStream(streams, mediaUrn)
+	if err != nil {
+		return "", err
+	}
+	if data == nil {
+		return "", nil
+	}
+	return string(data), nil
+}
+
+// RequireStream is like FindStream but fails hard if not found.
+func RequireStream(streams []struct {
+	MediaUrn string
+	Data     []byte
+}, mediaUrn string) ([]byte, error) {
+	data, err := FindStream(streams, mediaUrn)
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, fmt.Errorf("missing required arg: %s", mediaUrn)
+	}
+	return data, nil
+}
+
+// RequireStreamStr is like RequireStream but returns a UTF-8 string.
+func RequireStreamStr(streams []struct {
+	MediaUrn string
+	Data     []byte
+}, mediaUrn string) (string, error) {
+	data, err := RequireStream(streams, mediaUrn)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
