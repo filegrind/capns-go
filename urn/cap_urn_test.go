@@ -234,8 +234,8 @@ func Test011_serialization_smart_quoting(t *testing.T) {
 		Tag("key", "simple").
 		Build()
 	require.NoError(t, err)
-	// Go TaggedUrn serialization: no quotes around media:object (only colons, no semicolons/spaces)
-	assert.Equal(t, `cap:in=media:void;key=simple;out=`+standard.MediaObject, cap.ToString())
+	// MediaObject contains semicolon, so it gets quoted in output
+	assert.Equal(t, `cap:in=media:void;key=simple;out="`+standard.MediaObject+`"`, cap.ToString())
 
 	// Value with spaces — must be quoted
 	cap2, err := NewCapUrnBuilder().
@@ -244,7 +244,7 @@ func Test011_serialization_smart_quoting(t *testing.T) {
 		Tag("key", "has spaces").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in=media:void;key="has spaces";out=`+standard.MediaObject, cap2.ToString())
+	assert.Equal(t, `cap:in=media:void;key="has spaces";out="`+standard.MediaObject+`"`, cap2.ToString())
 
 	// Value with uppercase — must be quoted
 	cap4, err := NewCapUrnBuilder().
@@ -253,7 +253,7 @@ func Test011_serialization_smart_quoting(t *testing.T) {
 		Tag("key", "HasUpper").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in=media:void;key="HasUpper";out=`+standard.MediaObject, cap4.ToString())
+	assert.Equal(t, `cap:in=media:void;key="HasUpper";out="`+standard.MediaObject+`"`, cap4.ToString())
 }
 
 // TEST012: Test that simple cap URN round-trips (parse -> serialize -> parse equals original)
@@ -405,8 +405,9 @@ func Test019_missing_tag_handling(t *testing.T) {
 
 // TEST020: Test specificity calculation (direction specs use MediaUrn tag count, wildcards don't count)
 func Test020_specificity(t *testing.T) {
-	// Go uses standard.MediaVoid="media:void" (1 tag) and standard.MediaObject="media:object" (1 tag)
-	// So base specificity for testUrn = 1(void) + 1(object) = 2, plus non-wildcard tags
+	// standard.MediaVoid = "media:void" (1 tag)
+	// standard.MediaObject = "media:textable;form=map" (2 tags)
+	// So base specificity for testUrn = 1(void) + 2(object) = 3, plus non-wildcard tags
 	cap1, err := NewCapUrnFromString(testUrn("type=general"))
 	require.NoError(t, err)
 
@@ -416,17 +417,17 @@ func Test020_specificity(t *testing.T) {
 	cap3, err := NewCapUrnFromString(testUrn("op=*;ext=pdf"))
 	require.NoError(t, err)
 
-	// void(1) + object(1) + type=general(1) = 3
-	assert.Equal(t, 3, cap1.Specificity())
-	// void(1) + object(1) + op=generate(1) = 3
-	assert.Equal(t, 3, cap2.Specificity())
-	// void(1) + object(1) + ext=pdf(1) = 3 (op=* wildcards don't count)
-	assert.Equal(t, 3, cap3.Specificity())
+	// void(1) + object(2) + type=general(1) = 4
+	assert.Equal(t, 4, cap1.Specificity())
+	// void(1) + object(2) + op=generate(1) = 4
+	assert.Equal(t, 4, cap2.Specificity())
+	// void(1) + object(2) + ext=pdf(1) = 4 (op=* wildcards don't count)
+	assert.Equal(t, 4, cap3.Specificity())
 
-	// in=wildcard(0) + object(1) + op=test(1) = 2
+	// in=wildcard(0) + MediaObject(2 tags: textable,form=map) + op=test(1) = 3
 	cap4, err := NewCapUrnFromString(`cap:in=*;out="` + standard.MediaObject + `";op=test`)
 	require.NoError(t, err)
-	assert.Equal(t, 2, cap4.Specificity())
+	assert.Equal(t, 3, cap4.Specificity())
 }
 
 // TEST021: Test builder creates cap URN with correct tags and direction specs
@@ -785,11 +786,13 @@ func Test041_matching_semantics_cap_missing_tag(t *testing.T) {
 	request, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
 	require.NoError(t, err)
 
-	assert.False(t, cap.Accepts(request), "Test 2: Cap missing tag should NOT match (no implicit wildcard)")
+	// A general cap (op only) CAN handle specific requests (op + ext)
+	// The cap doesn't constrain ext, so any ext is fine
+	assert.True(t, cap.Accepts(request), "General cap accepts specific request")
 
 	cap2, err := NewCapUrnFromString(testUrn("ext=*;op=generate"))
 	require.NoError(t, err)
-	assert.True(t, cap2.Accepts(request), "Test 2b: Cap with ext=* should match pattern with ext=pdf")
+	assert.True(t, cap2.Accepts(request), "Cap with ext=* also accepts request with ext=pdf")
 }
 
 // TEST042: Pattern rejects instance missing required tags
@@ -800,7 +803,13 @@ func Test042_matching_semantics_cap_has_extra_tag(t *testing.T) {
 	request, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf"))
 	require.NoError(t, err)
 
-	assert.True(t, cap.Accepts(request), "Test 3: Cap with extra tag should match")
+	// Cap requires version=2, but request doesn't have it - reject
+	assert.False(t, cap.Accepts(request), "Specific cap rejects request missing required tag")
+
+	// But a request WITH version=2 is accepted
+	request2, err := NewCapUrnFromString(testUrn("op=generate;ext=pdf;version=2"))
+	require.NoError(t, err)
+	assert.True(t, cap.Accepts(request2), "Request with all required tags is accepted")
 }
 
 // TEST043: Matching semantics - request wildcard matches specific cap value
@@ -844,11 +853,12 @@ func Test046_matching_semantics_fallback_pattern(t *testing.T) {
 	request, err := NewCapUrnFromString(`cap:ext=wav;in="media:binary";op=generate_thumbnail;out="media:binary"`)
 	require.NoError(t, err)
 
-	assert.False(t, cap.Accepts(request), "Test 7: Cap missing ext should NOT match request with ext=wav")
+	// Cap missing ext DOES accept request with ext=wav - general caps accept specific requests
+	assert.True(t, cap.Accepts(request), "Cap without ext accepts request with ext=wav (implicit wildcard)")
 
 	capWithWildcard, err := NewCapUrnFromString(`cap:ext=*;in="media:binary";op=generate_thumbnail;out="media:binary"`)
 	require.NoError(t, err)
-	assert.True(t, capWithWildcard.Accepts(request), "Test 7b: Cap with ext=* should match request with ext=wav")
+	assert.True(t, capWithWildcard.Accepts(request), "Cap with ext=* also accepts request with ext=wav")
 }
 
 // TEST047: Matching semantics - thumbnail fallback with void input
@@ -860,11 +870,12 @@ func Test047_matching_semantics_thumbnail_void_input(t *testing.T) {
 	request, err := NewCapUrnFromString(fmt.Sprintf(`cap:ext=wav;in="%s";op=generate_thumbnail;out="%s"`, standard.MediaVoid, outBin))
 	require.NoError(t, err)
 
-	assert.False(t, cap.Accepts(request), "Test 7b: Cap missing ext should NOT match request with ext=wav")
+	// Cap missing ext DOES accept request with ext=wav - general caps accept specific requests
+	assert.True(t, cap.Accepts(request), "Cap without ext accepts request with ext=wav (implicit wildcard)")
 
 	capWithWildcard, err := NewCapUrnFromString(fmt.Sprintf(`cap:ext=*;in="%s";op=generate_thumbnail;out="%s"`, standard.MediaVoid, outBin))
 	require.NoError(t, err)
-	assert.True(t, capWithWildcard.Accepts(request), "Test 7b: Cap with ext=* should match request with ext=wav")
+	assert.True(t, capWithWildcard.Accepts(request), "Cap with ext=* also accepts request with ext=wav")
 }
 
 // TEST048: Matching semantics - wildcard direction matches anything
@@ -875,11 +886,12 @@ func Test048_matching_semantics_wildcard_direction_matches_anything(t *testing.T
 	request, err := NewCapUrnFromString(`cap:in="media:string";op=generate;out="media:object";ext=pdf`)
 	require.NoError(t, err)
 
-	assert.False(t, cap.Accepts(request), "Test 8: Cap missing op/ext should NOT match (no implicit wildcards)")
+	// Wildcard cap (no tags) accepts any request - this is the identity/universal cap
+	assert.True(t, cap.Accepts(request), "Wildcard cap accepts request with any tags")
 
 	request2, err := NewCapUrnFromString(`cap:in="media:string";out="media:object"`)
 	require.NoError(t, err)
-	assert.True(t, cap.Accepts(request2), "Test 8b: Same direction specs should match")
+	assert.True(t, cap.Accepts(request2), "Wildcard cap also accepts simpler requests")
 }
 
 // TEST049: Non-overlapping tags -- neither direction accepts
@@ -978,8 +990,11 @@ func Test052_direction_semantic_specificity(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, 6, genericCap.Specificity())
-	assert.Equal(t, 7, specificCap.Specificity())
+	// Specificity: op=generate_thumbnail (+3) + in/out tags
+	// genericCap has in="media:" (0 tags) + out="media:image;png;thumbnail" (3 tags)
+	// specificCap has in="media:pdf" (1 tag) + out="media:image;png;thumbnail" (3 tags)
+	assert.Equal(t, 4, genericCap.Specificity())
+	assert.Equal(t, 5, specificCap.Specificity())
 
 	assert.True(t, specificCap.Specificity() > genericCap.Specificity(),
 		"pdf cap must be more specific than wildcard cap")
@@ -992,7 +1007,7 @@ func Test052_direction_semantic_specificity(t *testing.T) {
 	matcher := &CapMatcher{}
 	best := matcher.FindBestMatch(caps, pdfRequest)
 	require.NotNil(t, best)
-	assert.Equal(t, 7, best.Specificity(),
+	assert.Equal(t, 5, best.Specificity(),
 		"CapMatcher must prefer the more specific pdf provider")
 }
 
@@ -1156,11 +1171,12 @@ func Test567_str_variants(t *testing.T) {
 
 // TEST639: cap: (empty) defaults to in=media:;out=media:
 func Test639_wildcard_empty_cap_defaults_to_media_wildcard(t *testing.T) {
-	// In Go, cap: without in/out is rejected with ErrorMissingInSpec
-	// This is different from Rust which defaults to media: wildcard
-	// Go requires explicit in/out specs
-	_, err := NewCapUrnFromString("cap:")
-	assert.Error(t, err)
+	// cap: without in/out defaults to wildcard media: for both
+	// This matches Rust behavior - empty cap is identity/wildcard
+	cap, err := NewCapUrnFromString("cap:")
+	require.NoError(t, err)
+	assert.Equal(t, "media:", cap.InSpec())
+	assert.Equal(t, "media:", cap.OutSpec())
 }
 
 // TEST648: Wildcard in/out match specific caps

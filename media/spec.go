@@ -395,7 +395,7 @@ func ResolveMediaUrn(mediaUrn string, mediaSpecs []MediaSpecDef, registry *Media
 		}
 		// Registry lookup failed - log warning and continue to error
 		fmt.Printf("[WARN] Media URN '%s' not found in registry: %v - "+
-			"ensure it's defined in capns_dot_org/standard/media/\n",
+			"ensure it's defined in capns-dot-org/standard/media/\n",
 			mediaUrn, err)
 	}
 

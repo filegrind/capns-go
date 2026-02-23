@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net"
 	"testing"
-	"time"
 )
 
 // TEST426: Single master REQ/response routing
@@ -13,9 +12,7 @@ func Test426_relay_switch_single_master_req_response(t *testing.T) {
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
 
-	done := make(chan bool)
-
-	// Spawn mock slave
+	// Spawn mock slave - no sync needed, NewRelaySwitch reads the notify
 	go func() {
 		reader := NewFrameReader(slaveRead)
 		writer := NewFrameWriter(slaveWrite)
@@ -31,8 +28,6 @@ func Test426_relay_switch_single_master_req_response(t *testing.T) {
 			return
 		}
 
-		done <- true
-
 		// Read REQ and send response
 		frame, err := reader.ReadFrame()
 		if err != nil || frame == nil {
@@ -44,9 +39,7 @@ func Test426_relay_switch_single_master_req_response(t *testing.T) {
 		}
 	}()
 
-	<-done
-
-	// Create RelaySwitch
+	// Create RelaySwitch - this reads the RelayNotify from the goroutine
 	sw, err := NewRelaySwitch([]SocketPair{{Read: engineRead, Write: engineWrite}})
 	if err != nil {
 		t.Fatalf("Failed to create RelaySwitch: %v", err)
@@ -86,9 +79,6 @@ func Test427_relay_switch_multi_master_cap_routing(t *testing.T) {
 	engineRead2, slaveWrite2 := net.Pipe()
 	slaveRead2, engineWrite2 := net.Pipe()
 
-	done1 := make(chan bool)
-	done2 := make(chan bool)
-
 	// Spawn slave 1 (echo)
 	go func() {
 		reader := NewFrameReader(slaveRead1)
@@ -99,7 +89,6 @@ func Test427_relay_switch_multi_master_cap_routing(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done1 <- true
 
 		for {
 			frame, err := reader.ReadFrame()
@@ -123,7 +112,6 @@ func Test427_relay_switch_multi_master_cap_routing(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done2 <- true
 
 		for {
 			frame, err := reader.ReadFrame()
@@ -136,9 +124,6 @@ func Test427_relay_switch_multi_master_cap_routing(t *testing.T) {
 			}
 		}
 	}()
-
-	<-done1
-	<-done2
 
 	sw, err := NewRelaySwitch([]SocketPair{
 		{Read: engineRead1, Write: engineWrite1},
@@ -180,8 +165,6 @@ func Test428_relay_switch_unknown_cap_returns_error(t *testing.T) {
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
 
-	done := make(chan bool)
-
 	go func() {
 		reader := NewFrameReader(slaveRead)
 		writer := NewFrameWriter(slaveWrite)
@@ -191,7 +174,6 @@ func Test428_relay_switch_unknown_cap_returns_error(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done <- true
 
 		// Keep reading to prevent blocking
 		for {
@@ -200,8 +182,6 @@ func Test428_relay_switch_unknown_cap_returns_error(t *testing.T) {
 			}
 		}
 	}()
-
-	<-done
 
 	sw, err := NewRelaySwitch([]SocketPair{{Read: engineRead, Write: engineWrite}})
 	if err != nil {
@@ -232,9 +212,6 @@ func Test429_relay_switch_find_master_for_cap(t *testing.T) {
 	engineRead2, slaveWrite2 := net.Pipe()
 	slaveRead2, engineWrite2 := net.Pipe()
 
-	done1 := make(chan bool)
-	done2 := make(chan bool)
-
 	go func() {
 		reader := NewFrameReader(slaveRead1)
 		writer := NewFrameWriter(slaveWrite1)
@@ -243,7 +220,6 @@ func Test429_relay_switch_find_master_for_cap(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done1 <- true
 		for {
 			if _, err := reader.ReadFrame(); err != nil {
 				return
@@ -259,16 +235,12 @@ func Test429_relay_switch_find_master_for_cap(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done2 <- true
 		for {
 			if _, err := reader.ReadFrame(); err != nil {
 				return
 			}
 		}
 	}()
-
-	<-done1
-	<-done2
 
 	sw, err := NewRelaySwitch([]SocketPair{
 		{Read: engineRead1, Write: engineWrite1},
@@ -313,9 +285,6 @@ func Test430_relay_switch_tie_breaking(t *testing.T) {
 	engineRead2, slaveWrite2 := net.Pipe()
 	slaveRead2, engineWrite2 := net.Pipe()
 
-	done1 := make(chan bool)
-	done2 := make(chan bool)
-
 	sameCap := `cap:in=media:;out=media:`
 
 	// Slave 1 responds with [1]
@@ -325,7 +294,6 @@ func Test430_relay_switch_tie_breaking(t *testing.T) {
 		manifest := map[string]interface{}{"capabilities": []string{sameCap}}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done1 <- true
 
 		for {
 			frame, err := reader.ReadFrame()
@@ -346,7 +314,6 @@ func Test430_relay_switch_tie_breaking(t *testing.T) {
 		manifest := map[string]interface{}{"capabilities": []string{sameCap}}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done2 <- true
 
 		for {
 			frame, err := reader.ReadFrame()
@@ -359,9 +326,6 @@ func Test430_relay_switch_tie_breaking(t *testing.T) {
 			}
 		}
 	}()
-
-	<-done1
-	<-done2
 
 	sw, _ := NewRelaySwitch([]SocketPair{
 		{Read: engineRead1, Write: engineWrite1},
@@ -390,8 +354,6 @@ func Test431_relay_switch_continuation_frame_routing(t *testing.T) {
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
 
-	done := make(chan bool)
-
 	go func() {
 		reader := NewFrameReader(slaveRead)
 		writer := NewFrameWriter(slaveWrite)
@@ -401,7 +363,6 @@ func Test431_relay_switch_continuation_frame_routing(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done <- true
 
 		// Read REQ
 		req, _ := reader.ReadFrame()
@@ -436,8 +397,6 @@ func Test431_relay_switch_continuation_frame_routing(t *testing.T) {
 		response := NewEnd(req.Id, []byte{42})
 		writer.WriteFrame(response)
 	}()
-
-	<-done
 
 	sw, _ := NewRelaySwitch([]SocketPair{{Read: engineRead, Write: engineWrite}})
 
@@ -489,9 +448,6 @@ func Test433_relay_switch_capability_aggregation_deduplicates(t *testing.T) {
 	engineRead2, slaveWrite2 := net.Pipe()
 	slaveRead2, engineWrite2 := net.Pipe()
 
-	done1 := make(chan bool)
-	done2 := make(chan bool)
-
 	go func() {
 		reader := NewFrameReader(slaveRead1)
 		writer := NewFrameWriter(slaveWrite1)
@@ -503,7 +459,6 @@ func Test433_relay_switch_capability_aggregation_deduplicates(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done1 <- true
 		for {
 			if _, err := reader.ReadFrame(); err != nil {
 				return
@@ -522,16 +477,12 @@ func Test433_relay_switch_capability_aggregation_deduplicates(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done2 <- true
 		for {
 			if _, err := reader.ReadFrame(); err != nil {
 				return
 			}
 		}
 	}()
-
-	<-done1
-	<-done2
 
 	sw, _ := NewRelaySwitch([]SocketPair{
 		{Read: engineRead1, Write: engineWrite1},
@@ -555,9 +506,6 @@ func Test434_relay_switch_limits_negotiation_minimum(t *testing.T) {
 	engineRead2, slaveWrite2 := net.Pipe()
 	slaveRead2, engineWrite2 := net.Pipe()
 
-	done1 := make(chan bool)
-	done2 := make(chan bool)
-
 	go func() {
 		reader := NewFrameReader(slaveRead1)
 		writer := NewFrameWriter(slaveWrite1)
@@ -565,7 +513,6 @@ func Test434_relay_switch_limits_negotiation_minimum(t *testing.T) {
 		manifestJSON, _ := json.Marshal(manifest)
 		limits1 := Limits{MaxFrame: 1_000_000, MaxChunk: 100_000}
 		SendNotify(writer, manifestJSON, limits1)
-		done1 <- true
 		for {
 			if _, err := reader.ReadFrame(); err != nil {
 				return
@@ -580,16 +527,12 @@ func Test434_relay_switch_limits_negotiation_minimum(t *testing.T) {
 		manifestJSON, _ := json.Marshal(manifest)
 		limits2 := Limits{MaxFrame: 2_000_000, MaxChunk: 50_000}
 		SendNotify(writer, manifestJSON, limits2)
-		done2 <- true
 		for {
 			if _, err := reader.ReadFrame(); err != nil {
 				return
 			}
 		}
 	}()
-
-	<-done1
-	<-done2
 
 	sw, _ := NewRelaySwitch([]SocketPair{
 		{Read: engineRead1, Write: engineWrite1},
@@ -610,8 +553,6 @@ func Test435_relay_switch_urn_matching(t *testing.T) {
 	engineRead, slaveWrite := net.Pipe()
 	slaveRead, engineWrite := net.Pipe()
 
-	done := make(chan bool)
-
 	registeredCap := `cap:in="media:text;utf8";op=process;out="media:text;utf8"`
 
 	go func() {
@@ -622,7 +563,6 @@ func Test435_relay_switch_urn_matching(t *testing.T) {
 		}
 		manifestJSON, _ := json.Marshal(manifest)
 		SendNotify(writer, manifestJSON, DefaultLimits())
-		done <- true
 
 		for {
 			frame, err := reader.ReadFrame()
@@ -635,9 +575,6 @@ func Test435_relay_switch_urn_matching(t *testing.T) {
 			}
 		}
 	}()
-
-	<-done
-	time.Sleep(10 * time.Millisecond) // Give goroutine time to start reading
 
 	sw, _ := NewRelaySwitch([]SocketPair{{Read: engineRead, Write: engineWrite}})
 

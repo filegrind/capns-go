@@ -8,23 +8,23 @@ package standard
 // MediaVoid represents the void media type
 const MediaVoid = "media:void"
 
-// MediaString represents the string media type
-const MediaString = "media:string"
+// MediaString represents the string media type (textable scalar)
+const MediaString = "media:textable;form=scalar"
 
-// MediaBinary represents the binary media type
-const MediaBinary = "media:binary"
+// MediaBinary represents the binary media type (no textable = binary)
+const MediaBinary = "media:"
 
-// MediaObject represents the object (map) media type
-const MediaObject = "media:object"
+// MediaObject represents the object (map) media type (textable map)
+const MediaObject = "media:textable;form=map"
 
-// MediaInteger represents the integer media type
-const MediaInteger = "media:integer"
+// MediaInteger represents the integer media type (textable numeric scalar)
+const MediaInteger = "media:integer;textable;numeric;form=scalar"
 
-// MediaNumber represents the number (float) media type
-const MediaNumber = "media:number"
+// MediaNumber represents the number (float) media type (textable numeric scalar)
+const MediaNumber = "media:textable;numeric;form=scalar"
 
-// MediaBoolean represents the boolean media type
-const MediaBoolean = "media:boolean"
+// MediaBoolean represents the boolean media type (textable bool scalar)
+const MediaBoolean = "media:bool;textable;form=scalar"
 
 // Domain-specific media types
 
