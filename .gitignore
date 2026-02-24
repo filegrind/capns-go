@@ -51,7 +51,7 @@ temp/
 # Generated files (optional)
 # *.pb.go
 # bindata.go
-.ws/
+.wsb/
 .scrap/
 examples/testplugin/testplugin
 diffs/
