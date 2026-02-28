@@ -164,32 +164,66 @@ func (m *MediaUrn) UnmarshalJSON(data []byte) error {
 
 // Helper functions for common media URN operations
 
-// GetForm returns the form tag value (scalar, map, list) if present
-func (m *MediaUrn) GetForm() (string, bool) {
-	return m.GetTag("form")
-}
+// =========================================================================
+// CARDINALITY (list marker)
+// =========================================================================
 
-// IsScalar returns true if form=scalar
-func (m *MediaUrn) IsScalar() bool {
-	form, ok := m.GetForm()
-	return ok && form == "scalar"
-}
-
-// IsMap returns true if form=map
-func (m *MediaUrn) IsMap() bool {
-	form, ok := m.GetForm()
-	return ok && form == "map"
-}
-
-// IsList returns true if form=list
+// IsList returns true if this media is a list (has `list` marker tag).
+// Returns false if scalar (no `list` marker = default).
 func (m *MediaUrn) IsList() bool {
-	form, ok := m.GetForm()
-	return ok && form == "list"
+	return m.hasMarkerTag("list")
 }
 
-// IsStructured returns true for map or list forms
+// IsScalar returns true if this media is a scalar (no `list` marker).
+// Scalar is the default cardinality.
+func (m *MediaUrn) IsScalar() bool {
+	return !m.hasMarkerTag("list")
+}
+
+// =========================================================================
+// STRUCTURE (record marker)
+// =========================================================================
+
+// IsRecord returns true if this media is a record (has `record` marker tag).
+// A record has internal key-value structure (e.g., JSON object).
+func (m *MediaUrn) IsRecord() bool {
+	return m.hasMarkerTag("record")
+}
+
+// IsOpaque returns true if this media is opaque (no `record` marker).
+// Opaque is the default structure - no internal fields recognized.
+func (m *MediaUrn) IsOpaque() bool {
+	return !m.hasMarkerTag("record")
+}
+
+// =========================================================================
+// DEPRECATED: Old form-based methods (use new marker-based methods above)
+// =========================================================================
+
+// IsMap is deprecated, use IsRecord instead.
+// Returns true if this has the record marker (structured key-value data).
+func (m *MediaUrn) IsMap() bool {
+	return m.IsRecord()
+}
+
+// IsStructured returns true for record data (has internal structure).
+// For list detection, use IsList separately.
 func (m *MediaUrn) IsStructured() bool {
-	return m.IsMap() || m.IsList()
+	return m.IsRecord()
+}
+
+// =========================================================================
+// HELPER: Check for marker tag presence
+// =========================================================================
+
+// hasMarkerTag checks if a marker tag (tag with wildcard/no value) is present.
+// A marker tag is stored as key="*" in the tagged URN.
+func (m *MediaUrn) hasMarkerTag(tagName string) bool {
+	if m.inner == nil {
+		return false
+	}
+	val, ok := m.inner.GetTag(tagName)
+	return ok && val == "*"
 }
 
 // IsImage returns true if this has the "image" marker tag

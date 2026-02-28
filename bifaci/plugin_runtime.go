@@ -19,8 +19,8 @@ import (
 
 // Media URN constants for file-path conversion
 const (
-	MediaFilePath      = "media:file-path;form=scalar"
-	MediaFilePathArray = "media:file-path;form=list"
+	MediaFilePath      = "media:file-path"
+	MediaFilePathArray = "media:file-path;list"
 )
 
 // StreamEmitter allows handlers to emit CBOR values and logs.

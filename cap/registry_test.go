@@ -34,8 +34,8 @@ func Test136_cache_key_generation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use URNs with required in/out
-	urn1 := `cap:in="media:void";op=extract;out="media:form=map;target=metadata"`
-	urn2 := `cap:in="media:void";op=extract;out="media:form=map;target=metadata"`
+	urn1 := `cap:in="media:void";op=extract;out="media:record;target=metadata"`
+	urn2 := `cap:in="media:void";op=extract;out="media:record;target=metadata"`
 	urn3 := `cap:in="media:void";op=different;out="media:object"`
 
 	key1 := registry.cacheKey(urn1)
@@ -101,7 +101,7 @@ func Test137_parse_registry_json(t *testing.T) {
 // TEST138: Test parsing registry JSON with stdin args verifies stdin media URN extraction
 func Test138_parse_registry_json_with_stdin(t *testing.T) {
 	// JSON with stdin args - means cap accepts stdin of specified media type
-	jsonData := `{"urn":"cap:in=\"media:pdf\";op=extract_metadata;out=\"media:file-metadata;textable;form=map\"","command":"extract-metadata","title":"Extract Metadata","args":[{"media_urn":"media:pdf","required":true,"sources":[{"stdin":"media:pdf"}]}]}`
+	jsonData := `{"urn":"cap:in=\"media:pdf\";op=extract_metadata;out=\"media:file-metadata;textable;record\"","command":"extract-metadata","title":"Extract Metadata","args":[{"media_urn":"media:pdf","required":true,"sources":[{"stdin":"media:pdf"}]}]}`
 
 	var registryResp RegistryCapResponse
 	err := json.Unmarshal([]byte(jsonData), &registryResp)

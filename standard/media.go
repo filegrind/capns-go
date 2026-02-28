@@ -4,159 +4,183 @@ package standard
 // =============================================================================
 // STANDARD MEDIA URN CONSTANTS
 // =============================================================================
+//
+// Cardinality and Structure use orthogonal marker tags:
+// - `list` marker: presence = list/array, absence = scalar (default)
+// - `record` marker: presence = has internal fields, absence = opaque (default)
+//
+// Examples:
+// - `media:pdf` → scalar, opaque (no markers)
+// - `media:textable;list` → list, opaque (has list marker)
+// - `media:json;textable;record` → scalar, record (has record marker)
+// - `media:json;list;record;textable` → list of records (has both markers)
 
-// MediaVoid represents the void media type
+// Primitive types - URNs must match base.toml definitions
+
+// MediaVoid is the media URN for void (no input/output) - no coercion tags
 const MediaVoid = "media:void"
 
-// MediaString represents the string media type (textable scalar)
-const MediaString = "media:textable;form=scalar"
+// MediaString is the media URN for string type - textable (can become text), scalar by default (no list marker)
+const MediaString = "media:textable"
 
-// MediaBinary represents the binary media type (no textable = binary)
+// MediaInteger is the media URN for integer type - textable, numeric (math ops valid), scalar by default
+const MediaInteger = "media:integer;textable;numeric"
+
+// MediaNumber is the media URN for number type - textable, numeric, scalar by default
+const MediaNumber = "media:textable;numeric"
+
+// MediaBoolean is the media URN for boolean type - uses "bool" not "boolean" per base.toml
+const MediaBoolean = "media:bool;textable"
+
+// MediaObject is the media URN for a generic record/object type - has internal key-value structure but NOT textable
+// Use MediaJSON for textable JSON objects.
+const MediaObject = "media:record"
+
+// MediaBinary is the media URN for binary data - the most general media type (no constraints)
 const MediaBinary = "media:"
 
-// MediaObject represents the object (map) media type (textable map)
-const MediaObject = "media:textable;form=map"
+// Array types - URNs must match base.toml definitions
 
-// MediaInteger represents the integer media type (textable numeric scalar)
-const MediaInteger = "media:integer;textable;numeric;form=scalar"
+// MediaStringArray is the media URN for string array type - textable with list marker
+const MediaStringArray = "media:list;textable"
 
-// MediaNumber represents the number (float) media type (textable numeric scalar)
-const MediaNumber = "media:textable;numeric;form=scalar"
+// MediaIntegerArray is the media URN for integer array type - textable, numeric with list marker
+const MediaIntegerArray = "media:integer;list;textable;numeric"
 
-// MediaBoolean represents the boolean media type (textable bool scalar)
-const MediaBoolean = "media:bool;textable;form=scalar"
+// MediaNumberArray is the media URN for number array type - textable, numeric with list marker
+const MediaNumberArray = "media:list;textable;numeric"
 
-// Domain-specific media types
+// MediaBooleanArray is the media URN for boolean array type - uses "bool" with list marker
+const MediaBooleanArray = "media:bool;list;textable"
 
-// MediaModelSpec represents model specification media type
-const MediaModelSpec = "media:model-spec"
+// MediaObjectArray is the media URN for object array type - list of records (NOT textable)
+// Use a specific format like JSON array for textable object arrays.
+const MediaObjectArray = "media:list;record"
 
-// MediaAvailabilityOutput represents model availability output media type
-const MediaAvailabilityOutput = "media:availability-output"
+// Semantic media types for specialized content
 
-// MediaPathOutput represents path output media type
-const MediaPathOutput = "media:path-output"
+// MediaPNG is the media URN for PNG image data
+const MediaPNG = "media:image;png"
 
-// MediaLlmInferenceOutput represents LLM inference output media type
-const MediaLlmInferenceOutput = "media:llm-inference-output"
-
-// =============================================================================
-// EXPANDED MEDIA URN CONSTANTS (with semantic tags, matching Rust)
-// =============================================================================
-
-// Scalar types with semantic tags
-
-// MediaStringExpanded is the expanded form of MediaString with semantic tags
-const MediaStringExpanded = "media:textable;form=scalar"
-
-// MediaIntegerExpanded is the expanded form of MediaInteger with semantic tags
-const MediaIntegerExpanded = "media:integer;textable;numeric;form=scalar"
-
-// MediaNumberExpanded is the expanded form of MediaNumber with semantic tags
-const MediaNumberExpanded = "media:textable;numeric;form=scalar"
-
-// MediaBooleanExpanded is the expanded form of MediaBoolean with semantic tags
-const MediaBooleanExpanded = "media:bool;textable;form=scalar"
-
-// MediaObjectExpanded is the expanded form of MediaObject with semantic tags
-const MediaObjectExpanded = "media:form=map;textable"
-
-// MediaBinaryExpanded is the expanded form of MediaBinary with semantic tags
-const MediaBinaryExpanded = "media:"
-
-// Array types
-
-// MediaStringArray represents a string array media type
-const MediaStringArray = "media:textable;form=list"
-
-// MediaIntegerArray represents an integer array media type
-const MediaIntegerArray = "media:integer;textable;numeric;form=list"
-
-// MediaNumberArray represents a number array media type
-const MediaNumberArray = "media:textable;numeric;form=list"
-
-// MediaBooleanArray represents a boolean array media type
-const MediaBooleanArray = "media:bool;textable;form=list"
-
-// MediaObjectArray represents an object array media type
-const MediaObjectArray = "media:form=list;textable"
-
-// Image/Audio/Video types
-
-// MediaPng represents a PNG image media type
-const MediaPng = "media:image;png"
-
-// MediaAudio represents an audio media type
+// MediaAudio is the media URN for audio data (wav, mp3, flac, etc.)
 const MediaAudio = "media:wav;audio"
 
-// MediaVideo represents a video media type
+// MediaVideo is the media URN for video data (mp4, webm, mov, etc.)
 const MediaVideo = "media:video"
 
-// MediaAudioSpeech represents audio speech media type
+// Semantic AI input types - distinguished by their purpose/context
+
+// MediaAudioSpeech is the media URN for audio input containing speech for transcription (Whisper)
 const MediaAudioSpeech = "media:audio;wav;speech"
 
-// MediaImageThumbnail represents an image thumbnail media type
+// MediaImageThumbnail is the media URN for thumbnail image output
 const MediaImageThumbnail = "media:image;png;thumbnail"
 
-// Collection types
+// Document types (PRIMARY naming - type IS the format)
 
-// MediaCollection represents a collection media type (map form)
-const MediaCollection = "media:collection;textable;form=map"
+// MediaPDF is the media URN for PDF documents
+const MediaPDF = "media:pdf"
 
-// MediaCollectionList represents a collection media type (list form)
-const MediaCollectionList = "media:collection;textable;form=list"
+// MediaEPUB is the media URN for EPUB documents
+const MediaEPUB = "media:epub"
 
-// Document types
+// Text format types (PRIMARY naming - type IS the format)
 
-// MediaPdf represents a PDF document media type
-const MediaPdf = "media:pdf"
+// MediaMarkdown is the media URN for Markdown text
+const MediaMarkdown = "media:md;textable"
 
-// MediaEpub represents an EPUB document media type
-const MediaEpub = "media:epub"
+// MediaTXT is the media URN for plain text
+const MediaTXT = "media:txt;textable"
 
-// Text format types
+// MediaRST is the media URN for reStructuredText
+const MediaRST = "media:rst;textable"
 
-// MediaMd represents a Markdown text media type
-const MediaMd = "media:md;textable"
-
-// MediaTxt represents a plain text media type
-const MediaTxt = "media:txt;textable"
-
-// MediaRst represents a reStructuredText media type
-const MediaRst = "media:rst;textable"
-
-// MediaLog represents a log text media type
+// MediaLog is the media URN for log files
 const MediaLog = "media:log;textable"
 
-// MediaHtml represents an HTML text media type
-const MediaHtml = "media:html;textable"
+// MediaHTML is the media URN for HTML documents
+const MediaHTML = "media:html;textable"
 
-// MediaXml represents an XML text media type
-const MediaXml = "media:xml;textable"
+// MediaXML is the media URN for XML documents
+const MediaXML = "media:xml;textable"
 
-// Structured text types
+// MediaJSON is the media URN for JSON data - has record marker (structured key-value)
+const MediaJSON = "media:json;record;textable"
 
-// MediaJson represents a JSON media type
-const MediaJson = "media:json;textable;form=map"
+// MediaJSONSchema is the media URN for JSON with schema constraint (input for structured queries)
+const MediaJSONSchema = "media:json;json-schema;record;textable"
 
-// MediaJsonSchema represents a JSON Schema media type
-const MediaJsonSchema = "media:json;json-schema;textable;form=map"
+// MediaYAML is the media URN for YAML data - has record marker (structured key-value)
+const MediaYAML = "media:record;textable;yaml"
 
-// MediaYaml represents a YAML media type
-const MediaYaml = "media:yaml;textable;form=map"
+// File path types - for arguments that represent filesystem paths
 
-// File path types
+// MediaFilePath is the media URN for a single file path - textable, scalar by default (no list marker)
+const MediaFilePath = "media:file-path;textable"
 
-// MediaFilePath represents a file path media type (scalar)
-const MediaFilePath = "media:file-path;textable;form=scalar"
+// MediaFilePathArray is the media URN for an array of file paths - textable with list marker
+const MediaFilePathArray = "media:file-path;list;textable"
 
-// MediaFilePathArray represents a file path array media type (list)
-const MediaFilePathArray = "media:file-path;textable;form=list"
+// Semantic text input types - distinguished by their purpose/context
 
-// Decision types
+// MediaFrontmatterText is the media URN for frontmatter text (book metadata) - scalar by default
+const MediaFrontmatterText = "media:frontmatter;textable"
 
-// MediaDecision represents a decision media type
-const MediaDecision = "media:decision;bool;textable;form=scalar"
+// MediaModelSpec is the media URN for model spec (provider:model format, HuggingFace name, etc.) - scalar by default
+const MediaModelSpec = "media:model-spec;textable"
 
-// MediaDecisionArray represents a decision array media type
-const MediaDecisionArray = "media:decision;bool;textable;form=list"
+// MediaMLXModelPath is the media URN for MLX model path - scalar by default
+const MediaMLXModelPath = "media:mlx-model-path;textable"
+
+// MediaModelRepo is the media URN for model repository (input for list-models) - has record marker
+const MediaModelRepo = "media:model-repo;record;textable"
+
+// CAPNS output types - record marker for structured JSON objects, list marker for arrays
+
+// MediaModelDim is the media URN for model dimension output - scalar by default (no list marker)
+const MediaModelDim = "media:integer;model-dim;numeric;textable"
+
+// MediaDownloadOutput is the media URN for model download output - has record marker
+const MediaDownloadOutput = "media:download-result;record;textable"
+
+// MediaListOutput is the media URN for model list output - has record marker
+const MediaListOutput = "media:model-list;record;textable"
+
+// MediaStatusOutput is the media URN for model status output - has record marker
+const MediaStatusOutput = "media:model-status;record;textable"
+
+// MediaContentsOutput is the media URN for model contents output - has record marker
+const MediaContentsOutput = "media:model-contents;record;textable"
+
+// MediaAvailabilityOutput is the media URN for model availability output - has record marker
+const MediaAvailabilityOutput = "media:model-availability;record;textable"
+
+// MediaPathOutput is the media URN for model path output - has record marker
+const MediaPathOutput = "media:model-path;record;textable"
+
+// MediaEmbeddingVector is the media URN for embedding vector output - has record marker
+const MediaEmbeddingVector = "media:embedding-vector;record;textable"
+
+// MediaLLMInferenceOutput is the media URN for LLM inference output - has record marker
+const MediaLLMInferenceOutput = "media:generated-text;record;textable"
+
+// MediaFileMetadata is the media URN for extracted metadata - has record marker
+const MediaFileMetadata = "media:file-metadata;record;textable"
+
+// MediaDocumentOutline is the media URN for extracted outline - has record marker
+const MediaDocumentOutline = "media:document-outline;record;textable"
+
+// MediaDisboundPage is the media URN for disbound page - has list marker (array of page objects)
+const MediaDisboundPage = "media:disbound-page;list;textable"
+
+// MediaImageDescription is the media URN for vision inference output - textable, scalar by default
+const MediaImageDescription = "media:image-description;textable"
+
+// MediaTranscriptionOutput is the media URN for transcription output - has record marker
+const MediaTranscriptionOutput = "media:record;textable;transcription"
+
+// MediaDecision is the media URN for decision output (bit choice) - scalar by default
+const MediaDecision = "media:bool;decision;textable"
+
+// MediaDecisionArray is the media URN for decision array output (bit choices) - has list marker
+const MediaDecisionArray = "media:bool;decision;list;textable"

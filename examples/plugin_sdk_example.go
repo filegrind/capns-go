@@ -11,7 +11,7 @@ func main() {
 	fmt.Println("=== Schema Integration Example ===")
 
 	// Create a capability
-	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:form=map;textable";target=structured`)
+	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:record;textable";target=structured`)
 	cap := capns.NewCap(urn, "Query Command", "query-command")
 
 	// Define a comprehensive schema for document query parameters
@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// Add a custom media spec with the schema
-	cap.AddMediaSpec("media:query-params;textable;form=map", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:query-params;textable;record", capns.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-params",
 		querySchema,
@@ -67,7 +67,7 @@ func main() {
 	cliFlag := "--query"
 	pos := 0
 	cap.AddArg(capns.CapArg{
-		MediaUrn:       "media:query-params;textable;form=map",
+		MediaUrn:       "media:query-params;textable;record",
 		Required:       true,
 		Sources:        []capns.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "Document query parameters",
@@ -114,14 +114,14 @@ func main() {
 	}
 
 	// Add custom media spec for output with schema
-	cap.AddMediaSpec("media:query-results;textable;form=map", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:query-results;textable;record", capns.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-results",
 		resultSchema,
 	))
 
 	// Set output
-	cap.SetOutput(capns.NewCapOutput("media:query-results;textable;form=map", "Document search results"))
+	cap.SetOutput(capns.NewCapOutput("media:query-results;textable;record", "Document search results"))
 
 	// Create validation coordinator
 	coordinator := capns.NewCapValidationCoordinator()

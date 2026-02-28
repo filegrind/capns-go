@@ -445,11 +445,11 @@ func getExpectedTypeFromMediaUrn(mediaUrn string, resolved *media.ResolvedMediaS
 		if resolved.IsBinary() {
 			return "binary"
 		}
-		// Check for map structure (form=map) OR explicit json tag
-		if resolved.IsMap() || resolved.IsJSON() {
+		// Check for record structure (has internal fields) OR explicit json tag
+		if resolved.IsRecord() || resolved.IsJSON() {
 			return "object"
 		}
-		// Check for list structure (form=list)
+		// Check for list structure (list)
 		if resolved.IsList() {
 			return "array"
 		}

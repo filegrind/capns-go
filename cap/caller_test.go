@@ -61,10 +61,10 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	mockHost := &MockCapSet{}
 
 	// Common mediaSpecs for resolution
-	// Use media.MediaObject (="media:form=map;textable") which has form=map tag for IsMap()
+	// Use media.MediaObject (="media:json;record;textable") which has record tag for IsMap()
 	mediaSpecs := []media.MediaSpecDef{
 		{Urn: "media:", MediaType: "application/octet-stream"},
-		{Urn: "media:textable;form=scalar", MediaType: "text/plain", ProfileURI: media.ProfileStr},
+		{Urn: "media:textable", MediaType: "text/plain", ProfileURI: media.ProfileStr},
 		{Urn: media.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
 	}
 
@@ -81,19 +81,19 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	assert.True(t, resolved.IsBinary())
 
 	// Test non-binary cap (text output) - use proper textable tag
-	textCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:textable;form=scalar"`)
+	textCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:textable"`)
 	require.NoError(t, err)
 
 	capDef2 := NewCap(textCapUrn, "Test Capability", "test-command")
 	capDef2.SetMediaSpecs(mediaSpecs)
-	caller2 := NewCapCaller(`cap:in="media:void";op=generate;out="media:textable;form=scalar"`, mockHost, capDef2)
+	caller2 := NewCapCaller(`cap:in="media:void";op=generate;out="media:textable"`, mockHost, capDef2)
 
 	resolved2, err := caller2.resolveOutputSpec(registry)
 	require.NoError(t, err)
 	assert.False(t, resolved2.IsBinary())
 	assert.True(t, resolved2.IsText())
 
-	// Test map cap with object output - use media.MediaObject which has form=map tag
+	// Test map cap with object output - use media.MediaObject which has record tag
 	mapCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="` + media.MediaObject + `"`)
 	require.NoError(t, err)
 
@@ -159,10 +159,10 @@ func TestCapCallerCall(t *testing.T) {
 func TestCapCallerWithArguments(t *testing.T) {
 	registry := testRegistry(t)
 	// Setup test data with arguments - use proper map tag for object
-	capUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable"`)
+	capUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:json;record;textable"`)
 	require.NoError(t, err)
 
-	// mediaSpecs for resolution - standard.MediaObject = "media:form=map;textable"
+	// mediaSpecs for resolution - standard.MediaObject = "media:json;record;textable"
 	mediaSpecs := []media.MediaSpecDef{
 		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
 		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
@@ -186,7 +186,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 		},
 	}
 
-	caller := NewCapCaller(`cap:in="media:void";op=process;out="media:form=map;textable"`, mockHost, capDef)
+	caller := NewCapCaller(`cap:in="media:void";op=process;out="media:json;record;textable"`, mockHost, capDef)
 
 	// Test call with unified argument
 	ctx := context.Background()
@@ -353,8 +353,8 @@ func TestStdinSourceNilHandling(t *testing.T) {
 
 // TEST274: Test CapArgumentValue::new stores media_urn and raw byte value
 func Test274_cap_argument_value_new(t *testing.T) {
-	arg := NewCapArgumentValue("media:model-spec;textable;form=scalar", []byte("gpt-4"))
-	assert.Equal(t, "media:model-spec;textable;form=scalar", arg.MediaUrn)
+	arg := NewCapArgumentValue("media:model-spec;textable", []byte("gpt-4"))
+	assert.Equal(t, "media:model-spec;textable", arg.MediaUrn)
 	assert.Equal(t, []byte("gpt-4"), arg.Value)
 }
 

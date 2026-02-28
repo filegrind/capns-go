@@ -29,9 +29,9 @@ func createTestRegistry(t *testing.T) *media.MediaUrnRegistry {
 // Test helper for integration tests - use proper media URNs with tags
 func intTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:form=map;textable"`
+		return `cap:in="media:void";out="media:record;textable"`
 	}
-	return `cap:in="media:void";out="media:form=map;textable";` + tags
+	return `cap:in="media:void";out="media:record;textable";` + tags
 }
 
 // MockCapSet implements CapSet for testing
@@ -65,7 +65,7 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 
 	// Verify the cap has direction specs in canonical form
 	assert.Contains(t, capDef.UrnString(), `in=media:void`)
-	assert.Contains(t, capDef.UrnString(), `out="media:form=map;textable"`)
+	assert.Contains(t, capDef.UrnString(), `out="media:record;textable"`)
 	assert.Equal(t, "transform-command", capDef.Command)
 
 	// Test case 2: Create cap with description but no version
@@ -127,7 +127,7 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	registry := createTestRegistry(t)
 	// Setup test cap definition with media URNs - use proper tags
-	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:record;textable";target=metadata`)
 	require.NoError(t, err)
 
 	capDef := cap.NewCap(urn, "Metadata Extractor", "extract-metadata")
@@ -157,7 +157,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	}
 
 	// Create caller
-	caller := cap.NewCapCaller(`cap:in="media:void";op=extract;out="media:form=map;textable";target=metadata`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=extract;out="media:record;textable";target=metadata`, mockHost, capDef)
 
 	// Test call with unified argument
 	ctx := context.Background()
@@ -231,7 +231,7 @@ func TestIntegrationBinaryCapHandling(t *testing.T) {
 func TestIntegrationTextCapHandling(t *testing.T) {
 	registry := createTestRegistry(t)
 	// Setup text cap - use proper tags
-	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=format;out="media:textable";target=text`)
 	require.NoError(t, err)
 
 	capDef := cap.NewCap(urn, "Text Formatter", "format-text")
@@ -259,7 +259,7 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 		},
 	}
 
-	caller := cap.NewCapCaller(`cap:in="media:void";op=format;out="media:textable;form=scalar";target=text`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=format;out="media:textable";target=text`, mockHost, capDef)
 
 	// Test text response
 	ctx := context.Background()
@@ -283,14 +283,14 @@ func TestIntegrationTextCapHandling(t *testing.T) {
 func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 	registry := createTestRegistry(t)
 	// Setup cap with custom media spec - use proper tags
-	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:result;textable;record";target=data`)
 	require.NoError(t, err)
 
 	capDef := cap.NewCap(urn, "Data Query", "query-data")
 
 	// Add custom media spec with schema
 	capDef.AddMediaSpec(media.NewMediaSpecDefWithSchema(
-		"media:result;textable;form=map",
+		"media:result;textable;record",
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{
@@ -306,7 +306,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 		},
 	))
 
-	capDef.SetOutput(cap.NewCapOutput("media:result;textable;form=map", "Query result"))
+	capDef.SetOutput(cap.NewCapOutput("media:result;textable;record", "Query result"))
 
 	// Mock host
 	mockHost := &MockCapSet{
@@ -315,7 +315,7 @@ func TestIntegrationCapWithMediaSpecs(t *testing.T) {
 		},
 	}
 
-	caller := cap.NewCapCaller(`cap:in="media:void";op=query;out="media:result;textable;form=map";target=data`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=query;out="media:result;textable;record";target=data`, mockHost, capDef)
 
 	// Test call
 	ctx := context.Background()
@@ -337,7 +337,7 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator := cap.NewCapValidationCoordinator()
 
 	// Create a cap with arguments - use proper tags
-	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:form=map;textable";target=data`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:record;textable";target=data`)
 	require.NoError(t, err)
 
 	capDef := cap.NewCap(urn, "Data Processor", "process-data")
@@ -397,7 +397,7 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	resolved, err = media.ResolveMediaUrn(standard.MediaObject, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
-	assert.True(t, resolved.IsMap())
+	assert.True(t, resolved.IsRecord())
 	assert.True(t, resolved.IsStructured())
 	assert.False(t, resolved.IsJSON())
 

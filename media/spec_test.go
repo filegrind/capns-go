@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/filegrind/capns-go/standard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,7 @@ func testRegistry(t *testing.T) *MediaUrnRegistry {
 // TEST088: Test resolving string media URN from registry returns correct media type and profile
 func Test088_resolve_from_registry_str(t *testing.T) {
 	registry := testRegistry(t)
-	resolved, err := ResolveMediaUrn("media:textable;form=scalar", nil, registry)
+	resolved, err := ResolveMediaUrn("media:textable", nil, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
 	assert.Equal(t, "https://capns.org/schema/string", resolved.ProfileURI)
@@ -32,7 +33,7 @@ func Test088_resolve_from_registry_str(t *testing.T) {
 // TEST089: Test resolving object media URN from registry returns JSON media type
 func Test089_resolve_from_registry_obj(t *testing.T) {
 	registry := testRegistry(t)
-	resolved, err := ResolveMediaUrn("media:form=map;textable", nil, registry)
+	resolved, err := ResolveMediaUrn("media:record;textable", nil, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 }
@@ -83,7 +84,7 @@ func Test092_resolve_custom_with_schema(t *testing.T) {
 	}
 	customSpecs := []MediaSpecDef{
 		{
-			Urn:         "media:output-spec;json;form=map",
+			Urn:         "media:output-spec;json;record",
 			MediaType:   "application/json",
 			Title:       "Output Spec",
 			ProfileURI:  "https://example.com/schema/output",
@@ -95,9 +96,9 @@ func Test092_resolve_custom_with_schema(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:output-spec;json;form=map", customSpecs, registry)
+	resolved, err := ResolveMediaUrn("media:output-spec;json;record", customSpecs, registry)
 	require.NoError(t, err)
-	assert.Equal(t, "media:output-spec;json;form=map", resolved.SpecID)
+	assert.Equal(t, "media:output-spec;json;record", resolved.SpecID)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.Equal(t, "https://example.com/schema/output", resolved.ProfileURI)
 	assert.Equal(t, schema, resolved.Schema)
@@ -120,7 +121,7 @@ func Test094_local_overrides_registry(t *testing.T) {
 	// Custom definition in media_specs takes precedence over registry
 	customOverride := []MediaSpecDef{
 		{
-			Urn:         "media:textable;form=scalar",
+			Urn:         "media:textable",
 			MediaType:   "application/json", // Override: normally text/plain
 			Title:       "Custom String",
 			ProfileURI:  "https://custom.example.com/str",
@@ -132,7 +133,7 @@ func Test094_local_overrides_registry(t *testing.T) {
 		},
 	}
 
-	resolved, err := ResolveMediaUrn("media:textable;form=scalar", customOverride, registry)
+	resolved, err := ResolveMediaUrn("media:textable", customOverride, registry)
 	require.NoError(t, err)
 	// Custom definition used, not registry
 	assert.Equal(t, "application/json", resolved.MediaType)
@@ -229,10 +230,10 @@ func Test099_resolved_is_binary(t *testing.T) {
 	assert.False(t, resolved.IsJSON())
 }
 
-// TEST100: Test ResolvedMediaSpec IsMap returns true for form=map media URN
+// TEST100: Test ResolvedMediaSpec IsMap/IsRecord returns true for record media URN
 func Test100_resolved_is_map(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
-		SpecID:      "media:textable;form=map",
+		SpecID:      standard.MediaJSON, // "media:json;record;textable"
 		MediaType:   "application/json",
 		ProfileURI:  "",
 		Schema:      nil,
@@ -243,15 +244,16 @@ func Test100_resolved_is_map(t *testing.T) {
 		Extensions:  []string{},
 	}
 	assert.True(t, resolved.IsMap())
+	assert.True(t, resolved.IsRecord())
 	assert.False(t, resolved.IsBinary())
-	assert.False(t, resolved.IsScalar())
+	assert.True(t, resolved.IsScalar()) // record is still scalar (no list marker)
 	assert.False(t, resolved.IsList())
 }
 
 // TEST101: Test ResolvedMediaSpec IsScalar returns true for form=scalar media URN
 func Test101_resolved_is_scalar(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
-		SpecID:      "media:textable;form=scalar",
+		SpecID:      "media:textable",
 		MediaType:   "text/plain",
 		ProfileURI:  "",
 		Schema:      nil,
@@ -266,10 +268,10 @@ func Test101_resolved_is_scalar(t *testing.T) {
 	assert.False(t, resolved.IsList())
 }
 
-// TEST102: Test ResolvedMediaSpec IsList returns true for form=list media URN
+// TEST102: Test ResolvedMediaSpec IsList returns true for list media URN
 func Test102_resolved_is_list(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
-		SpecID:      "media:textable;form=list",
+		SpecID:      "media:textable;list",
 		MediaType:   "application/json",
 		ProfileURI:  "",
 		Schema:      nil,
@@ -287,7 +289,7 @@ func Test102_resolved_is_list(t *testing.T) {
 // TEST103: Test ResolvedMediaSpec IsJSON returns true when json tag is present
 func Test103_resolved_is_json(t *testing.T) {
 	resolved := &ResolvedMediaSpec{
-		SpecID:      "media:json;textable;form=map",
+		SpecID:      "media:json;textable;record",
 		MediaType:   "application/json",
 		ProfileURI:  "",
 		Schema:      nil,
@@ -504,8 +506,8 @@ func Test110_multiple_extensions(t *testing.T) {
 func Test304_media_availability_output_constant(t *testing.T) {
 	assert.True(t, HasMediaUrnTag(MediaAvailabilityOutput, "textable"),
 		"model-availability must be textable")
-	assert.True(t, HasMediaUrnTagValue(MediaAvailabilityOutput, "form", "map"),
-		"model-availability must be form=map")
+	assert.True(t, HasMediaUrnMarkerTag(MediaAvailabilityOutput, "record"),
+		"model-availability must be record")
 	assert.True(t, HasMediaUrnTag(MediaAvailabilityOutput, "textable"),
 		"model-availability must be textable (not binary)")
 }
@@ -514,8 +516,8 @@ func Test304_media_availability_output_constant(t *testing.T) {
 func Test305_media_path_output_constant(t *testing.T) {
 	assert.True(t, HasMediaUrnTag(MediaPathOutput, "textable"),
 		"model-path must be textable")
-	assert.True(t, HasMediaUrnTagValue(MediaPathOutput, "form", "map"),
-		"model-path must be form=map")
+	assert.True(t, HasMediaUrnMarkerTag(MediaPathOutput, "record"),
+		"model-path must be record")
 	assert.True(t, HasMediaUrnTag(MediaPathOutput, "textable"),
 		"model-path must be textable (not binary)")
 }

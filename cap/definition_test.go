@@ -14,9 +14,9 @@ import (
 // Test helper to create URNs with required in/out specs
 func capTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:form=map"`
+		return `cap:in="media:void";out="media:record"`
 	}
-	return `cap:in="media:void";out="media:form=map";` + tags
+	return `cap:in="media:void";out="media:record";` + tags
 }
 
 // TEST108: Test creating new cap with URN, title, and command verifies correct initialization
@@ -32,7 +32,7 @@ func Test108_cap_creation(t *testing.T) {
 	assert.Contains(t, urnStr, "in=")
 	assert.Contains(t, urnStr, "media:void")
 	assert.Contains(t, urnStr, "out=")
-	assert.Contains(t, urnStr, "form=map")
+	assert.Contains(t, urnStr, "record")
 	assert.Equal(t, "Transform JSON Data", cap.Title)
 	assert.NotNil(t, cap.Metadata)
 	assert.Empty(t, cap.Metadata)

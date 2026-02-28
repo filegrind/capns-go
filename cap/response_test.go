@@ -13,9 +13,9 @@ import (
 // Test helper for response wrapper tests - use proper media URNs with tags
 func respTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:form=map;textable"`
+		return `cap:in="media:void";out="media:record;textable"`
 	}
-	return `cap:in="media:void";out="media:form=map;textable";` + tags
+	return `cap:in="media:void";out="media:record;textable";` + tags
 }
 
 // TEST168: Test ResponseWrapper from JSON deserializes to correct structured type
@@ -161,18 +161,18 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	// Common mediaSpecs for all caps - resolution requires this table
 	// Use the constant values directly since the cap URNs reference these specific media URN strings
 	mediaSpecs := []media.MediaSpecDef{
-		{Urn: "media:textable;form=scalar", MediaType: "text/plain", ProfileURI: media.ProfileStr},
+		{Urn: "media:textable", MediaType: "text/plain", ProfileURI: media.ProfileStr},
 		{Urn: "media:", MediaType: "application/octet-stream"},
-		{Urn: "media:form=map;textable", MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: "media:record;textable", MediaType: "application/json", ProfileURI: media.ProfileObj},
 		{Urn: "media:void", MediaType: "application/x-void", ProfileURI: media.ProfileVoid},
 	}
 
 	// Setup cap definitions with media URNs - all need in/out with proper tags
-	stringCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable;form=scalar"`)
+	stringCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:textable"`)
 	require.NoError(t, err)
 	stringCap := NewCap(stringCapUrn, "String Test", "test")
 	// Use expanded URN form matching the cap's out spec for proper resolution
-	stringCap.SetOutput(NewCapOutput("media:textable;form=scalar", "String output"))
+	stringCap.SetOutput(NewCapOutput("media:textable", "String output"))
 	stringCap.SetMediaSpecs(mediaSpecs)
 
 	binaryCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:"`)
@@ -181,10 +181,10 @@ func TestResponseWrapperMatchesOutputType(t *testing.T) {
 	binaryCap.SetOutput(NewCapOutput("media:", "Binary output"))
 	binaryCap.SetMediaSpecs(mediaSpecs)
 
-	jsonCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:form=map;textable"`)
+	jsonCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=test;out="media:record;textable"`)
 	require.NoError(t, err)
 	jsonCap := NewCap(jsonCapUrn, "JSON Test", "test")
-	jsonCap.SetOutput(NewCapOutput("media:form=map;textable", "JSON output"))
+	jsonCap.SetOutput(NewCapOutput("media:record;textable", "JSON output"))
 	jsonCap.SetMediaSpecs(mediaSpecs)
 
 	// Test text response with string output type
@@ -250,7 +250,7 @@ func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 
 	// Add custom spec with schema - needs map tag for JSON
 	cap.AddMediaSpec(media.NewMediaSpecDefWithSchema(
-		"media:result;textable;form=map",
+		"media:result;textable;record",
 		"application/json",
 		"https://example.com/schema/result",
 		map[string]interface{}{
@@ -262,7 +262,7 @@ func TestResponseWrapperValidateAgainstCap(t *testing.T) {
 		},
 	))
 
-	cap.SetOutput(NewCapOutput("media:result;textable;form=map", "Result output"))
+	cap.SetOutput(NewCapOutput("media:result;textable;record", "Result output"))
 
 	// Valid JSON response
 	validResponse := NewResponseWrapperFromJSON([]byte(`{"status": "ok"}`))

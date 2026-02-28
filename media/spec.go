@@ -4,7 +4,7 @@
 // Format: `media:<type>` with optional tags.
 //
 // Examples:
-// - `media:textable;form=scalar`
+// - `media:textable`
 // - `media:pdf`
 //
 // MediaSpecDef is always a structured object - NO string form parsing.
@@ -23,17 +23,17 @@ import (
 // Built-in media URN constants with coercion tags
 const (
 	MediaVoid         = "media:void"
-	MediaString       = "media:textable;form=scalar"
-	MediaInteger      = "media:integer;textable;numeric;form=scalar"
-	MediaNumber       = "media:textable;numeric;form=scalar"
-	MediaBoolean      = "media:bool;textable;form=scalar"
-	MediaObject       = "media:form=map;textable"
+	MediaString       = "media:textable"
+	MediaInteger      = "media:integer;textable;numeric"
+	MediaNumber       = "media:textable;numeric"
+	MediaBoolean      = "media:bool;textable"
+	MediaObject       = "media:record;textable"
 	MediaBinary       = "media:"
-	MediaStringArray  = "media:textable;form=list"
-	MediaIntegerArray = "media:integer;textable;numeric;form=list"
-	MediaNumberArray  = "media:textable;numeric;form=list"
-	MediaBooleanArray = "media:bool;textable;form=list"
-	MediaObjectArray  = "media:form=list;textable"
+	MediaStringArray  = "media:textable;list"
+	MediaIntegerArray = "media:integer;textable;numeric;list"
+	MediaNumberArray  = "media:textable;numeric;list"
+	MediaBooleanArray = "media:bool;textable;list"
+	MediaObjectArray  = "media:list;textable"
 	// Semantic content types
 	MediaImage = "media:image;png"
 	MediaAudio = "media:wav;audio"
@@ -51,24 +51,24 @@ const (
 	MediaLog        = "media:log;textable"
 	MediaHtml       = "media:html;textable"
 	MediaXml        = "media:xml;textable"
-	MediaJson       = "media:json;textable;form=map"
-	MediaJsonSchema = "media:json;json-schema;textable;form=map"
-	MediaYaml       = "media:yaml;textable;form=map"
+	MediaJson       = "media:json;textable;record"
+	MediaJsonSchema = "media:json;json-schema;textable;record"
+	MediaYaml       = "media:yaml;textable;record"
 	// Semantic input types
-	MediaModelSpec = "media:model-spec;textable;form=scalar"
-	MediaModelRepo = "media:model-repo;textable;form=map"
+	MediaModelSpec = "media:model-spec;textable"
+	MediaModelRepo = "media:model-repo;textable;record"
 	// File path types
-	MediaFilePath      = "media:file-path;textable;form=scalar"
-	MediaFilePathArray = "media:file-path;textable;form=list"
+	MediaFilePath      = "media:file-path;textable"
+	MediaFilePathArray = "media:file-path;textable;list"
 	// Semantic output types
-	MediaModelDim      = "media:model-dim;integer;textable;numeric;form=scalar"
-	MediaDecision      = "media:decision;bool;textable;form=scalar"
-	MediaDecisionArray = "media:decision;bool;textable;form=list"
+	MediaModelDim      = "media:model-dim;integer;textable;numeric"
+	MediaDecision      = "media:decision;bool;textable"
+	MediaDecisionArray = "media:decision;bool;textable;list"
 	// Semantic output types
-	MediaLlmInferenceOutput = "media:generated-text;textable;form=map"
+	MediaLlmInferenceOutput = "media:generated-text;textable;record"
 	// Semantic output types for model operations
-	MediaAvailabilityOutput = "media:model-availability;textable;form=map"
-	MediaPathOutput         = "media:model-path;textable;form=map"
+	MediaAvailabilityOutput = "media:model-availability;textable;record"
+	MediaPathOutput         = "media:model-path;textable;record"
 )
 
 // Profile URL constants (defaults, use GetSchemaBase() for configurable version)
@@ -192,32 +192,43 @@ func (r *ResolvedMediaSpec) IsBinary() bool {
 	return !HasMediaUrnTag(r.SpecID, "textable")
 }
 
-// IsMap returns true if form=map tag is present (key-value structure).
+// IsRecord returns true if record marker tag is present (has internal key-value structure).
+func (r *ResolvedMediaSpec) IsRecord() bool {
+	return HasMediaUrnMarkerTag(r.SpecID, "record")
+}
+
+// IsMap is deprecated, use IsRecord instead.
+// Returns true if this has the record marker (structured key-value data).
 func (r *ResolvedMediaSpec) IsMap() bool {
-	return HasMediaUrnTagValue(r.SpecID, "form", "map")
+	return r.IsRecord()
 }
 
-// IsScalar returns true if form=scalar tag is present (single value).
+// IsOpaque returns true if no record marker is present (opaque = default structure).
+func (r *ResolvedMediaSpec) IsOpaque() bool {
+	return !r.IsRecord()
+}
+
+// IsScalar returns true if no list marker is present (scalar = default cardinality).
 func (r *ResolvedMediaSpec) IsScalar() bool {
-	return HasMediaUrnTagValue(r.SpecID, "form", "scalar")
+	return !r.IsList()
 }
 
-// IsList returns true if form=list tag is present (ordered collection).
+// IsList returns true if list marker tag is present (array/list cardinality).
 func (r *ResolvedMediaSpec) IsList() bool {
-	return HasMediaUrnTagValue(r.SpecID, "form", "list")
+	return HasMediaUrnMarkerTag(r.SpecID, "list")
 }
 
 // IsJSON returns true if the "json" marker tag is present in the source media URN.
-// Note: This checks for JSON representation specifically, not map structure (use IsMap for that).
+// Note: This checks for JSON representation specifically, not record structure (use IsRecord for that).
 func (r *ResolvedMediaSpec) IsJSON() bool {
 	return HasMediaUrnTag(r.SpecID, "json")
 }
 
-// IsStructured returns true if this represents structured data (map or list).
-// Structured data can be serialized as JSON when transmitted as text.
+// IsStructured returns true if this represents structured data (has record marker).
+// Structured data has internal key-value fields that can be accessed.
 // Note: This does NOT check for the explicit `json` tag - use IsJSON() for that.
 func (r *ResolvedMediaSpec) IsStructured() bool {
-	return r.IsMap() || r.IsList()
+	return r.IsRecord()
 }
 
 // IsText returns true if the "textable" marker tag is present in the source media URN.
@@ -265,7 +276,7 @@ func HasMediaUrnTag(mediaUrn, tagName string) bool {
 	return exists
 }
 
-// HasMediaUrnTagValue checks if a media URN has a tag with a specific value (e.g., form=map).
+// HasMediaUrnTagValue checks if a media URN has a tag with a specific value (e.g., record).
 // Uses tagged-urn parsing for proper tag detection.
 // Requires a valid, non-empty media URN - panics otherwise.
 func HasMediaUrnTagValue(mediaUrn, tagKey, tagValue string) bool {
@@ -278,6 +289,22 @@ func HasMediaUrnTagValue(mediaUrn, tagKey, tagValue string) bool {
 	}
 	value, exists := parsed.GetTag(tagKey)
 	return exists && value == tagValue
+}
+
+// HasMediaUrnMarkerTag checks if a media URN has a marker tag (tag with wildcard value "*").
+// Marker tags are used for boolean flags like `list` and `record`.
+// Uses tagged-urn parsing for proper tag detection.
+// Requires a valid, non-empty media URN - panics otherwise.
+func HasMediaUrnMarkerTag(mediaUrn, tagName string) bool {
+	if mediaUrn == "" {
+		panic("HasMediaUrnMarkerTag called with empty mediaUrn - this indicates the MediaSpec was not resolved via ResolveMediaUrn")
+	}
+	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to parse media URN '%s': %v - this indicates invalid data", mediaUrn, err))
+	}
+	value, exists := parsed.GetTag(tagName)
+	return exists && value == "*"
 }
 
 // PrimaryType returns the primary type (e.g., "image" from "image/png")
@@ -355,7 +382,7 @@ func ValidateNoMediaSpecDuplicates(mediaSpecs []MediaSpecDef) error {
 //  4. If none resolve → FAIL HARD
 //
 // Arguments:
-//   - mediaUrn: The media URN to resolve (e.g., "media:textable;form=scalar")
+//   - mediaUrn: The media URN to resolve (e.g., "media:textable")
 //   - mediaSpecs: Optional media_specs array from the cap definition (nil = none)
 //   - registry: The MediaUrnRegistry for standard spec lookups
 //
@@ -422,7 +449,7 @@ func resolveMediaSpecDef(def *MediaSpecDef) (*ResolvedMediaSpec, error) {
 
 // GetTypeFromMediaUrn returns the base type (string, integer, number, boolean, object, binary, etc.) from a media URN
 // This is useful for validation to determine what Go type to expect
-// Determines type based on media URN tags: no textable->binary, form=map->object, form=list->array, etc.
+// Determines type based on media URN tags: no textable->binary, record->object, list->array, etc.
 func GetTypeFromMediaUrn(mediaUrn string) string {
 	// Parse the media URN to check tags
 	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
@@ -477,11 +504,11 @@ func GetTypeFromResolvedMediaSpec(resolved *ResolvedMediaSpec) string {
 	if resolved.IsBinary() {
 		return "binary"
 	}
-	// Check for map structure (form=map) OR explicit json tag
-	if resolved.IsMap() || resolved.IsJSON() {
+	// Check for record structure (has internal fields) OR explicit json tag
+	if resolved.IsRecord() || resolved.IsJSON() {
 		return "object"
 	}
-	// Check for list structure (form=list)
+	// Check for list structure (list)
 	if resolved.IsList() {
 		return "array"
 	}

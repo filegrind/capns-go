@@ -797,7 +797,7 @@ func Test234_decode_garbage_bytes(t *testing.T) {
 func Test389_stream_start_roundtrip(t *testing.T) {
 	reqId := NewMessageIdRandom()
 	streamId := "stream-roundtrip-123"
-	mediaUrn := "media:json;form=scalar"
+	mediaUrn := "media:json"
 
 	original := NewStreamStart(reqId, streamId, mediaUrn)
 	encoded, err := EncodeFrame(original)

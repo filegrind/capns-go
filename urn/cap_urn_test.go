@@ -234,8 +234,8 @@ func Test011_serialization_smart_quoting(t *testing.T) {
 		Tag("key", "simple").
 		Build()
 	require.NoError(t, err)
-	// MediaObject contains semicolon, so it gets quoted in output
-	assert.Equal(t, `cap:in=media:void;key=simple;out="`+standard.MediaObject+`"`, cap.ToString())
+	// MediaObject = "media:record" has no semicolon, no quoting needed
+	assert.Equal(t, `cap:in=media:void;key=simple;out=media:record`, cap.ToString())
 
 	// Value with spaces — must be quoted
 	cap2, err := NewCapUrnBuilder().
@@ -244,7 +244,7 @@ func Test011_serialization_smart_quoting(t *testing.T) {
 		Tag("key", "has spaces").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in=media:void;key="has spaces";out="`+standard.MediaObject+`"`, cap2.ToString())
+	assert.Equal(t, `cap:in=media:void;key="has spaces";out=media:record`, cap2.ToString())
 
 	// Value with uppercase — must be quoted
 	cap4, err := NewCapUrnBuilder().
@@ -253,7 +253,7 @@ func Test011_serialization_smart_quoting(t *testing.T) {
 		Tag("key", "HasUpper").
 		Build()
 	require.NoError(t, err)
-	assert.Equal(t, `cap:in=media:void;key="HasUpper";out="`+standard.MediaObject+`"`, cap4.ToString())
+	assert.Equal(t, `cap:in=media:void;key="HasUpper";out=media:record`, cap4.ToString())
 }
 
 // TEST012: Test that simple cap URN round-trips (parse -> serialize -> parse equals original)
@@ -405,9 +405,9 @@ func Test019_missing_tag_handling(t *testing.T) {
 
 // TEST020: Test specificity calculation (direction specs use MediaUrn tag count, wildcards don't count)
 func Test020_specificity(t *testing.T) {
-	// standard.MediaVoid = "media:void" (1 tag)
-	// standard.MediaObject = "media:textable;form=map" (2 tags)
-	// So base specificity for testUrn = 1(void) + 2(object) = 3, plus non-wildcard tags
+	// Direction specs contribute their MediaUrn tag count:
+	// MEDIA_VOID = "media:void" -> 1 tag (void)
+	// MEDIA_OBJECT = "media:record" -> 1 tag (record)
 	cap1, err := NewCapUrnFromString(testUrn("type=general"))
 	require.NoError(t, err)
 
@@ -417,17 +417,14 @@ func Test020_specificity(t *testing.T) {
 	cap3, err := NewCapUrnFromString(testUrn("op=*;ext=pdf"))
 	require.NoError(t, err)
 
-	// void(1) + object(2) + type=general(1) = 4
-	assert.Equal(t, 4, cap1.Specificity())
-	// void(1) + object(2) + op=generate(1) = 4
-	assert.Equal(t, 4, cap2.Specificity())
-	// void(1) + object(2) + ext=pdf(1) = 4 (op=* wildcards don't count)
-	assert.Equal(t, 4, cap3.Specificity())
+	assert.Equal(t, 3, cap1.Specificity()) // void(1) + record(1) + type(1)
+	assert.Equal(t, 3, cap2.Specificity()) // void(1) + record(1) + op(1)
+	assert.Equal(t, 3, cap3.Specificity()) // void(1) + record(1) + ext(1) (wildcard op doesn't count)
 
-	// in=wildcard(0) + MediaObject(2 tags: textable,form=map) + op=test(1) = 3
+	// Wildcard in direction doesn't count
 	cap4, err := NewCapUrnFromString(`cap:in=*;out="` + standard.MediaObject + `";op=test`)
 	require.NoError(t, err)
-	assert.Equal(t, 3, cap4.Specificity())
+	assert.Equal(t, 2, cap4.Specificity()) // record(1) + op(1) (in wildcard doesn't count)
 }
 
 // TEST021: Test builder creates cap URN with correct tags and direction specs
@@ -922,8 +919,8 @@ func Test050_matching_semantics_direction_mismatch(t *testing.T) {
 	assert.False(t, cap.Accepts(request), "Test 10: Direction mismatch should not match")
 }
 
-// TEST051: Semantic direction matching - generic provider matches specific request
-func Test051_direction_semantic_matching(t *testing.T) {
+// TEST890: Semantic direction matching - generic provider matches specific request
+func Test890_direction_semantic_matching(t *testing.T) {
 	genericCap, err := NewCapUrnFromString(
 		`cap:in="media:";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)
@@ -979,8 +976,8 @@ func Test051_direction_semantic_matching(t *testing.T) {
 		"Cap producing generic image must NOT satisfy request requiring image;png;thumbnail")
 }
 
-// TEST052: Semantic direction specificity - more media URN tags = higher specificity
-func Test052_direction_semantic_specificity(t *testing.T) {
+// TEST891: Semantic direction specificity - more media URN tags = higher specificity
+func Test891_direction_semantic_specificity(t *testing.T) {
 	genericCap, err := NewCapUrnFromString(
 		`cap:in="media:";op=generate_thumbnail;out="media:image;png;thumbnail"`,
 	)

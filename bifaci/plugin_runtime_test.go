@@ -354,7 +354,7 @@ func Test261_extract_effective_payload_cbor_match(t *testing.T) {
 	// For now, simplified implementation returns raw payload
 	// Full CBOR argument extraction will be implemented when needed
 	payload := []byte("test payload")
-	result, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:string;textable;form=scalar";op=test;out="media:void"`)
+	result, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:string;textable";op=test;out="media:void"`)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -369,7 +369,7 @@ func Test262_extract_effective_payload_cbor_no_match(t *testing.T) {
 	// This test will be meaningful when full CBOR decoding is implemented
 	// For now, simplified version returns raw payload
 	payload := []byte("test")
-	_, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:string;textable;form=scalar";op=test;out="media:void"`)
+	_, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:string;textable";op=test;out="media:void"`)
 	// Currently doesn't fail - will when CBOR parsing is added
 	if err != nil {
 		t.Logf("Note: Error handling to be enhanced with full CBOR support: %v", err)
@@ -488,7 +488,7 @@ func Test271_handler_replacement(t *testing.T) {
 func Test272_extract_effective_payload_multiple_args(t *testing.T) {
 	// Will be meaningful when full CBOR argument parsing is implemented
 	payload := []byte("test payload")
-	result, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:model-spec;textable;form=scalar";op=infer;out="media:void"`)
+	result, err := extractEffectivePayload(payload, "application/cbor", `cap:in="media:model-spec;textable";op=infer;out="media:void"`)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -588,7 +588,7 @@ func Test336FilePathReadsFilePassesBytes(t *testing.T) {
 		"process",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:pdf"),
@@ -663,7 +663,7 @@ func Test337FilePathWithoutStdinPassesString(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					positionSource(0), // NO stdin source!
@@ -704,7 +704,7 @@ func Test338FilePathViaCliFlag(t *testing.T) {
 		"process",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:pdf"),
@@ -753,7 +753,7 @@ func Test339FilePathArrayGlobExpansion(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -807,7 +807,7 @@ func Test340FileNotFoundClearError(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:pdf"),
@@ -852,7 +852,7 @@ func Test341StdinPrecedenceOverFilePath(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"), // First
@@ -894,7 +894,7 @@ func Test342FilePathPositionZeroReadsFirstArg(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -929,10 +929,10 @@ func Test343NonFilePathArgsUnaffected(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:model-spec;textable;form=scalar", // NOT file-path
+				MediaUrn: "media:model-spec;textable", // NOT file-path
 				Required: true,
 				Sources: []cap.ArgSource{
-					stdinSource("media:model-spec;textable;form=scalar"),
+					stdinSource("media:model-spec;textable"),
 					positionSource(0),
 				},
 			},
@@ -965,7 +965,7 @@ func Test344FilePathArrayInvalidJSONFails(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1011,7 +1011,7 @@ func Test345FilePathArrayOneFileMissingFailsHard(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1061,7 +1061,7 @@ func Test346LargeFileReadsSuccessfully(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1101,7 +1101,7 @@ func Test347EmptyFileReadsAsEmptyBytes(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1142,7 +1142,7 @@ func Test348FilePathConversionRespectsSourceOrder(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					positionSource(0),          // First
@@ -1184,7 +1184,7 @@ func Test349FilePathMultipleSourcesFallback(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					cliFlagSource("--file"),    // First (not provided)
@@ -1227,7 +1227,7 @@ func Test350FullCLIModeWithFilePathIntegration(t *testing.T) {
 		"process",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:pdf"),
@@ -1297,7 +1297,7 @@ func Test351FilePathArrayEmptyArray(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: false, // Not required
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1353,7 +1353,7 @@ func Test352FilePermissionDeniedClearError(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1388,7 +1388,7 @@ func Test353CBORPayloadFormatConsistency(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:text;textable;form=scalar",
+				MediaUrn: "media:text;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:text;textable"),
@@ -1429,8 +1429,8 @@ func Test353CBORPayloadFormatConsistency(t *testing.T) {
 		t.Fatal("Expected argument to have media_urn and value fields")
 	}
 
-	if mediaUrn != "media:text;textable;form=scalar" {
-		t.Errorf("Expected media_urn 'media:text;textable;form=scalar', got: %s", mediaUrn)
+	if mediaUrn != "media:text;textable" {
+		t.Errorf("Expected media_urn 'media:text;textable', got: %s", mediaUrn)
 	}
 
 	if string(value) != "test value" {
@@ -1448,7 +1448,7 @@ func Test354GlobPatternNoMatchesEmptyArray(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1508,7 +1508,7 @@ func Test355GlobPatternSkipsDirectories(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1572,7 +1572,7 @@ func Test356MultipleGlobPatternsCombined(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1646,7 +1646,7 @@ func Test357SymlinksFollowed(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1687,7 +1687,7 @@ func Test358BinaryFileNonUTF8(t *testing.T) {
 		"test",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1727,7 +1727,7 @@ func Test359InvalidGlobPatternFails(t *testing.T) {
 		"batch",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=list",
+				MediaUrn: "media:file-path;textable;list",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:"),
@@ -1771,7 +1771,7 @@ func Test360ExtractEffectivePayloadWithFileData(t *testing.T) {
 		"process",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:pdf"),
@@ -1822,7 +1822,7 @@ func Test361CLIModeFilePath(t *testing.T) {
 		"process",
 		[]cap.CapArg{
 			{
-				MediaUrn: "media:file-path;textable;form=scalar",
+				MediaUrn: "media:file-path;textable",
 				Required: true,
 				Sources: []cap.ArgSource{
 					stdinSource("media:pdf"),
@@ -2105,7 +2105,7 @@ func Test364CBORModeFilePath(t *testing.T) {
 	// Build CBOR arguments with file-path URN
 	args := []cap.CapArgumentValue{
 		{
-			MediaUrn: "media:file-path;textable;form=scalar",
+			MediaUrn: "media:file-path;textable",
 			Value:    []byte(tempFile),
 		},
 	}
@@ -2140,7 +2140,7 @@ func Test364CBORModeFilePath(t *testing.T) {
 	mediaUrn, _ := argMap["media_urn"].(string)
 	value, _ := argMap["value"].([]byte)
 
-	if mediaUrn != "media:file-path;textable;form=scalar" {
+	if mediaUrn != "media:file-path;textable" {
 		t.Errorf("Expected media:file-path URN, got: %s", mediaUrn)
 	}
 	if string(value) != tempFile {
