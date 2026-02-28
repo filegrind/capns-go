@@ -61,11 +61,11 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	mockHost := &MockCapSet{}
 
 	// Common mediaSpecs for resolution
-	// Use media.MediaObject (="media:json;record;textable") which has record tag for IsMap()
+	// Use MediaJSON which has record marker for structured JSON data
 	mediaSpecs := []media.MediaSpecDef{
 		{Urn: "media:", MediaType: "application/octet-stream"},
 		{Urn: "media:textable", MediaType: "text/plain", ProfileURI: media.ProfileStr},
-		{Urn: media.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaJSON, MediaType: "application/json", ProfileURI: media.ProfileObj},
 	}
 
 	// Test binary cap using the 'out' tag with media URN - use proper binary tag
@@ -93,17 +93,17 @@ func TestCapCallerResolveOutputSpec(t *testing.T) {
 	assert.False(t, resolved2.IsBinary())
 	assert.True(t, resolved2.IsText())
 
-	// Test map cap with object output - use media.MediaObject which has record tag
-	mapCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="` + media.MediaObject + `"`)
+	// Test map cap with JSON object output - use MediaJSON which has record marker
+	mapCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="` + standard.MediaJSON + `"`)
 	require.NoError(t, err)
 
 	capDef3 := NewCap(mapCapUrn, "Test Capability", "test-command")
 	capDef3.SetMediaSpecs(mediaSpecs)
-	caller3 := NewCapCaller(`cap:in="media:void";op=generate;out="`+media.MediaObject+`"`, mockHost, capDef3)
+	caller3 := NewCapCaller(`cap:in="media:void";op=generate;out="`+standard.MediaJSON+`"`, mockHost, capDef3)
 
 	resolved3, err := caller3.resolveOutputSpec(registry)
 	require.NoError(t, err)
-	assert.True(t, resolved3.IsMap())
+	assert.True(t, resolved3.IsRecord())
 
 	// Test cap with unresolvable media URN - MUST FAIL (no mediaSpecs entry)
 	badSpecCapUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=generate;out="media:unknown"`)
@@ -162,9 +162,9 @@ func TestCapCallerWithArguments(t *testing.T) {
 	capUrn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:json;record;textable"`)
 	require.NoError(t, err)
 
-	// mediaSpecs for resolution - standard.MediaObject = "media:json;record;textable"
+	// mediaSpecs for resolution - standard.MediaJSON = "media:json;record;textable"
 	mediaSpecs := []media.MediaSpecDef{
-		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaJSON, MediaType: "application/json", ProfileURI: media.ProfileObj},
 		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
 	}
 
@@ -178,7 +178,7 @@ func TestCapCallerWithArguments(t *testing.T) {
 		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "Input file",
 	})
-	capDef.SetOutput(NewCapOutput(standard.MediaObject, "Process output"))
+	capDef.SetOutput(NewCapOutput(standard.MediaJSON, "Process output"))
 
 	mockHost := &MockCapSet{
 		returnResult: &HostResult{

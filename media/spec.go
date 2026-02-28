@@ -197,12 +197,6 @@ func (r *ResolvedMediaSpec) IsRecord() bool {
 	return HasMediaUrnMarkerTag(r.SpecID, "record")
 }
 
-// IsMap is deprecated, use IsRecord instead.
-// Returns true if this has the record marker (structured key-value data).
-func (r *ResolvedMediaSpec) IsMap() bool {
-	return r.IsRecord()
-}
-
 // IsOpaque returns true if no record marker is present (opaque = default structure).
 func (r *ResolvedMediaSpec) IsOpaque() bool {
 	return !r.IsRecord()
@@ -449,7 +443,7 @@ func resolveMediaSpecDef(def *MediaSpecDef) (*ResolvedMediaSpec, error) {
 
 // GetTypeFromMediaUrn returns the base type (string, integer, number, boolean, object, binary, etc.) from a media URN
 // This is useful for validation to determine what Go type to expect
-// Determines type based on media URN tags: no textable->binary, record->object, list->array, etc.
+// Determines type based on media URN marker tags: no textable->binary, record marker->object, list marker->array, etc.
 func GetTypeFromMediaUrn(mediaUrn string) string {
 	// Parse the media URN to check tags
 	parsed, err := taggedurn.NewTaggedUrnFromString(mediaUrn)
@@ -457,29 +451,32 @@ func GetTypeFromMediaUrn(mediaUrn string) string {
 		return "unknown"
 	}
 
-	// Check for binary (no "textable" tag)
-	if _, ok := parsed.GetTag("textable"); !ok {
-		return "binary"
-	}
-
 	// Check for void
 	if _, ok := parsed.GetTag("void"); ok {
 		return "void"
 	}
 
-	// Check form tag for structure type
-	if form, ok := parsed.GetTag("form"); ok {
-		switch form {
-		case "map":
-			return "object"
-		case "list":
-			return "array"
-		case "scalar":
-			// Explicit scalar - check specific type tags below
-		}
+	// Check for binary (no "textable" tag)
+	if _, ok := parsed.GetTag("textable"); !ok {
+		return "binary"
 	}
 
-	// Check specific type tags (works regardless of whether form is specified)
+	// Check for record marker (has internal key-value structure)
+	if val, ok := parsed.GetTag("record"); ok && val == "*" {
+		return "object"
+	}
+
+	// Check for explicit json tag (also represents object)
+	if _, ok := parsed.GetTag("json"); ok {
+		return "object"
+	}
+
+	// Check for list marker (array/list cardinality)
+	if val, ok := parsed.GetTag("list"); ok && val == "*" {
+		return "array"
+	}
+
+	// Check specific type tags (for scalar types)
 	if _, ok := parsed.GetTag("integer"); ok {
 		return "integer"
 	}

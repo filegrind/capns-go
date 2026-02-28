@@ -81,15 +81,15 @@ func Test061_is_binary(t *testing.T) {
 func Test062_is_map(t *testing.T) {
 	mapUrn, err := NewMediaUrnFromString(standard.MediaObject)
 	require.NoError(t, err)
-	assert.True(t, mapUrn.IsMap())
+	assert.True(t, mapUrn.IsRecord())
 
 	customMap, err := NewMediaUrnFromString("media:custom;record")
 	require.NoError(t, err)
-	assert.True(t, customMap.IsMap())
+	assert.True(t, customMap.IsRecord())
 
 	scalar, err := NewMediaUrnFromString("media:string")
 	require.NoError(t, err)
-	assert.False(t, scalar.IsMap())
+	assert.False(t, scalar.IsRecord())
 }
 
 // TEST063: Test is_scalar returns true when no list marker is present (scalar = default cardinality)
@@ -341,7 +341,7 @@ func Test304_media_availability_output_constant(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:model-availability;textable;record")
 	require.NoError(t, err)
 	assert.True(t, urn.IsTextable())
-	assert.True(t, urn.IsMap())
+	assert.True(t, urn.IsRecord())
 	assert.False(t, urn.IsBinary())
 }
 
@@ -350,7 +350,7 @@ func Test305_media_path_output_constant(t *testing.T) {
 	urn, err := NewMediaUrnFromString("media:model-path;textable;record")
 	require.NoError(t, err)
 	assert.True(t, urn.IsTextable())
-	assert.True(t, urn.IsMap())
+	assert.True(t, urn.IsRecord())
 	assert.False(t, urn.IsBinary())
 }
 
@@ -598,7 +598,7 @@ func Test558_predicate_constant_consistency(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, jsonUrn.IsJson())
 	assert.True(t, jsonUrn.IsTextable())
-	assert.True(t, jsonUrn.IsMap())
+	assert.True(t, jsonUrn.IsRecord())
 	assert.True(t, jsonUrn.IsStructured())
 	assert.False(t, jsonUrn.IsBinary())
 	assert.False(t, jsonUrn.IsList())

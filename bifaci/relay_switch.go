@@ -154,12 +154,6 @@ func NewRelaySwitch(sockets []SocketPair) (*RelaySwitch, error) {
 					return
 				}
 
-				// Intercept RelayNotify
-				if frame.FrameType == FrameTypeRelayNotify {
-					// TODO: handle dynamic updates
-					continue
-				}
-
 				frameRx <- MasterFrame{MasterIdx: idx, Frame: frame, Err: nil}
 			}
 		}()
@@ -472,6 +466,37 @@ func (sw *RelaySwitch) handleMasterFrame(sourceIdx int, frame *Frame) (*Frame, e
 		}
 
 		return frame, nil
+
+	case FrameTypeRelayNotify:
+		// Capability update from host — update our cap table
+		manifest := frame.RelayNotifyManifest()
+		if manifest == nil {
+			return nil, &RelaySwitchError{
+				Type:    RelaySwitchErrorTypeProtocol,
+				Message: "RelayNotify has no payload",
+			}
+		}
+
+		newCaps, err := parseCapabilitiesFromManifest(manifest)
+		if err != nil {
+			return nil, err
+		}
+
+		// Update master's caps and limits
+		if sourceIdx >= 0 && sourceIdx < len(sw.masters) {
+			sw.masters[sourceIdx].caps = newCaps
+			sw.masters[sourceIdx].manifest = manifest
+			// Extract and update limits from RelayNotify
+			if limits := frame.RelayNotifyLimits(); limits != nil {
+				sw.masters[sourceIdx].limits = *limits
+			}
+		}
+
+		// Rebuild aggregate capability table
+		sw.rebuildCapTable()
+
+		// RelayNotify is consumed internally, don't forward to engine
+		return nil, nil
 
 	default:
 		return frame, nil

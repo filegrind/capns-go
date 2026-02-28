@@ -226,7 +226,7 @@ func Test099_resolved_is_binary(t *testing.T) {
 		Extensions:  []string{},
 	}
 	assert.True(t, resolved.IsBinary())
-	assert.False(t, resolved.IsMap())
+	assert.False(t, resolved.IsRecord())
 	assert.False(t, resolved.IsJSON())
 }
 
@@ -243,7 +243,7 @@ func Test100_resolved_is_map(t *testing.T) {
 		Metadata:    nil,
 		Extensions:  []string{},
 	}
-	assert.True(t, resolved.IsMap())
+	assert.True(t, resolved.IsRecord())
 	assert.True(t, resolved.IsRecord())
 	assert.False(t, resolved.IsBinary())
 	assert.True(t, resolved.IsScalar()) // record is still scalar (no list marker)
@@ -264,7 +264,7 @@ func Test101_resolved_is_scalar(t *testing.T) {
 		Extensions:  []string{},
 	}
 	assert.True(t, resolved.IsScalar())
-	assert.False(t, resolved.IsMap())
+	assert.False(t, resolved.IsRecord())
 	assert.False(t, resolved.IsList())
 }
 
@@ -282,7 +282,7 @@ func Test102_resolved_is_list(t *testing.T) {
 		Extensions:  []string{},
 	}
 	assert.True(t, resolved.IsList())
-	assert.False(t, resolved.IsMap())
+	assert.False(t, resolved.IsRecord())
 	assert.False(t, resolved.IsScalar())
 }
 
@@ -300,7 +300,7 @@ func Test103_resolved_is_json(t *testing.T) {
 		Extensions:  []string{},
 	}
 	assert.True(t, resolved.IsJSON())
-	assert.True(t, resolved.IsMap())
+	assert.True(t, resolved.IsRecord())
 	assert.False(t, resolved.IsBinary())
 }
 

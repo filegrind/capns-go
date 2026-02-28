@@ -29,9 +29,9 @@ func createTestRegistry(t *testing.T) *media.MediaUrnRegistry {
 // Test helper for integration tests - use proper media URNs with tags
 func intTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:record;textable"`
+		return `cap:in="media:void";out="media:json;record;textable"`
 	}
-	return `cap:in="media:void";out="media:record;textable";` + tags
+	return `cap:in="media:void";out="media:json;record;textable";` + tags
 }
 
 // MockCapSet implements CapSet for testing
@@ -65,7 +65,7 @@ func TestIntegrationVersionlessCapCreation(t *testing.T) {
 
 	// Verify the cap has direction specs in canonical form
 	assert.Contains(t, capDef.UrnString(), `in=media:void`)
-	assert.Contains(t, capDef.UrnString(), `out="media:record;textable"`)
+	assert.Contains(t, capDef.UrnString(), `out="media:json;record;textable"`)
 	assert.Equal(t, "transform-command", capDef.Command)
 
 	// Test case 2: Create cap with description but no version
@@ -113,7 +113,7 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 	// Test case 4: Builder preserves value case
 	urn3, err := urn.NewCapUrnBuilder().
 		InSpec(standard.MediaVoid).
-		OutSpec(standard.MediaObject).
+		OutSpec(standard.MediaJSON).
 		Tag("OP", "Transform").
 		Tag("Format", "JSON").
 		Build()
@@ -127,15 +127,15 @@ func TestIntegrationCaseInsensitiveUrns(t *testing.T) {
 func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	registry := createTestRegistry(t)
 	// Setup test cap definition with media URNs - use proper tags
-	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:record;textable";target=metadata`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=extract;out="media:json;record;textable";target=metadata`)
 	require.NoError(t, err)
 
 	capDef := cap.NewCap(urn, "Metadata Extractor", "extract-metadata")
-	capDef.SetOutput(cap.NewCapOutput(standard.MediaObject, "Extracted metadata"))
+	capDef.SetOutput(cap.NewCapOutput(standard.MediaJSON, "Extracted metadata"))
 
 	// Add mediaSpecs for resolution
 	capDef.SetMediaSpecs([]media.MediaSpecDef{
-		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaJSON, MediaType: "application/json", ProfileURI: media.ProfileObj},
 		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
 	})
 
@@ -157,7 +157,7 @@ func TestIntegrationCallerAndResponseSystem(t *testing.T) {
 	}
 
 	// Create caller
-	caller := cap.NewCapCaller(`cap:in="media:void";op=extract;out="media:record;textable";target=metadata`, mockHost, capDef)
+	caller := cap.NewCapCaller(`cap:in="media:void";op=extract;out="media:json;record;textable";target=metadata`, mockHost, capDef)
 
 	// Test call with unified argument
 	ctx := context.Background()
@@ -337,14 +337,14 @@ func TestIntegrationCapValidation(t *testing.T) {
 	coordinator := cap.NewCapValidationCoordinator()
 
 	// Create a cap with arguments - use proper tags
-	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:record;textable";target=data`)
+	urn, err := urn.NewCapUrnFromString(`cap:in="media:void";op=process;out="media:json;record;textable";target=data`)
 	require.NoError(t, err)
 
 	capDef := cap.NewCap(urn, "Data Processor", "process-data")
 
 	// Add mediaSpecs for resolution
 	capDef.SetMediaSpecs([]media.MediaSpecDef{
-		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaJSON, MediaType: "application/json", ProfileURI: media.ProfileObj},
 		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
 	})
 
@@ -359,7 +359,7 @@ func TestIntegrationCapValidation(t *testing.T) {
 	})
 
 	// Set output
-	capDef.SetOutput(cap.NewCapOutput(standard.MediaObject, "Processing result"))
+	capDef.SetOutput(cap.NewCapOutput(standard.MediaJSON, "Processing result"))
 
 	// Register cap
 	coordinator.RegisterCap(capDef)
@@ -380,7 +380,7 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	// mediaSpecs for resolution - no built-in resolution, must provide specs
 	mediaSpecs := []media.MediaSpecDef{
 		{Urn: standard.MediaString, MediaType: "text/plain", ProfileURI: media.ProfileStr},
-		{Urn: standard.MediaObject, MediaType: "application/json", ProfileURI: media.ProfileObj},
+		{Urn: standard.MediaJSON, MediaType: "application/json", ProfileURI: media.ProfileObj},
 		{Urn: standard.MediaBinary, MediaType: "application/octet-stream"},
 	}
 
@@ -393,13 +393,13 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 	assert.False(t, resolved.IsJSON())
 	assert.True(t, resolved.IsText())
 
-	// Test object media URN
-	resolved, err = media.ResolveMediaUrn(standard.MediaObject, mediaSpecs, registry)
+	// Test JSON media URN
+	resolved, err = media.ResolveMediaUrn(standard.MediaJSON, mediaSpecs, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "application/json", resolved.MediaType)
 	assert.True(t, resolved.IsRecord())
 	assert.True(t, resolved.IsStructured())
-	assert.False(t, resolved.IsJSON())
+	assert.True(t, resolved.IsJSON()) // MediaJSON has json marker tag
 
 	// Test binary media URN
 	resolved, err = media.ResolveMediaUrn(standard.MediaBinary, mediaSpecs, registry)

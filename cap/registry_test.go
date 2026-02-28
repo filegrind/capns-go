@@ -34,9 +34,9 @@ func Test136_cache_key_generation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Use URNs with required in/out
-	urn1 := `cap:in="media:void";op=extract;out="media:record;target=metadata"`
-	urn2 := `cap:in="media:void";op=extract;out="media:record;target=metadata"`
-	urn3 := `cap:in="media:void";op=different;out="media:object"`
+	urn1 := `cap:in="media:void";op=extract;out="media:json;record;textable;target=metadata"`
+	urn2 := `cap:in="media:void";op=extract;out="media:json;record;textable;target=metadata"`
+	urn3 := `cap:in="media:void";op=different;out="media:json;record;textable"`
 
 	key1 := registry.cacheKey(urn1)
 	key2 := registry.cacheKey(urn2)

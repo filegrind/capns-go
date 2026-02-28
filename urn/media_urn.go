@@ -196,16 +196,6 @@ func (m *MediaUrn) IsOpaque() bool {
 	return !m.hasMarkerTag("record")
 }
 
-// =========================================================================
-// DEPRECATED: Old form-based methods (use new marker-based methods above)
-// =========================================================================
-
-// IsMap is deprecated, use IsRecord instead.
-// Returns true if this has the record marker (structured key-value data).
-func (m *MediaUrn) IsMap() bool {
-	return m.IsRecord()
-}
-
 // IsStructured returns true for record data (has internal structure).
 // For list detection, use IsList separately.
 func (m *MediaUrn) IsStructured() bool {
@@ -264,11 +254,6 @@ func (m *MediaUrn) IsFilePathArray() bool {
 // IsAnyFilePath returns true if this has the "file-path" marker tag (single or array)
 func (m *MediaUrn) IsAnyFilePath() bool {
 	return m.HasTag("file-path")
-}
-
-// IsCollection returns true if this has the "collection" marker tag
-func (m *MediaUrn) IsCollection() bool {
-	return m.HasTag("collection")
 }
 
 // GetExtension returns the ext tag value if present

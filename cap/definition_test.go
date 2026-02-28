@@ -14,9 +14,9 @@ import (
 // Test helper to create URNs with required in/out specs
 func capTestUrn(tags string) string {
 	if tags == "" {
-		return `cap:in="media:void";out="media:record"`
+		return `cap:in="media:void";out="media:json;record;textable"`
 	}
-	return `cap:in="media:void";out="media:record";` + tags
+	return `cap:in="media:void";out="media:json;record;textable";` + tags
 }
 
 // TEST108: Test creating new cap with URN, title, and command verifies correct initialization
@@ -323,7 +323,7 @@ func TestCapJSONRoundTrip(t *testing.T) {
 		Sources:        []ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "Input text",
 	})
-	cap.SetOutput(NewCapOutput(standard.MediaObject, "Output object"))
+	cap.SetOutput(NewCapOutput(standard.MediaJSON, "Output object"))
 
 	// Serialize to JSON
 	jsonData, err := json.Marshal(cap)
