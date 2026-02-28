@@ -77,19 +77,33 @@ func Test061_is_binary(t *testing.T) {
 	assert.False(t, jsonUrn.IsBinary(), "MEDIA_JSON should NOT be binary")
 }
 
-// TEST062: Test is_map returns true when record tag is present indicating key-value structure
-func Test062_is_map(t *testing.T) {
-	mapUrn, err := NewMediaUrnFromString(standard.MediaObject)
+// TEST062: Test is_record returns true when record marker tag is present indicating key-value structure
+func Test062_is_record(t *testing.T) {
+	// is_record returns true if record marker tag is present (key-value structure)
+	recordUrn, err := NewMediaUrnFromString(standard.MediaObject)
 	require.NoError(t, err)
-	assert.True(t, mapUrn.IsRecord())
+	assert.True(t, recordUrn.IsRecord()) // "media:record"
 
-	customMap, err := NewMediaUrnFromString("media:custom;record")
+	customRecord, err := NewMediaUrnFromString("media:custom;record")
 	require.NoError(t, err)
-	assert.True(t, customMap.IsRecord())
+	assert.True(t, customRecord.IsRecord())
 
-	scalar, err := NewMediaUrnFromString("media:string")
+	jsonUrn, err := NewMediaUrnFromString(standard.MediaJSON)
+	require.NoError(t, err)
+	assert.True(t, jsonUrn.IsRecord()) // "media:json;record;textable"
+
+	// Without record marker, is_record is false
+	scalar, err := NewMediaUrnFromString("media:textable")
 	require.NoError(t, err)
 	assert.False(t, scalar.IsRecord())
+
+	stringUrn, err := NewMediaUrnFromString(standard.MediaString)
+	require.NoError(t, err)
+	assert.False(t, stringUrn.IsRecord()) // scalar, no record marker
+
+	arrayUrn, err := NewMediaUrnFromString(standard.MediaStringArray)
+	require.NoError(t, err)
+	assert.False(t, arrayUrn.IsRecord()) // list, no record marker
 }
 
 // TEST063: Test is_scalar returns true when no list marker is present (scalar = default cardinality)

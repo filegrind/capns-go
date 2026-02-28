@@ -1,6 +1,6 @@
 module github.com/filegrind/capns-go
 
-// version: 0.154.59509
+// version: 0.155.59726
 
 go 1.21
 
