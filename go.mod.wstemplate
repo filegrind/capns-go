@@ -1,18 +1,18 @@
-module github.com/filegrind/capns-go
+module github.com/machinefabric/capns-go
 
 // version: {{ project.version }}
 
 go 1.21
 
 require (
-	github.com/filegrind/tagged-urn-go v0.0.0
+	github.com/machinefabric/tagged-urn-go v0.0.0
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.8.4
 	github.com/xeipuuv/gojsonschema v1.2.0
 )
 
-replace github.com/filegrind/tagged-urn-go => ../tagged-urn-go
+replace github.com/machinefabric/tagged-urn-go => ../tagged-urn-go
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect

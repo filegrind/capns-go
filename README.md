@@ -1,6 +1,6 @@
 # Cap URN - Go Implementation
 
-Go implementation of Cap URN (Capability Uniform Resource Names), built on [Tagged URN](https://github.com/filegrind/tagged-urn-go).
+Go implementation of Cap URN (Capability Uniform Resource Names), built on [Tagged URN](https://github.com/machinefabric/tagged-urn-go).
 
 ## Features
 
@@ -16,7 +16,7 @@ Go implementation of Cap URN (Capability Uniform Resource Names), built on [Tagg
 ## Installation
 
 ```bash
-go get github.com/filegrind/capns-go
+go get github.com/machinefabric/capns-go
 ```
 
 ## Quick Start
@@ -28,7 +28,7 @@ import (
     "fmt"
     "log"
 
-    "github.com/filegrind/capns-go"
+    "github.com/machinefabric/capns-go"
 )
 
 func main() {
@@ -149,7 +149,7 @@ host, cap, err := matrix.FindBestCapSet(requestUrn)
 | 11 | `ErrorMissingOutSpec` | Missing required `out` tag |
 | 12 | `ErrorInvalidMediaUrn` | Invalid Media URN in direction spec |
 
-For base Tagged URN error codes, see [Tagged URN documentation](https://github.com/filegrind/tagged-urn-go).
+For base Tagged URN error codes, see [Tagged URN documentation](https://github.com/machinefabric/tagged-urn-go).
 
 ## Testing
 
@@ -160,10 +160,10 @@ go test -v ./...
 ## Cross-Language Compatibility
 
 This Go implementation produces identical results to:
-- [Rust reference implementation](https://github.com/filegrind/capns)
-- [JavaScript implementation](https://github.com/filegrind/capns-js)
-- [Objective-C implementation](https://github.com/filegrind/capns-objc)
+- [Rust reference implementation](https://github.com/machinefabric/capns)
+- [JavaScript implementation](https://github.com/machinefabric/capns-js)
+- [Objective-C implementation](https://github.com/machinefabric/capns-objc)
 
 All implementations follow the same rules. See:
-- [Cap URN RULES.md](https://github.com/filegrind/capns/blob/main/docs/RULES.md) - Cap-specific rules
-- [Tagged URN RULES.md](https://github.com/filegrind/tagged-urn-rs/blob/main/docs/RULES.md) - Base format rules
+- [Cap URN RULES.md](https://github.com/machinefabric/capns/blob/main/docs/RULES.md) - Cap-specific rules
+- [Tagged URN RULES.md](https://github.com/machinefabric/tagged-urn-rs/blob/main/docs/RULES.md) - Base format rules

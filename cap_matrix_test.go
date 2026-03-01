@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/filegrind/capns-go/standard"
+	"github.com/machinefabric/capns-go/standard"
 )
 
 // MockCapSetForRegistry for testing (avoid conflict with existing MockCapSet)

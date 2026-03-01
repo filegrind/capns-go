@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/filegrind/capns-go/cap"
-	"github.com/filegrind/capns-go/urn"
-	taggedurn "github.com/filegrind/tagged-urn-go"
+	"github.com/machinefabric/capns-go/cap"
+	"github.com/machinefabric/capns-go/urn"
+	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 
 // CapMatrixError represents errors that can occur during capability host operations

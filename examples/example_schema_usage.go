@@ -5,7 +5,7 @@ package main
 import (
 	"fmt"
 
-	capns "github.com/macina/cap-sdk-go"
+	capns "github.com/machfab/cap-sdk-go"
 )
 
 func main() {

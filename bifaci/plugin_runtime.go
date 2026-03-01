@@ -12,9 +12,9 @@ import (
 
 	cborlib "github.com/fxamacker/cbor/v2"
 
-	"github.com/filegrind/capns-go/cap"
-	"github.com/filegrind/capns-go/urn"
-	taggedurn "github.com/filegrind/tagged-urn-go"
+	"github.com/machinefabric/capns-go/cap"
+	"github.com/machinefabric/capns-go/urn"
+	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 
 // Media URN constants for file-path conversion

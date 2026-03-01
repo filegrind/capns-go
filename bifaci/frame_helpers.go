@@ -5,8 +5,8 @@ import (
 
 	cborlib "github.com/fxamacker/cbor/v2"
 
-	"github.com/filegrind/capns-go/cap"
-	taggedurn "github.com/filegrind/tagged-urn-go"
+	"github.com/machinefabric/capns-go/cap"
+	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 
 // CollectArgsByMediaUrn collects all argument streams that match the given media URN pattern.

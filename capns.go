@@ -5,11 +5,11 @@ package capns
 
 // Re-export URN module
 import (
-	"github.com/filegrind/capns-go/bifaci"
-	"github.com/filegrind/capns-go/cap"
-	"github.com/filegrind/capns-go/media"
-	"github.com/filegrind/capns-go/standard"
-	"github.com/filegrind/capns-go/urn"
+	"github.com/machinefabric/capns-go/bifaci"
+	"github.com/machinefabric/capns-go/cap"
+	"github.com/machinefabric/capns-go/media"
+	"github.com/machinefabric/capns-go/standard"
+	"github.com/machinefabric/capns-go/urn"
 )
 
 // URN types and functions

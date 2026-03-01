@@ -263,7 +263,7 @@ func (s *PluginRepoServer) TransformToPluginArray() ([]PluginInfo, error) {
 		})
 
 		// Build flat plugin object
-		packageUrl := fmt.Sprintf("https://filegrind.com/plugins/packages/%s", versionData.Package.Name)
+		packageUrl := fmt.Sprintf("https://machinefabric.com/plugins/packages/%s", versionData.Package.Name)
 		pageUrl := plugin.PageUrl
 		if pageUrl == "" {
 			pageUrl = packageUrl

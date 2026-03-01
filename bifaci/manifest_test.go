@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/filegrind/capns-go/cap"
-	"github.com/filegrind/capns-go/standard"
-	"github.com/filegrind/capns-go/urn"
+	"github.com/machinefabric/capns-go/cap"
+	"github.com/machinefabric/capns-go/standard"
+	"github.com/machinefabric/capns-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

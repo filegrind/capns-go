@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/filegrind/capns-go/urn"
+	"github.com/machinefabric/capns-go/urn"
 )
 
 const (

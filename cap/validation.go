@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/filegrind/capns-go/media"
+	"github.com/machinefabric/capns-go/media"
 )
 
 // ValidationError represents validation errors with descriptive failure information

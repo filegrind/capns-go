@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/filegrind/capns-go/media"
+	"github.com/machinefabric/capns-go/media"
 )
 
 // ResponseWrapper provides unified response wrapper for all plugin operations

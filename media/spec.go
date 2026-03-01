@@ -16,8 +16,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/filegrind/capns-go/urn"
-	taggedurn "github.com/filegrind/tagged-urn-go"
+	"github.com/machinefabric/capns-go/urn"
+	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 
 // Built-in media URN constants with coercion tags

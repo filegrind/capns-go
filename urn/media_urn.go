@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/filegrind/capns-go/standard"
-	taggedurn "github.com/filegrind/tagged-urn-go"
+	"github.com/machinefabric/capns-go/standard"
+	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 
 // MediaUrn represents a media type URN with semantic tags

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/filegrind/capns-go/urn"
+	"github.com/machinefabric/capns-go/urn"
 )
 
 // MediaValidation represents validation rules for media data

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/filegrind/capns-go/media"
-	"github.com/filegrind/capns-go/urn"
+	"github.com/machinefabric/capns-go/media"
+	"github.com/machinefabric/capns-go/urn"
 )
 
 // StdinSourceKind identifies the type of stdin source

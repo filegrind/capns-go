@@ -3,9 +3,9 @@ package cap
 import (
 	"testing"
 
-	"github.com/filegrind/capns-go/media"
-	"github.com/filegrind/capns-go/standard"
-	"github.com/filegrind/capns-go/urn"
+	"github.com/machinefabric/capns-go/media"
+	"github.com/machinefabric/capns-go/standard"
+	"github.com/machinefabric/capns-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/filegrind/capns-go/media"
+	"github.com/machinefabric/capns-go/media"
 	"github.com/xeipuuv/gojsonschema"
 )
 

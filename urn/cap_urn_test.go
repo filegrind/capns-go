@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/filegrind/capns-go/standard"
+	"github.com/machinefabric/capns-go/standard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
