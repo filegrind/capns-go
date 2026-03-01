@@ -2,7 +2,7 @@ module testplugin
 
 go 1.21
 
-require github.com/machinafabric/capns-go v0.0.0
+require github.com/machinafabric/capdag-go v0.0.0
 
 require (
 	github.com/machinafabric/tagged-urn-go v0.0.0 // indirect
@@ -14,6 +14,6 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 )
 
-replace github.com/machinafabric/capns-go => ../..
+replace github.com/machinafabric/capdag-go => ../..
 
 replace github.com/machinafabric/tagged-urn-go => ../../../tagged-urn-go
