@@ -1,10 +1,10 @@
-package capns
+package capdag
 
 import (
 	"context"
 	"testing"
 
-	"github.com/machinefabric/capns-go/standard"
+	"github.com/machinefabric/capdag-go/standard"
 )
 
 // MockCapSetForRegistry for testing (avoid conflict with existing MockCapSet)

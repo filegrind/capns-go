@@ -12,8 +12,8 @@ import (
 
 	cborlib "github.com/fxamacker/cbor/v2"
 
-	"github.com/machinefabric/capns-go/cap"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/cap"
+	"github.com/machinefabric/capdag-go/urn"
 	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 
@@ -194,7 +194,7 @@ func (pr *PluginRuntime) Register(capUrn string, handler HandlerFunc) {
 
 // Request bundles the handler's input frames, output emitter, and peer invoker into a
 // single object. Struct-based handlers (CapHandler) receive a *Request instead of the
-// three separate HandlerFunc parameters. Mirrors the Rust capns Request type.
+// three separate HandlerFunc parameters. Mirrors the Rust capdag Request type.
 type Request struct {
 	frames  <-chan Frame
 	emitter StreamEmitter

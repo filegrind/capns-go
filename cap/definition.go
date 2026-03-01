@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/machinefabric/capns-go/media"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/media"
+	"github.com/machinefabric/capdag-go/urn"
 )
 
 // ArgSource specifies how an argument can be provided

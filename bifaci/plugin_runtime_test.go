@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/machinefabric/capns-go/cap"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/cap"
+	"github.com/machinefabric/capdag-go/urn"
 	cborlib "github.com/fxamacker/cbor/v2"
 )
 

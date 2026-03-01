@@ -8,7 +8,7 @@ import (
 )
 
 // CBOR map keys (MUST match Rust implementation exactly)
-// From capns/src/cbor_frame.rs lines 10-22:
+// From capdag/src/cbor_frame.rs lines 10-22:
 const (
 	keyVersion     = 0  // version (u8, always 2)
 	keyFrameType   = 1  // frame_type (u8)

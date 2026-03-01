@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/machinefabric/capns-go/media"
-	"github.com/machinefabric/capns-go/standard"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/media"
+	"github.com/machinefabric/capdag-go/standard"
+	"github.com/machinefabric/capdag-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

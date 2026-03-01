@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/machinefabric/capns-go/cap"
-	"github.com/machinefabric/capns-go/media"
-	"github.com/machinefabric/capns-go/standard"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/cap"
+	"github.com/machinefabric/capdag-go/media"
+	"github.com/machinefabric/capdag-go/standard"
+	"github.com/machinefabric/capdag-go/urn"
 	cbor2 "github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -424,10 +424,10 @@ func TestIntegrationMediaUrnResolution(t *testing.T) {
 // TestIntegrationMediaSpecDefConstruction verifies media.MediaSpecDef construction
 func TestIntegrationMediaSpecDefConstruction(t *testing.T) {
 	// Test basic construction
-	def := media.NewMediaSpecDef("media:test;textable", "text/plain", "https://capns.org/schema/str")
+	def := media.NewMediaSpecDef("media:test;textable", "text/plain", "https://capdag.com/schema/str")
 	assert.Equal(t, "media:test;textable", def.Urn)
 	assert.Equal(t, "text/plain", def.MediaType)
-	assert.Equal(t, "https://capns.org/schema/str", def.ProfileURI)
+	assert.Equal(t, "https://capdag.com/schema/str", def.ProfileURI)
 
 	// Test with title
 	defWithTitle := media.NewMediaSpecDefWithTitle("media:test;textable", "text/plain", "https://example.com/schema", "Test Title")

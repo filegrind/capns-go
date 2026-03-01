@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/machinefabric/capns-go/standard"
+	"github.com/machinefabric/capdag-go/standard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

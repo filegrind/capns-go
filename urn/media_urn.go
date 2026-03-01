@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/machinefabric/capns-go/standard"
+	"github.com/machinefabric/capdag-go/standard"
 	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 

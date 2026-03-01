@@ -1,4 +1,4 @@
-module github.com/machinefabric/capns-go
+module github.com/machinefabric/capdag-go
 
 // version: {{ project.version }}
 

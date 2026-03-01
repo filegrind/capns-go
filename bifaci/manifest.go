@@ -2,9 +2,9 @@
 package bifaci
 
 import (
-	"github.com/machinefabric/capns-go/cap"
-	"github.com/machinefabric/capns-go/standard"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/cap"
+	"github.com/machinefabric/capdag-go/standard"
+	"github.com/machinefabric/capdag-go/urn"
 )
 
 // CapManifest represents unified cap manifest for --manifest output

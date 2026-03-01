@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/urn"
 )
 
 const (
-	DefaultRegistryBaseURL = "https://capns.org"
+	DefaultRegistryBaseURL = "https://capdag.com"
 	CacheDurationHours     = 24
 	HTTPTimeoutSeconds     = 10
 )
@@ -31,15 +31,15 @@ type RegistryConfig struct {
 // DefaultRegistryConfig returns config from environment variables or defaults
 //
 // Environment variables:
-//   - CAPNS_REGISTRY_URL: Base URL for the registry (default: https://capns.org)
-//   - CAPNS_SCHEMA_BASE_URL: Base URL for schemas (default: {registry_url}/schema)
+//   - CAPDAG_REGISTRY_URL: Base URL for the registry (default: https://capdag.com)
+//   - CAPDAG_SCHEMA_BASE_URL: Base URL for schemas (default: {registry_url}/schema)
 func DefaultRegistryConfig() RegistryConfig {
-	registryBase := os.Getenv("CAPNS_REGISTRY_URL")
+	registryBase := os.Getenv("CAPDAG_REGISTRY_URL")
 	if registryBase == "" {
 		registryBase = DefaultRegistryBaseURL
 	}
 
-	schemaBase := os.Getenv("CAPNS_SCHEMA_BASE_URL")
+	schemaBase := os.Getenv("CAPDAG_SCHEMA_BASE_URL")
 	if schemaBase == "" {
 		schemaBase = registryBase + "/schema"
 	}
@@ -82,7 +82,7 @@ func (e *CacheEntry) isExpired() bool {
 	return time.Now().Unix() > e.CachedAt+(e.TTLHours*3600)
 }
 
-// RegistryCapResponse represents the response format from capns.org registry
+// RegistryCapResponse represents the response format from capdag.com registry
 type RegistryCapResponse struct {
 	Urn            string            `json:"urn"` // URN in canonical string format
 	Title          string            `json:"title"`
@@ -119,7 +119,7 @@ func (r *RegistryCapResponse) ToCap() (*Cap, error) {
 	return cap, nil
 }
 
-// CapRegistry handles communication with the capns registry
+// CapRegistry handles communication with the capdag registry
 type CapRegistry struct {
 	client     *http.Client
 	cacheDir   string
@@ -292,7 +292,7 @@ func getCacheDir() (string, error) {
 		cacheBase = filepath.Join(homeDir, ".cache")
 	}
 
-	return filepath.Join(cacheBase, "capns"), nil
+	return filepath.Join(cacheBase, "capdag"), nil
 }
 
 func (r *CapRegistry) cacheKey(urn string) string {
@@ -436,7 +436,7 @@ func NewCapRegistryForTestWithConfig(config RegistryConfig) *CapRegistry {
 
 	return &CapRegistry{
 		client:     client,
-		cacheDir:   "/tmp/capns-test-cache",
+		cacheDir:   "/tmp/capdag-test-cache",
 		cachedCaps: make(map[string]*Cap),
 		config:     config,
 	}

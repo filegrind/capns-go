@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/urn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,7 +85,7 @@ func TestCacheOperations(t *testing.T) {
 // TEST137: Test parsing registry JSON without stdin args verifies cap structure
 func Test137_parse_registry_json(t *testing.T) {
 	// JSON without stdin args - means cap doesn't accept stdin
-	jsonData := `{"urn":"cap:in=\"media:listing-id\";op=use_grinder;out=\"media:task-id\"","command":"grinder_task","title":"Create Grinder Tool Task","cap_description":"Create a task for initial document analysis - first glance phase","metadata":{},"media_specs":[{"urn":"media:listing-id","media_type":"text/plain","title":"Listing ID","profile_uri":"https://machinefabric.com/schema/listing-id","schema":{"type":"string","pattern":"[0-9a-f-]{36}","description":"MachineFabric listing UUID"}},{"urn":"media:task-id","media_type":"application/json","title":"Task ID","profile_uri":"https://capns.org/schema/grinder_task-output","schema":{"type":"object","additionalProperties":false,"properties":{"task_id":{"type":"string","description":"ID of the created task"},"task_type":{"type":"string","description":"Type of task created"}},"required":["task_id","task_type"]}}],"args":[{"media_urn":"media:listing-id","required":true,"sources":[{"cli_flag":"--listing-id"}],"arg_description":"ID of the listing to analyze"}],"output":{"media_urn":"media:task-id","output_description":"Created task information"},"registered_by":{"username":"joeharshamshiri","registered_at":"2026-01-15T00:44:29.851Z"}}`
+	jsonData := `{"urn":"cap:in=\"media:listing-id\";op=use_grinder;out=\"media:task-id\"","command":"grinder_task","title":"Create Grinder Tool Task","cap_description":"Create a task for initial document analysis - first glance phase","metadata":{},"media_specs":[{"urn":"media:listing-id","media_type":"text/plain","title":"Listing ID","profile_uri":"https://machinefabric.com/schema/listing-id","schema":{"type":"string","pattern":"[0-9a-f-]{36}","description":"MachineFabric listing UUID"}},{"urn":"media:task-id","media_type":"application/json","title":"Task ID","profile_uri":"https://capdag.com/schema/grinder_task-output","schema":{"type":"object","additionalProperties":false,"properties":{"task_id":{"type":"string","description":"ID of the created task"},"task_type":{"type":"string","description":"Type of task created"}},"required":["task_id","task_type"]}}],"args":[{"media_urn":"media:listing-id","required":true,"sources":[{"cli_flag":"--listing-id"}],"arg_description":"ID of the listing to analyze"}],"output":{"media_urn":"media:task-id","output_description":"Created task information"},"registered_by":{"username":"joeharshamshiri","registered_at":"2026-01-15T00:44:29.851Z"}}`
 
 	var registryResp RegistryCapResponse
 	err := json.Unmarshal([]byte(jsonData), &registryResp)
@@ -171,8 +171,8 @@ func Test141_url_format_is_valid(t *testing.T) {
 	parsed, err := url.Parse(registryURL)
 	require.NoError(t, err, "Generated URL must be valid")
 
-	// Host should be capns.org
-	assert.Equal(t, "capns.org", parsed.Host, "Host must be capns.org")
+	// Host should be capdag.com
+	assert.Equal(t, "capdag.com", parsed.Host, "Host must be capdag.com")
 
 	// Raw URL string should start with the correct base
 	assert.True(t, strings.HasPrefix(registryURL, DefaultRegistryBaseURL+"/cap:"), "URL must start with base URL and /cap:")
@@ -189,13 +189,13 @@ func Test142_normalize_handles_different_tag_orders(t *testing.T) {
 	assert.Equal(t, url1, url2, "Different tag orders should produce the same URL")
 }
 
-// TEST143: Test default config uses capns.org or environment variable values
+// TEST143: Test default config uses capdag.com or environment variable values
 func Test143_default_config(t *testing.T) {
 	config := DefaultRegistryConfig()
-	// Default should use capns.org (unless env var is set)
-	registryURL := os.Getenv("CAPNS_REGISTRY_URL")
+	// Default should use capdag.com (unless env var is set)
+	registryURL := os.Getenv("CAPDAG_REGISTRY_URL")
 	if registryURL == "" {
-		assert.Contains(t, config.RegistryBaseURL, "capns.org", "Default registry URL should be capns.org")
+		assert.Contains(t, config.RegistryBaseURL, "capdag.com", "Default registry URL should be capdag.com")
 	} else {
 		assert.Equal(t, registryURL, config.RegistryBaseURL, "Registry URL should be from env var")
 	}

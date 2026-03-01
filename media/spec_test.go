@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/machinefabric/capns-go/standard"
+	"github.com/machinefabric/capdag-go/standard"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +27,7 @@ func Test088_resolve_from_registry_str(t *testing.T) {
 	resolved, err := ResolveMediaUrn("media:textable", nil, registry)
 	require.NoError(t, err)
 	assert.Equal(t, "text/plain", resolved.MediaType)
-	assert.Equal(t, "https://capns.org/schema/string", resolved.ProfileURI)
+	assert.Equal(t, "https://capdag.com/schema/string", resolved.ProfileURI)
 }
 
 // TEST089: Test resolving object media URN from registry returns JSON media type
@@ -402,7 +402,7 @@ func Test107_extensions_propagation(t *testing.T) {
 			Urn:         "media:custom-pdf",
 			MediaType:   "application/pdf",
 			Title:       "PDF Document",
-			ProfileURI:  "https://capns.org/schema/pdf",
+			ProfileURI:  "https://capdag.com/schema/pdf",
 			Schema:      nil,
 			Description: "A PDF document",
 			Validation:  nil,
@@ -482,7 +482,7 @@ func Test110_multiple_extensions(t *testing.T) {
 			Urn:         "media:image;jpeg",
 			MediaType:   "image/jpeg",
 			Title:       "JPEG Image",
-			ProfileURI:  "https://capns.org/schema/jpeg",
+			ProfileURI:  "https://capdag.com/schema/jpeg",
 			Schema:      nil,
 			Description: "JPEG image data",
 			Validation:  nil,

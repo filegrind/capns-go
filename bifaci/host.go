@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"sync"
 
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/urn"
 )
 
 // CapHandler is a function that handles a peer invoke request.

@@ -5,7 +5,7 @@ import (
 
 	cborlib "github.com/fxamacker/cbor/v2"
 
-	"github.com/machinefabric/capns-go/cap"
+	"github.com/machinefabric/capdag-go/cap"
 	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 

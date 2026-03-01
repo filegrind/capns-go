@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/urn"
 )
 
 // RelaySwitchError represents errors from relay switch operations

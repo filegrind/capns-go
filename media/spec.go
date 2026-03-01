@@ -1,4 +1,4 @@
-// Package capns provides MediaSpec parsing and media URN resolution
+// Package capdag provides MediaSpec parsing and media URN resolution
 //
 // Media URNs reference media type definitions in the media_specs array.
 // Format: `media:<type>` with optional tags.
@@ -16,7 +16,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/urn"
 	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 
@@ -73,48 +73,48 @@ const (
 
 // Profile URL constants (defaults, use GetSchemaBase() for configurable version)
 const (
-	SchemaBase       = "https://capns.org/schema"
-	ProfileStr       = "https://capns.org/schema/str"
-	ProfileInt       = "https://capns.org/schema/int"
-	ProfileNum       = "https://capns.org/schema/num"
-	ProfileBool      = "https://capns.org/schema/bool"
-	ProfileObj       = "https://capns.org/schema/obj"
-	ProfileStrArray  = "https://capns.org/schema/str-array"
-	ProfileIntArray  = "https://capns.org/schema/int-array"
-	ProfileNumArray  = "https://capns.org/schema/num-array"
-	ProfileBoolArray = "https://capns.org/schema/bool-array"
-	ProfileObjArray  = "https://capns.org/schema/obj-array"
-	ProfileVoid      = "https://capns.org/schema/void"
+	SchemaBase       = "https://capdag.com/schema"
+	ProfileStr       = "https://capdag.com/schema/str"
+	ProfileInt       = "https://capdag.com/schema/int"
+	ProfileNum       = "https://capdag.com/schema/num"
+	ProfileBool      = "https://capdag.com/schema/bool"
+	ProfileObj       = "https://capdag.com/schema/obj"
+	ProfileStrArray  = "https://capdag.com/schema/str-array"
+	ProfileIntArray  = "https://capdag.com/schema/int-array"
+	ProfileNumArray  = "https://capdag.com/schema/num-array"
+	ProfileBoolArray = "https://capdag.com/schema/bool-array"
+	ProfileObjArray  = "https://capdag.com/schema/obj-array"
+	ProfileVoid      = "https://capdag.com/schema/void"
 	// Semantic content type profiles
-	ProfileImage = "https://capns.org/schema/image"
-	ProfileAudio = "https://capns.org/schema/audio"
-	ProfileVideo = "https://capns.org/schema/video"
-	ProfileText  = "https://capns.org/schema/text"
+	ProfileImage = "https://capdag.com/schema/image"
+	ProfileAudio = "https://capdag.com/schema/audio"
+	ProfileVideo = "https://capdag.com/schema/video"
+	ProfileText  = "https://capdag.com/schema/text"
 	// Document type profiles (PRIMARY naming)
-	ProfilePdf  = "https://capns.org/schema/pdf"
-	ProfileEpub = "https://capns.org/schema/epub"
+	ProfilePdf  = "https://capdag.com/schema/pdf"
+	ProfileEpub = "https://capdag.com/schema/epub"
 	// Text format type profiles (PRIMARY naming)
-	ProfileMd   = "https://capns.org/schema/md"
-	ProfileTxt  = "https://capns.org/schema/txt"
-	ProfileRst  = "https://capns.org/schema/rst"
-	ProfileLog  = "https://capns.org/schema/log"
-	ProfileHtml = "https://capns.org/schema/html"
-	ProfileXml  = "https://capns.org/schema/xml"
-	ProfileJson = "https://capns.org/schema/json"
-	ProfileYaml = "https://capns.org/schema/yaml"
+	ProfileMd   = "https://capdag.com/schema/md"
+	ProfileTxt  = "https://capdag.com/schema/txt"
+	ProfileRst  = "https://capdag.com/schema/rst"
+	ProfileLog  = "https://capdag.com/schema/log"
+	ProfileHtml = "https://capdag.com/schema/html"
+	ProfileXml  = "https://capdag.com/schema/xml"
+	ProfileJson = "https://capdag.com/schema/json"
+	ProfileYaml = "https://capdag.com/schema/yaml"
 )
 
 // GetSchemaBase returns the schema base URL from environment variables or default
 //
 // Checks in order:
-//  1. CAPNS_SCHEMA_BASE_URL environment variable
-//  2. CAPNS_REGISTRY_URL environment variable + "/schema"
-//  3. Default: "https://capns.org/schema"
+//  1. CAPDAG_SCHEMA_BASE_URL environment variable
+//  2. CAPDAG_REGISTRY_URL environment variable + "/schema"
+//  3. Default: "https://capdag.com/schema"
 func GetSchemaBase() string {
-	if schemaURL := os.Getenv("CAPNS_SCHEMA_BASE_URL"); schemaURL != "" {
+	if schemaURL := os.Getenv("CAPDAG_SCHEMA_BASE_URL"); schemaURL != "" {
 		return schemaURL
 	}
-	if registryURL := os.Getenv("CAPNS_REGISTRY_URL"); registryURL != "" {
+	if registryURL := os.Getenv("CAPDAG_REGISTRY_URL"); registryURL != "" {
 		return registryURL + "/schema"
 	}
 	return SchemaBase
@@ -416,7 +416,7 @@ func ResolveMediaUrn(mediaUrn string, mediaSpecs []MediaSpecDef, registry *Media
 		}
 		// Registry lookup failed - log warning and continue to error
 		fmt.Printf("[WARN] Media URN '%s' not found in registry: %v - "+
-			"ensure it's defined in capns-dot-org/standard/media/\n",
+			"ensure it's defined in capdag-dot-com/standard/media/\n",
 			mediaUrn, err)
 	}
 

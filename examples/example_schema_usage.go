@@ -5,15 +5,15 @@ package main
 import (
 	"fmt"
 
-	capns "github.com/machfab/cap-sdk-go"
+	capdag "github.com/machfab/cap-sdk-go"
 )
 
 func main() {
 	// Example 1: Create capability with embedded schema
 	fmt.Println("=== Example 1: Basic Schema Validation ===")
 
-	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:record;textable";target=structured`)
-	cap := capns.NewCap(urn, "Query Command", "query-command")
+	urn, _ := capdag.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:record;textable";target=structured`)
+	cap := capdag.NewCap(urn, "Query Command", "query-command")
 
 	// Define JSON schema for user data
 	userSchema := map[string]interface{}{
@@ -37,7 +37,7 @@ func main() {
 	}
 
 	// Add custom media spec with schema
-	cap.AddMediaSpec("media:user;textable;record", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:user;textable;record", capdag.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/user",
 		userSchema,
@@ -46,16 +46,16 @@ func main() {
 	// Add argument with schema using new CapArg architecture
 	cliFlag := "--user"
 	pos := 0
-	userArg := capns.CapArg{
+	userArg := capdag.CapArg{
 		MediaUrn:       "media:user;textable;record",
 		Required:       true,
-		Sources:        []capns.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		Sources:        []capdag.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "User data",
 	}
 	cap.AddArg(userArg)
 
 	// Create validator and test
-	validator := capns.NewSchemaValidator()
+	validator := capdag.NewSchemaValidator()
 
 	// Valid data
 	validUser := map[string]interface{}{
@@ -65,7 +65,7 @@ func main() {
 	}
 
 	// Get registry for resolving media URNs
-	registry, err := capns.NewMediaUrnRegistry()
+	registry, err := capdag.NewMediaUrnRegistry()
 	if err != nil {
 		fmt.Printf("ERR Failed to create media URN registry: %v\n", err)
 		return
@@ -132,13 +132,13 @@ func main() {
 	}
 
 	// Add custom media spec for output with schema
-	cap.AddMediaSpec("media:query-result;textable;record", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:query-result;textable;record", capdag.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-result",
 		outputSchema,
 	))
 
-	output := capns.NewCapOutput("media:query-result;textable;record", "Query results")
+	output := capdag.NewCapOutput("media:query-result;textable;record", "Query results")
 	cap.SetOutput(output)
 
 	// Valid output
@@ -167,7 +167,7 @@ func main() {
 	// Example 3: Integration with CapValidationCoordinator
 	fmt.Println("\n=== Example 3: Full Integration ===")
 
-	coordinator := capns.NewCapValidationCoordinator()
+	coordinator := capdag.NewCapValidationCoordinator()
 	coordinator.RegisterCap(cap)
 
 	// Test input validation through coordinator
@@ -205,7 +205,7 @@ func main() {
 	}
 
 	// Add custom media spec for array with schema
-	cap.AddMediaSpec("media:items;textable;record", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:items;textable;record", capdag.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/items",
 		arraySchema,
@@ -213,10 +213,10 @@ func main() {
 
 	cliFlag2 := "--items"
 	pos2 := 1
-	itemsArg := capns.CapArg{
+	itemsArg := capdag.CapArg{
 		MediaUrn:       "media:items;textable;record",
 		Required:       false,
-		Sources:        []capns.ArgSource{{CliFlag: &cliFlag2}, {Position: &pos2}},
+		Sources:        []capdag.ArgSource{{CliFlag: &cliFlag2}, {Position: &pos2}},
 		ArgDescription: "List of items",
 	}
 

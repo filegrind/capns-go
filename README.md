@@ -16,7 +16,7 @@ Go implementation of Cap URN (Capability Uniform Resource Names), built on [Tagg
 ## Installation
 
 ```bash
-go get github.com/machinefabric/capns-go
+go get github.com/machinefabric/capdag-go
 ```
 
 ## Quick Start
@@ -28,12 +28,12 @@ import (
     "fmt"
     "log"
 
-    "github.com/machinefabric/capns-go"
+    "github.com/machinefabric/capdag-go"
 )
 
 func main() {
     // Parse a Cap URN
-    cap, err := capns.NewCapUrnFromString(`cap:in="media:binary";op=extract;out="media:object"`)
+    cap, err := capdag.NewCapUrnFromString(`cap:in="media:binary";op=extract;out="media:object"`)
     if err != nil {
         log.Fatal(err)
     }
@@ -42,7 +42,7 @@ func main() {
     fmt.Println("Op:", cap.GetTag("op"))     // "extract"
 
     // Build a Cap URN
-    built := capns.NewCapUrnBuilder().
+    built := capdag.NewCapUrnBuilder().
         InSpec("media:void").
         OutSpec("media:object").
         Tag("op", "generate").
@@ -50,7 +50,7 @@ func main() {
         MustBuild()
 
     // Check matching
-    pattern, _ := capns.NewCapUrnFromString(`cap:in="media:binary";op=extract;out="media:object"`)
+    pattern, _ := capdag.NewCapUrnFromString(`cap:in="media:binary";op=extract;out="media:object"`)
     if cap.Accepts(pattern) {
         fmt.Println("Cap matches pattern")
     }
@@ -64,13 +64,13 @@ func main() {
 
 ```go
 // Create a full capability definition
-capDef := &capns.Cap{
+capDef := &capdag.Cap{
     Urn:   cap,
     Title: "PDF Text Extractor",
-    Args: []capns.CapArg{
+    Args: []capdag.CapArg{
         {Name: "pages", Type: "string", Description: "Page range (e.g., '1-5')"},
     },
-    Output: &capns.CapOutput{
+    Output: &capdag.CapOutput{
         Type:        "text",
         Description: "Extracted text content",
     },
@@ -81,10 +81,10 @@ capDef := &capns.Cap{
 
 ```go
 // Create a capability registry
-matrix := capns.NewCapMatrix()
+matrix := capdag.NewCapMatrix()
 
 // Register a capability with its handler
-matrix.RegisterCapSet("my-plugin", myHandler, []*capns.Cap{capDef})
+matrix.RegisterCapSet("my-plugin", myHandler, []*capdag.Cap{capDef})
 
 // Find matching capabilities
 caps, err := matrix.FindCapSets(`cap:in="media:binary";op=extract;out=*`)
@@ -160,10 +160,10 @@ go test -v ./...
 ## Cross-Language Compatibility
 
 This Go implementation produces identical results to:
-- [Rust reference implementation](https://github.com/machinefabric/capns)
-- [JavaScript implementation](https://github.com/machinefabric/capns-js)
-- [Objective-C implementation](https://github.com/machinefabric/capns-objc)
+- [Rust reference implementation](https://github.com/machinefabric/capdag)
+- [JavaScript implementation](https://github.com/machinefabric/capdag-js)
+- [Objective-C implementation](https://github.com/machinefabric/capdag-objc)
 
 All implementations follow the same rules. See:
-- [Cap URN RULES.md](https://github.com/machinefabric/capns/blob/main/docs/RULES.md) - Cap-specific rules
+- [Cap URN RULES.md](https://github.com/machinefabric/capdag/blob/main/docs/RULES.md) - Cap-specific rules
 - [Tagged URN RULES.md](https://github.com/machinefabric/tagged-urn-rs/blob/main/docs/RULES.md) - Base format rules

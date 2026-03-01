@@ -135,7 +135,7 @@ const MediaMLXModelPath = "media:mlx-model-path;textable"
 // MediaModelRepo is the media URN for model repository (input for list-models) - has record marker
 const MediaModelRepo = "media:model-repo;record;textable"
 
-// CAPNS output types - record marker for structured JSON objects, list marker for arrays
+// CAPDAG output types - record marker for structured JSON objects, list marker for arrays
 
 // MediaModelDim is the media URN for model dimension output - scalar by default (no list marker)
 const MediaModelDim = "media:integer;model-dim;numeric;textable"

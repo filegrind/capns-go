@@ -1,6 +1,6 @@
-module github.com/machinefabric/capns-go
+module github.com/machinefabric/capdag-go
 
-// version: 0.156.59758
+// version: 0.157.59944
 
 go 1.21
 

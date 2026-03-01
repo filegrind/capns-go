@@ -1,4 +1,4 @@
-# JSON Schema Validation for capns-go and machfab-plugin-sdk-go
+# JSON Schema Validation for capdag-go and machfab-plugin-sdk-go
 
 This document describes the comprehensive JSON Schema validation system implemented for the Go SDKs to match the capabilities of the Rust implementation.
 

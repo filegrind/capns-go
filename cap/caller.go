@@ -1,4 +1,4 @@
-// Package capns provides cap-based execution with strict input validation
+// Package capdag provides cap-based execution with strict input validation
 package cap
 
 import (
@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/machinefabric/capns-go/media"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/media"
+	"github.com/machinefabric/capdag-go/urn"
 )
 
 // StdinSourceKind identifies the type of stdin source

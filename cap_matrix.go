@@ -1,13 +1,13 @@
-// Package capns provides CapSet registry for unified capability host discovery
-package capns
+// Package capdag provides CapSet registry for unified capability host discovery
+package capdag
 
 import (
 	"context"
 	"fmt"
 	"sync"
 
-	"github.com/machinefabric/capns-go/cap"
-	"github.com/machinefabric/capns-go/urn"
+	"github.com/machinefabric/capdag-go/cap"
+	"github.com/machinefabric/capdag-go/urn"
 	taggedurn "github.com/machinefabric/tagged-urn-go"
 )
 

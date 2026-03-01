@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"os"
 
-	capns "github.com/machinefabric/capns-go"
+	capdag "github.com/machinefabric/capdag-go"
 )
 
 func main() {
 	// Create manifest
-	manifest := capns.NewCapManifest(
+	manifest := capdag.NewCapManifest(
 		"testplugin",
 		"1.0.0",
 		"Test plugin for Go",
-		[]capns.Cap{
+		[]capdag.Cap{
 			{
-				Urn:     mustParseCapUrn(capns.CapIdentity),
+				Urn:     mustParseCapUrn(capdag.CapIdentity),
 				Title:   "Echo",
 				Command: "echo",
 			},
@@ -29,15 +29,15 @@ func main() {
 	)
 
 	// Create runtime
-	runtime, err := capns.NewPluginRuntimeWithManifest(manifest)
+	runtime, err := capdag.NewPluginRuntimeWithManifest(manifest)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create runtime: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Register echo handler
-	runtime.Register(capns.CapIdentity,
-		func(payload []byte, emitter capns.StreamEmitter, peer capns.PeerInvoker) error {
+	runtime.Register(capdag.CapIdentity,
+		func(payload []byte, emitter capdag.StreamEmitter, peer capdag.PeerInvoker) error {
 			// Parse input JSON
 			var input map[string]interface{}
 			if err := json.Unmarshal(payload, &input); err != nil {
@@ -66,7 +66,7 @@ func main() {
 
 	// Register void test handler
 	runtime.Register(`cap:in="media:void";op=void_test;out="media:void"`,
-		func(payload []byte, emitter capns.StreamEmitter, peer capns.PeerInvoker) error {
+		func(payload []byte, emitter capdag.StreamEmitter, peer capdag.PeerInvoker) error {
 			// Void capability - no input, no output
 			emitter.Emit([]byte{})
 			return nil
@@ -79,8 +79,8 @@ func main() {
 	}
 }
 
-func mustParseCapUrn(urnStr string) *capns.CapUrn {
-	urn, err := capns.NewCapUrnFromString(urnStr)
+func mustParseCapUrn(urnStr string) *capdag.CapUrn {
+	urn, err := capdag.NewCapUrnFromString(urnStr)
 	if err != nil {
 		panic(fmt.Sprintf("invalid URN: %s - %v", urnStr, err))
 	}

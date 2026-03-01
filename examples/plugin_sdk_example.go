@@ -4,15 +4,15 @@ package main
 import (
 	"fmt"
 
-	capns "github.com/machfab/cap-sdk-go"
+	capdag "github.com/machfab/cap-sdk-go"
 )
 
 func main() {
 	fmt.Println("=== Schema Integration Example ===")
 
 	// Create a capability
-	urn, _ := capns.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:record;textable";target=structured`)
-	cap := capns.NewCap(urn, "Query Command", "query-command")
+	urn, _ := capdag.NewCapUrnFromString(`cap:in="media:void";op=query;out="media:record;textable";target=structured`)
+	cap := capdag.NewCap(urn, "Query Command", "query-command")
 
 	// Define a comprehensive schema for document query parameters
 	querySchema := map[string]interface{}{
@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// Add a custom media spec with the schema
-	cap.AddMediaSpec("media:query-params;textable;record", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:query-params;textable;record", capdag.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-params",
 		querySchema,
@@ -66,10 +66,10 @@ func main() {
 	// Add schema-enabled argument using new CapArg architecture
 	cliFlag := "--query"
 	pos := 0
-	cap.AddArg(capns.CapArg{
+	cap.AddArg(capdag.CapArg{
 		MediaUrn:       "media:query-params;textable;record",
 		Required:       true,
-		Sources:        []capns.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
+		Sources:        []capdag.ArgSource{{CliFlag: &cliFlag}, {Position: &pos}},
 		ArgDescription: "Document query parameters",
 	})
 
@@ -114,17 +114,17 @@ func main() {
 	}
 
 	// Add custom media spec for output with schema
-	cap.AddMediaSpec("media:query-results;textable;record", capns.NewMediaSpecDefObjectWithSchema(
+	cap.AddMediaSpec("media:query-results;textable;record", capdag.NewMediaSpecDefObjectWithSchema(
 		"application/json",
 		"https://example.com/schema/query-results",
 		resultSchema,
 	))
 
 	// Set output
-	cap.SetOutput(capns.NewCapOutput("media:query-results;textable;record", "Document search results"))
+	cap.SetOutput(capdag.NewCapOutput("media:query-results;textable;record", "Document search results"))
 
 	// Create validation coordinator
-	coordinator := capns.NewCapValidationCoordinator()
+	coordinator := capdag.NewCapValidationCoordinator()
 	coordinator.RegisterCap(cap)
 
 	// Test with valid input
@@ -230,8 +230,8 @@ func main() {
 
 	// Demonstrate schema resolver functionality
 	fmt.Println("\n--- Testing Schema Resolver ---")
-	resolver := capns.NewFileSchemaResolver("/schema/base/path")
-	coordinatorWithResolver := capns.NewCapValidationCoordinatorWithSchemaResolver(resolver)
+	resolver := capdag.NewFileSchemaResolver("/schema/base/path")
+	coordinatorWithResolver := capdag.NewCapValidationCoordinatorWithSchemaResolver(resolver)
 
 	// Register the cap with resolver
 	coordinatorWithResolver.RegisterCap(cap)

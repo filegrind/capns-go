@@ -1,4 +1,4 @@
-// Package capns provides unified response wrapper for plugin output handling with validation
+// Package capdag provides unified response wrapper for plugin output handling with validation
 package cap
 
 import (
@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/machinefabric/capns-go/media"
+	"github.com/machinefabric/capdag-go/media"
 )
 
 // ResponseWrapper provides unified response wrapper for all plugin operations
